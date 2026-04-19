@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { CommandHeader } from '@/components/layout/CommandHeader';
 import { ServicesRail } from '@/components/pulse/ServicesRail';
@@ -29,8 +29,7 @@ import { CostDriversView } from '@/components/views/CostDriversView';
 import { SessionsView } from '@/components/views/SessionsView';
 import { RulesView } from '@/components/views/RulesView';
 import { ArchiveView } from '@/components/views/ArchiveView';
-import { makeRng } from '@/lib/rng';
-import type { Lookback } from '@/lib/models';
+import type { Lookback } from '@/lib/lookback';
 
 type Density = 'comfortable' | 'compact' | 'dense';
 
@@ -71,18 +70,6 @@ export default function App() {
     setTimeout(() => howRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   };
 
-  const pulseData = useMemo(() => {
-    const r = makeRng(7);
-    const tpm = Array.from({ length: 60 }, (_, i) => {
-      const base = 14000 + Math.sin(i / 6) * 2500 + Math.sin(i / 2) * 900;
-      return Math.max(4000, base + (r() - .5) * 3000);
-    });
-    const lat = Array.from({ length: 60 }, (_, i) =>
-      420 + Math.sin(i / 9) * 120 + (r() - .5) * 200 + (i === 42 ? 1300 : 0) + (i === 51 ? 800 : 0) + (i === 18 ? 600 : 0)
-    );
-    return { tpm, lat, spikes: [{ i: 18 }, { i: 42 }, { i: 51 }] };
-  }, []);
-
   return (
     <div className={`shell${railExpanded ? ' expanded' : ''}`}>
       <Sidebar view={view} setView={setView} expanded={railExpanded} setExpanded={setRailExpanded} />
@@ -99,7 +86,7 @@ export default function App() {
         />
 
         <div className="page" style={{ paddingTop: 20 }}>
-          {view === 'Traces'   && <TracesView />}
+          {view === 'Traces'   && <TracesView lookback={lookback} />}
           {view === 'Costs'    && <CostDriversView />}
           {view === 'Sessions' && <SessionsView />}
           {view === 'Rules'    && <RulesView />}
@@ -110,14 +97,9 @@ export default function App() {
               <ServicesRail lookback={lookback} providerFilter={modelFilter !== 'all' ? modelFilter : undefined} />
               <OverallCostHero lookback={lookback} />
               <PulseBar
-                tpmHist={pulseData.tpm}
-                latHist={pulseData.lat}
-                tpmNow={43700}
-                latNow={1078}
-                spikes={pulseData.spikes}
                 lookback={lookback}
                 setLookback={setLookback}
-                onDrillSpike={(s) => drillTo('spike', `pulse spike @ −${60 - s.i}m`, 4)}
+                onDrillSpike={(s) => drillTo('spike', 'pulse spike', 4)}
               />
 
               <BurnRateRail lookback={lookback} />

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { fmtUsd } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 import { AddServiceModal } from './AddServiceModal';
-import type { Lookback } from '@/lib/models';
+import type { Lookback } from '@/lib/lookback';
 
 interface ServicesRailProps {
   lookback: Lookback;

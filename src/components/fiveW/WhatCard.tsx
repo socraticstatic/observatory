@@ -2,8 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { fmt } from '@/lib/fmt';
-import { makeRng } from '@/lib/rng';
-import { LOOKBACKS, Lookback } from '@/lib/models';
+import { LOOKBACKS, Lookback } from '@/lib/lookback';
 import { trpc } from '@/lib/trpc-client';
 
 type ViewMode = 'stacked' | 'grouped' | 'flow';
@@ -21,20 +20,6 @@ const LAYERS: { key: keyof Bar; label: string; color: string }[] = [
   { key: 'output',    label: 'Output',    color: '#9BC4CC' },
   { key: 'reasoning', label: 'Reasoning', color: '#C9966B' },
 ];
-
-function buildData(lookback: Lookback): Bar[] {
-  const r = makeRng(9 + lookback.charCodeAt(0));
-  const n = LOOKBACKS[lookback].n;
-  return Array.from({ length: n }, () => {
-    const base = 800 + r() * 3200;
-    return {
-      cached:    Math.round(base * (0.3 + r() * 0.2)),
-      input:     Math.round(base * (0.15 + r() * 0.15)),
-      output:    Math.round(base * (0.2 + r() * 0.15)),
-      reasoning: Math.round(base * (0.05 + r() * 0.1)),
-    };
-  });
-}
 
 interface LCProps {
   data: Bar[];
@@ -264,14 +249,18 @@ export function WhatCard({ lookback, onDrill }: WhatCardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { data: rawData } = trpc.what.tokenLifecycle.useQuery({ lookback });
-  const data: Bar[] = rawData
-    ? rawData.map(r => ({
-        cached: r.cached,
-        input: r.input,
-        output: r.output,
-        reasoning: r.reasoning,
-      }))
-    : buildData(lookback);
+  const data: Bar[] = rawData?.map(r => ({
+    cached: r.cached,
+    input: r.input,
+    output: r.output,
+    reasoning: r.reasoning,
+  })) ?? [];
+
+  if (!data.length) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
 
   useEffect(() => {
     const el = containerRef.current;

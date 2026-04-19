@@ -2,16 +2,23 @@
 
 import { useState, useMemo } from 'react';
 import { fmt, fmtMs } from '@/lib/fmt';
-import { makeRng } from '@/lib/rng';
-import { MODELS, LOOKBACKS, Lookback, type Model } from '@/lib/models';
+import { type Lookback } from '@/lib/lookback';
 import { Sparkline } from '@/components/shared/Sparkline';
 import { trpc } from '@/lib/trpc-client';
 
 type SortKey = 'tpm' | 'p50' | 'cost';
 
-function buildTrend(modelId: string, n = 12): number[] {
-  const r = makeRng(modelId.charCodeAt(0) * 7 + 3);
-  return Array.from({ length: n }, () => 0.4 + r() * 0.6);
+interface ModelRow {
+  id: string;
+  name: string;
+  vendor: string;
+  share: number;
+  tpm: number;
+  p50: number;
+  p95: number;
+  cost: number;
+  err: number;
+  col: string;
 }
 
 function modelColor(model: string): string {
@@ -36,13 +43,12 @@ interface WhoCardProps {
 export function WhoCard({ selected, setSelected, lookback, providerFilter, onDrill }: WhoCardProps) {
   const [simOn, setSimOn] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('tpm');
-  const { costMul } = LOOKBACKS[lookback];
 
   const { data: modelData } = trpc.who.modelAttribution.useQuery({ lookback });
 
-  const models: Model[] = useMemo(() => {
+  const models: ModelRow[] = useMemo(() => {
     const base = !modelData || modelData.length === 0
-      ? MODELS
+      ? []
       : modelData.map(m => ({
           id: m.model,
           name: m.model,
@@ -69,11 +75,19 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
 
   const totalTPM = models.reduce((s, m) => s + m.tpm, 0);
 
+  if (!models.length) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
+
   // Simulation: flash replaces opus
-  const opusModel = models.find(m => m.id.toLowerCase().includes('opus')) ?? models[0] ?? MODELS[0];
-  const flashModel = models.find(m => m.id.toLowerCase().includes('sonnet')) ?? models[1] ?? MODELS[1];
-  const opusCost   = opusModel.cost * costMul;
-  const simCost    = flashModel.cost * (opusModel.tpm / flashModel.tpm) * costMul;
+  const opusModel  = models.find(m => m.id.toLowerCase().includes('opus'))   ?? models[0];
+  const flashModel = models.find(m => m.id.toLowerCase().includes('sonnet')) ?? models[1];
+  const opusCost   = opusModel?.cost ?? 0;
+  const simCost    = (flashModel && opusModel && flashModel.tpm > 0)
+    ? flashModel.cost * (opusModel.tpm / flashModel.tpm)
+    : 0;
   const savings    = opusCost - simCost;
 
   return (
@@ -114,11 +128,11 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
           </div>
           {/* Comparative bar */}
           <div style={{ height: 6, background: 'var(--line)', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${(simCost / opusCost) * 100}%`, background: 'linear-gradient(90deg, var(--good), var(--accent))', borderRadius: 3 }} />
+            <div style={{ height: '100%', width: `${opusCost > 0 ? (simCost / opusCost) * 100 : 0}%`, background: 'linear-gradient(90deg, var(--good), var(--accent))', borderRadius: 3 }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
             <span style={{ fontSize: 9, color: 'var(--steel)' }}>0</span>
-            <span style={{ fontSize: 9, color: 'var(--steel)' }}>Simulated {((simCost / opusCost) * 100).toFixed(0)}% of current</span>
+            <span style={{ fontSize: 9, color: 'var(--steel)' }}>Simulated {opusCost > 0 ? ((simCost / opusCost) * 100).toFixed(0) : 0}% of current</span>
             <span style={{ fontSize: 9, color: 'var(--steel)' }}>${opusCost.toFixed(2)}</span>
           </div>
         </div>
@@ -177,8 +191,8 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
           <tbody>
             {sorted.map(m => {
               const isOpus = m.id.toLowerCase().includes('opus');
-              const scaledCost = m.cost * costMul;
-              const trend = buildTrend(m.id);
+              const scaledCost = m.cost;
+              const trend: number[] = [];
               const isSelected = selected === m.id;
               return (
                 <tr

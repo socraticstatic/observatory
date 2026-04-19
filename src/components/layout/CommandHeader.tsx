@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Lookback, LOOKBACKS } from '@/lib/models';
+import { Lookback, LOOKBACKS } from '@/lib/lookback';
 
 interface Props {
   now: Date;

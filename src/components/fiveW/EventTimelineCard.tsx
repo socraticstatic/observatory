@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { makeRng } from '@/lib/rng';
 import { fmtUsd } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 
@@ -63,24 +62,12 @@ export function EventTimelineCard() {
 
   const { data: timelineData } = trpc.events.timeline.useQuery();
 
-  const fallbackData = useMemo(() => {
-    const rng = makeRng(44);
-    return Array.from({ length: 30 }, (_, i) => {
-      const base = 20 + rng() * 40;
-      // Add spikes at annotation days
-      const spike = [14, 18].includes(i) ? rng() * 30 + 20 : 0;
-      // Drops after cache/model events
-      const drop = [3, 4, 5, 8, 9].includes(i) ? -(rng() * 15) : 0;
-      return Math.max(8, base + spike + drop);
-    });
-  }, []);
-
   const data = useMemo<number[]>(() => {
     if (timelineData && timelineData.daily.length > 0) {
       return timelineData.daily.map(d => d.costUsd);
     }
-    return fallbackData;
-  }, [timelineData, fallbackData]);
+    return [];
+  }, [timelineData]);
 
   const ANNOTATIONS = useMemo<readonly Annotation[]>(() => {
     if (timelineData && timelineData.annotations.length > 0) {
@@ -96,6 +83,12 @@ export function EventTimelineCard() {
   }, [timelineData]);
 
   const { linePts, areaPath, px, py, min, max } = useMemo(() => buildCurve(data), [data]);
+
+  if (!data.length) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
 
   const selectedAnn = selected !== null ? ANNOTATIONS[selected] : null;
 

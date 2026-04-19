@@ -11,6 +11,7 @@ import { surfaceRouter } from './surface';
 import { eventsRouter } from './events';
 import { entityRouter } from './entity';
 import { insightsRouter } from './insights';
+import { tracesRouter } from './traces';
 
 export const appRouter = router({
   pulse:    pulseRouter,
@@ -24,6 +25,7 @@ export const appRouter = router({
   events:   eventsRouter,
   entity:   entityRouter,
   insights: insightsRouter,
+  traces:   tracesRouter,
 });
 
 export type AppRouter = typeof appRouter;

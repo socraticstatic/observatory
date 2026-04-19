@@ -12,3 +12,6 @@ export const LOOKBACK_CONFIG = {
 export function lookbackToInterval(l: Lookback): string {
   return l === '1H' ? '1 hour' : l === '24H' ? '24 hours' : '30 days';
 }
+
+// Alias for components that destructure { label } or { n }
+export const LOOKBACKS = LOOKBACK_CONFIG;
