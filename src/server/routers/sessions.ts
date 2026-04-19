@@ -12,7 +12,6 @@ export const sessionsRouter = router({
   list: publicProcedure
     .input(z.object({
       lookback: LookbackSchema,
-      project:  z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
@@ -57,7 +56,7 @@ export const sessionsRouter = router({
         callCount:    Number(r.call_count),
         totalCost:    Number(r.total_cost),
         totalTokens:  Number(r.total_tokens),
-        avgLatMs:     Math.round(Number(r.avg_lat) ?? 0),
+        avgLatMs:     Math.round(Number(r.avg_lat ?? 0)),
         errorCount:   Number(r.error_count),
         models:       r.models,
       }));
