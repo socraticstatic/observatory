@@ -1,0 +1,70 @@
+# litellm/config.yaml
+# LiteLLM proxy configuration for Observatory
+# Usage: litellm --config litellm/config.yaml --port 4000
+
+model_list:
+  # Anthropic models
+  - model_name: claude-opus-4-5-20251014
+    litellm_params:
+      model: anthropic/claude-opus-4-5-20251014
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-sonnet-4-5-20251014
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5-20251014
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-haiku-4-5-20251001
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # Google Gemini
+  - model_name: gemini-2.5-pro
+    litellm_params:
+      model: gemini/gemini-2.5-pro-preview-05-06
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
+  # xAI Grok
+  - model_name: grok-3
+    litellm_params:
+      model: xai/grok-3
+      api_key: os.environ/XAI_API_KEY
+
+  # Local via Ollama (OpenAI-compatible endpoint)
+  - model_name: llama-3.1-70b
+    litellm_params:
+      model: ollama/llama3.1:70b
+      api_base: http://localhost:11434
+
+litellm_settings:
+  # Drop unsupported parameters silently
+  drop_params: true
+  # Retry on 429/5xx
+  num_retries: 2
+  request_timeout: 120
+
+general_settings:
+  # Master key for proxy authentication (rotate in production)
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+# Success callback: fires for every completed LLM call
+# Observatory ingest endpoint receives the full vendor response
+success_callback:
+  - custom_callback_compatible_provider
+
+# Custom callback to POST to Observatory
+environment_variables:
+  OBSERVATORY_INGEST_URL: "http://localhost:3000/api/ingest"
+
+# Inline callback config
+callbacks:
+  - name: "http"
+    url: "http://localhost:3000/api/ingest"
+    headers:
+      X-LiteLLM-Signature: os.environ/LITELLM_CALLBACK_SECRET
