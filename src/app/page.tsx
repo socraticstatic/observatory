@@ -107,7 +107,7 @@ export default function App() {
 
           {view === 'Pulse' && (
             <>
-              <ServicesRail />
+              <ServicesRail lookback={lookback} />
               <OverallCostHero lookback={lookback} />
               <PulseBar
                 tpmHist={pulseData.tpm}

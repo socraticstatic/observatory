@@ -9,6 +9,33 @@ function msSince(interval: string): number {
 }
 
 export const whoRouter = router({
+  providerBreakdown: publicProcedure
+    .input(z.object({ lookback: LookbackSchema }))
+    .query(async ({ ctx, input }) => {
+      const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const rows = await ctx.db.$queryRaw<Array<{
+        provider: string; calls: bigint; cost: unknown; tokens: unknown;
+      }>>`
+        SELECT
+          provider,
+          COUNT(*) AS calls,
+          SUM(cost_usd)::float AS cost,
+          SUM(input_tokens + output_tokens)::float AS tokens
+        FROM llm_events
+        WHERE ts >= ${since}
+        GROUP BY provider
+        ORDER BY cost DESC
+      `;
+      const totalCost = rows.reduce((s, r) => s + Number(r.cost), 0);
+      return rows.map(r => ({
+        provider: r.provider,
+        calls: Number(r.calls),
+        costUsd: Number(r.cost),
+        tokens: Number(r.tokens),
+        sharePct: totalCost > 0 ? (Number(r.cost) / totalCost) * 100 : 0,
+      }));
+    }),
+
   modelAttribution: publicProcedure
     .input(z.object({ lookback: LookbackSchema }))
     .query(async ({ ctx, input }) => {
