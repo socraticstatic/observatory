@@ -14,6 +14,7 @@ const ROW = {
   output: 500n,
   reasoning: 100n,
   cached: 200n,
+  cache_creation: 50n,
 };
 
 describe('whatRouter.tokenLifecycle', () => {
@@ -28,12 +29,21 @@ describe('whatRouter.tokenLifecycle', () => {
     expect(result[0].output).toBe(500);
     expect(result[0].reasoning).toBe(100);
     expect(result[0].cached).toBe(200);
+    expect(typeof result[0].cacheCreation).toBe('number');
+    expect(result[0].cacheCreation).toBe(50);
   });
 
   it('formats bucket as ISO label', async () => {
     mockDb.$queryRaw.mockResolvedValue([ROW]);
     const result = await caller.tokenLifecycle({ lookback: '24H' });
     expect(result[0].label).toBe('2026-01-01T10:00:00.000Z');
+  });
+
+  it('converts bigint cache_creation to numeric cacheCreation', async () => {
+    mockDb.$queryRaw.mockResolvedValue([ROW]);
+    const result = await caller.tokenLifecycle({ lookback: '24H' });
+    expect(typeof result[0].cacheCreation).toBe('number');
+    expect(result[0].cacheCreation).toBe(50);
   });
 
   it('returns empty array for no rows', async () => {

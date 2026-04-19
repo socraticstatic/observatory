@@ -9,16 +9,18 @@ type ViewMode = 'stacked' | 'grouped' | 'flow';
 
 interface Bar {
   cached: number;
+  cacheCreation: number;
   input: number;
   output: number;
   reasoning: number;
 }
 
 const LAYERS: { key: keyof Bar; label: string; color: string }[] = [
-  { key: 'cached',    label: 'Cached',    color: '#4F7B83' },
-  { key: 'input',     label: 'Input',     color: '#6FA8B3' },
-  { key: 'output',    label: 'Output',    color: '#9BC4CC' },
-  { key: 'reasoning', label: 'Reasoning', color: '#C9966B' },
+  { key: 'cached',        label: 'Cached',      color: '#4F7B83' },
+  { key: 'cacheCreation', label: 'Cache Write',  color: 'var(--warn)' },
+  { key: 'input',         label: 'Input',        color: '#6FA8B3' },
+  { key: 'output',        label: 'Output',       color: '#9BC4CC' },
+  { key: 'reasoning',     label: 'Reasoning',    color: '#C9966B' },
 ];
 
 interface LCProps {
@@ -40,8 +42,8 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
 
   const maxVal = Math.max(...data.map(b =>
     mode === 'grouped'
-      ? Math.max(b.cached, b.input, b.output, b.reasoning)
-      : b.cached + b.input + b.output + b.reasoning
+      ? Math.max(b.cached, b.cacheCreation, b.input, b.output, b.reasoning)
+      : b.cached + b.cacheCreation + b.input + b.output + b.reasoning
   ));
 
   const yScale = (v: number) => PAD_T + innerH - (v / maxVal) * innerH;
@@ -126,7 +128,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           }
 
           // flow: area-style, single bar representing total with gradient
-          const total = bar.cached + bar.input + bar.output + bar.reasoning;
+          const total = bar.cached + bar.cacheCreation + bar.input + bar.output + bar.reasoning;
           const h = (total / maxVal) * innerH;
           return (
             <rect key={i} x={gx} y={yScale(total)} width={gw} height={h}
@@ -166,7 +168,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           <div style={{ borderTop: '1px solid var(--line)', marginTop: 5, paddingTop: 5, display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 10, color: 'var(--steel)' }}>Cache ratio</span>
             <span className="num" style={{ fontSize: 11, color: 'var(--accent)' }}>
-              {(tooltip.bar.cached / (tooltip.bar.cached + tooltip.bar.input + tooltip.bar.output + tooltip.bar.reasoning) * 100).toFixed(0)}%
+              {(tooltip.bar.cached / (tooltip.bar.cached + tooltip.bar.cacheCreation + tooltip.bar.input + tooltip.bar.output + tooltip.bar.reasoning) * 100).toFixed(0)}%
             </span>
           </div>
         </div>
@@ -186,14 +188,15 @@ interface SidebarProps {
 function Sidebar({ data, lookback }: SidebarProps) {
   const totals = data.reduce(
     (acc, b) => ({
-      cached:    acc.cached + b.cached,
-      input:     acc.input + b.input,
-      output:    acc.output + b.output,
-      reasoning: acc.reasoning + b.reasoning,
+      cached:        acc.cached + b.cached,
+      cacheCreation: acc.cacheCreation + b.cacheCreation,
+      input:         acc.input + b.input,
+      output:        acc.output + b.output,
+      reasoning:     acc.reasoning + b.reasoning,
     }),
-    { cached: 0, input: 0, output: 0, reasoning: 0 }
+    { cached: 0, cacheCreation: 0, input: 0, output: 0, reasoning: 0 }
   );
-  const grand = totals.cached + totals.input + totals.output + totals.reasoning;
+  const grand = totals.cached + totals.cacheCreation + totals.input + totals.output + totals.reasoning;
 
   return (
     <div style={{ width: 180, padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 12, borderLeft: '1px solid var(--line)' }}>
@@ -250,10 +253,11 @@ export function WhatCard({ lookback, onDrill }: WhatCardProps) {
 
   const { data: rawData } = trpc.what.tokenLifecycle.useQuery({ lookback });
   const data: Bar[] = rawData?.map(r => ({
-    cached: r.cached,
-    input: r.input,
-    output: r.output,
-    reasoning: r.reasoning,
+    cached:        r.cached,
+    cacheCreation: r.cacheCreation ?? 0,
+    input:         r.input,
+    output:        r.output,
+    reasoning:     r.reasoning,
   })) ?? [];
 
   if (!data.length) return (
