@@ -108,7 +108,11 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
     outputTokens = usage.completion_tokens ?? usage.output_tokens ?? 0;
   }
 
-  const costUsd = calcCost(model, inputTokens, outputTokens, reasoningTokens);
+  // Prefer LiteLLM's own cost field over our rate-table estimate
+  const litellmCost = body.response_cost ?? body.cost;
+  const costUsd = litellmCost != null
+    ? Number(litellmCost).toFixed(6)
+    : calcCost(model, inputTokens, outputTokens, reasoningTokens);
 
   return {
     provider,

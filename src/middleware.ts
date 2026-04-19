@@ -8,6 +8,7 @@ export async function middleware(req: NextRequest) {
   // Allow auth endpoint, login page, and static assets
   if (
     pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/ingest') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')

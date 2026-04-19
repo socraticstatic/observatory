@@ -13,13 +13,17 @@ export const surfaceRouter = router({
     .input(z.object({ lookback: LookbackSchema }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
-      const rows = await ctx.db.$queryRaw<Array<{ surface: string; calls: bigint; cost: unknown; avg_lat: unknown; p50_lat: unknown }>>`
+      const rows = await ctx.db.$queryRaw<Array<{
+        surface: string; calls: bigint; cost: unknown;
+        avg_lat: unknown; p50_lat: unknown; sessions: bigint;
+      }>>`
         SELECT
           COALESCE(surface, 'unknown') AS surface,
           COUNT(*) AS calls,
           SUM(cost_usd)::float AS cost,
           AVG(latency_ms)::float AS avg_lat,
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) AS p50_lat
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) AS p50_lat,
+          COUNT(DISTINCT session_id) AS sessions
         FROM llm_events
         WHERE ts >= ${since}
         GROUP BY surface
@@ -34,6 +38,7 @@ export const surfaceRouter = router({
         sharePct: totalCost > 0 ? (Number(r.cost) / totalCost) * 100 : 0,
         avgLatMs: Math.round(Number(r.avg_lat) ?? 0),
         p50LatMs: Math.round(Number(r.p50_lat) ?? 0),
+        sessions: Number(r.sessions),
       }));
     }),
 });

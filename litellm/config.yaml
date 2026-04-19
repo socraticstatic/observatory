@@ -53,16 +53,7 @@ general_settings:
   # Master key for proxy authentication (rotate in production)
   master_key: os.environ/LITELLM_MASTER_KEY
 
-# Success callback: fires for every completed LLM call
-# Observatory ingest endpoint receives the full vendor response
-success_callback:
-  - custom_callback_compatible_provider
-
-# Custom callback to POST to Observatory
-environment_variables:
-  OBSERVATORY_INGEST_URL: "http://localhost:3000/api/ingest"
-
-# Inline callback config
+# HTTP callback: POSTs full vendor response to Observatory after each LLM call
 callbacks:
   - name: "http"
     url: "http://localhost:3000/api/ingest"

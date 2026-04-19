@@ -1,16 +1,27 @@
+import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
+import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
+
+function msSince(interval: string): number {
+  if (interval === '1 hour') return 3_600_000;
+  if (interval === '24 hours') return 86_400_000;
+  return 30 * 86_400_000;
+}
 
 export const eventsRouter = router({
   timeline: publicProcedure
-    .query(async ({ ctx }) => {
-      const since = new Date(Date.now() - 30 * 86_400_000);
+    .input(z.object({ lookback: LookbackSchema }).optional())
+    .query(async ({ ctx, input }) => {
+      const interval = lookbackToInterval(input?.lookback ?? '30D');
+      const since = new Date(Date.now() - msSince(interval));
+      const trunc = (input?.lookback ?? '30D') === '1H' ? 'minute' : (input?.lookback ?? '30D') === '24H' ? 'hour' : 'day';
       const [annotations, daily] = await Promise.all([
         ctx.db.annotation.findMany({
           where: { ts: { gte: since } },
           orderBy: { ts: 'asc' },
         }),
         ctx.db.$queryRaw<Array<{ d: Date; cost: unknown }>>`
-          SELECT date_trunc('day', ts) AS d, SUM(cost_usd)::float AS cost
+          SELECT date_trunc(${trunc}, ts) AS d, SUM(cost_usd)::float AS cost
           FROM llm_events WHERE ts >= ${since}
           GROUP BY d ORDER BY d ASC
         `,
