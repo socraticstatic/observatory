@@ -13,7 +13,7 @@ const MOCK_ROW = {
   ended_at:   new Date('2026-01-01T10:05:00Z'),
   call_count:  3n,
   total_cost:  0.0045,
-  total_tokens: 5000,
+  total_tokens: 5000n,
   avg_lat:     1200,
   error_count: 0n,
   models:      ['claude-3-5-sonnet-20241022'],
@@ -54,6 +54,13 @@ describe('sessionsRouter.list', () => {
     const result = await caller.list({ lookback: '24H' });
     expect(typeof result[0].callCount).toBe('number');
     expect(result[0].callCount).toBe(42);
+  });
+
+  it('converts bigint error_count to number', async () => {
+    mockDb.$queryRaw.mockResolvedValue([{ ...MOCK_ROW, error_count: 5n }]);
+    const result = await caller.list({ lookback: '24H' });
+    expect(typeof result[0].errorCount).toBe('number');
+    expect(result[0].errorCount).toBe(5);
   });
 
   it('computes durationMs from started_at / ended_at', async () => {
