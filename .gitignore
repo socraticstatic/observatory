@@ -44,3 +44,6 @@ docker-compose.override.yml
 next-env.d.ts
 
 /src/generated/prisma
+
+# git worktrees
+.claude/worktrees/
