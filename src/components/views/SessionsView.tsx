@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import type { Lookback } from '@/lib/lookback';
 
@@ -45,7 +45,7 @@ export function SessionsView({ lookback }: Props) {
   );
 
   const windowMs    = WINDOW_MS[lookback];
-  const windowStart = Date.now() - windowMs;
+  const windowStart = useMemo(() => Date.now() - windowMs, [lookback]);
 
   const allProjects = Array.from(
     new Set((sessions ?? []).map(s => s.project).filter((p): p is string => !!p))
@@ -72,6 +72,7 @@ export function SessionsView({ lookback }: Props) {
   }
 
   return (
+    <div className="page">
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
       {/* Project filter chips */}
@@ -107,7 +108,7 @@ export function SessionsView({ lookback }: Props) {
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
           {visible.map((s, idx) => (
-            <div key={`${s.sessionId}-${idx}`}>
+            <div key={s.sessionId}>
 
               {/* Session row */}
               <div
@@ -159,6 +160,9 @@ export function SessionsView({ lookback }: Props) {
                   {s.errorCount > 0 && (
                     <span style={{ color: 'var(--bad)' }}>{s.errorCount} err</span>
                   )}
+                  <span style={{ color: 'var(--steel)', fontSize: 9 }}>
+                    {expanded === s.sessionId ? '▲' : '▼'}
+                  </span>
                 </div>
               </div>
 
@@ -209,6 +213,7 @@ export function SessionsView({ lookback }: Props) {
           ))}
         </div>
       )}
+    </div>
     </div>
   );
 }
