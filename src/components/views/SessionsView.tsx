@@ -59,6 +59,7 @@ export function SessionsView({ lookback }: Props) {
     const start   = new Date(s.startedAt).getTime();
     const end     = new Date(s.endedAt).getTime();
     const leftPct = Math.max(0, (start - windowStart) / windowMs) * 100;
+    if (leftPct >= 100) return { left: '0%', width: '0%' };
     const widPct  = Math.max(0.5, (end - start) / windowMs * 100);
     return { left: `${leftPct}%`, width: `${Math.min(widPct, 100 - leftPct)}%` };
   }
