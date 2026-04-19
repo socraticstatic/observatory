@@ -1,7 +1,6 @@
 'use client';
 
 import { fmtUsd, fmtMs } from '@/lib/fmt';
-import { makeRng } from '@/lib/rng';
 import { LOOKBACKS, type Lookback } from '@/lib/lookback';
 import { Sparkline } from '@/components/shared/Sparkline';
 import { trpc } from '@/lib/trpc-client';
@@ -40,16 +39,6 @@ const LB_RUNWAY: Record<Lookback, string> = {
   '30D': '5.8 days',
 };
 
-function buildSparkData(lookback: Lookback): number[] {
-  const rng = makeRng(3);
-  const { n, costMul } = LOOKBACKS[lookback];
-  const base = 21.72 * costMul / n;
-  return Array.from({ length: n }, (_, i) => {
-    const trend = 1 + (i / n) * 0.18;
-    return base * trend * (0.7 + rng() * 0.6);
-  });
-}
-
 export function OverallCostHero({ lookback }: Props) {
   const { data: costData } = trpc.pulse.overallCost.useQuery({ lookback });
   const { data: burnData } = trpc.pulse.burnRate.useQuery();
@@ -60,7 +49,7 @@ export function OverallCostHero({ lookback }: Props) {
   const pace  = burnData ? `$${burnData.todayCost.toFixed(2)} today` : LB_PACE[lookback];
   const proj  = burnData ? `$${(burnData.projected * 30).toFixed(0)}/mo` : LB_PROJ[lookback];
   const runway = burnData ? `${burnData.runway.toFixed(1)} days` : LB_RUNWAY[lookback];
-  const data  = chartData ? chartData.map(r => r.cost) : buildSparkData(lookback);
+  const data  = chartData?.map(r => r.cost) ?? [];
 
   return (
     <div
