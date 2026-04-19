@@ -34,7 +34,8 @@ async function main() {
 
   const r = rng(42);
   const now = new Date();
-  const events: Parameters<typeof db.llmEvent.createMany>[0]['data'] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const events: any[] = [];
 
   for (let d = 29; d >= 0; d--) {
     for (let h = 0; h < 24; h++) {
