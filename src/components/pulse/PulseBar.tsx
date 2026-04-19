@@ -3,15 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { fmt, fmtMs } from '@/lib/fmt';
 import { LOOKBACKS, Lookback } from '@/lib/lookback';
+import { trpc } from '@/lib/trpc-client';
 
 interface Spike { i: number; }
 
 interface Props {
-  tpmHist: number[];
-  latHist: number[];
-  tpmNow: number;
-  latNow: number;
-  spikes: Spike[];
   onDrillSpike?: (s: Spike) => void;
   lookback: Lookback;
   setLookback: (l: Lookback) => void;
@@ -51,10 +47,23 @@ function toAreaPath(data: number[], w: number, h: number): string {
   return `${linePath} L ${w},${h} L 0,${h} Z`;
 }
 
-export function PulseBar({
-  tpmHist, latHist, tpmNow, latNow, spikes,
-  onDrillSpike, lookback, setLookback,
-}: Props) {
+export function PulseBar({ onDrillSpike, lookback, setLookback }: Props) {
+  const { data: chartData } = trpc.pulse.pulseChart.useQuery({ lookback });
+  const { data: statData }  = trpc.pulse.statStrip.useQuery({ lookback });
+
+  const tpmHist: number[] = chartData?.map(r => r.tokens) ?? [];
+  const latHist: number[] = chartData?.map(r => r.latP95) ?? [];
+  const tpmNow  = tpmHist[tpmHist.length - 1] ?? 0;
+  const latNow  = statData?.avgLatencyMs ?? 0;
+
+  // Auto-detect spikes: buckets where latP95 > 2× median
+  const sortedLat = [...latHist].sort((a, b) => a - b);
+  const medianLat = sortedLat.length > 0 ? sortedLat[Math.floor(sortedLat.length / 2)] : 0;
+  const spikes: Spike[] = latHist
+    .map((v, i) => ({ v, i }))
+    .filter(({ v }) => medianLat > 0 && v > medianLat * 2)
+    .map(({ i }) => ({ i }));
+
   const centerRef = useRef<HTMLDivElement>(null);
   const [cw, setCw] = useState(600);
   const svgH = 96;
