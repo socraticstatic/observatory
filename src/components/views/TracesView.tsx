@@ -1,12 +1,243 @@
 'use client';
 
-export function TracesView() {
+import { useState, useEffect, useMemo } from 'react';
+import { trpc } from '@/lib/trpc-client';
+import { fmtUsd, fmtMs } from '@/lib/fmt';
+import type { Lookback } from '@/lib/lookback';
+
+interface Props {
+  lookback: Lookback;
+}
+
+const PROVIDERS = [
+  { id: undefined,    label: 'All' },
+  { id: 'anthropic',  label: 'Claude' },
+  { id: 'google',     label: 'Gemini' },
+  { id: 'xai',        label: 'Grok' },
+];
+
+const STATUS_OPTS: { id: 'ok' | 'error' | undefined; label: string }[] = [
+  { id: undefined, label: 'All' },
+  { id: 'ok',      label: 'OK' },
+  { id: 'error',   label: 'Error' },
+];
+
+function providerDot(p: string): string {
+  if (p === 'anthropic') return '#6FA8B3';
+  if (p === 'google')    return '#C9B08A';
+  if (p === 'xai')       return '#B88A8A';
+  return '#8A9297';
+}
+
+function fmt2(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
+  return String(n);
+}
+
+type TraceItem = {
+  id: string;
+  ts: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  reasoningTokens: number;
+  costUsd: number;
+  latencyMs: number;
+  status: string;
+  sessionId: string | null;
+  project: string | null;
+  surface: string | null;
+  contentType: string | null;
+  rawPayload: unknown;
+};
+
+export function TracesView({ lookback }: Props) {
+  const [provider, setProvider] = useState<string | undefined>(undefined);
+  const [status,   setStatus]   = useState<'ok' | 'error' | undefined>(undefined);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [cursor,   setCursor]   = useState<string | undefined>(undefined);
+  const [allItems, setAllItems] = useState<TraceItem[]>([]);
+
+  const { data, isFetching } = trpc.traces.list.useQuery(
+    { lookback, provider, status, cursor, limit: 50 },
+  );
+
+  useEffect(() => {
+    if (!data) return;
+    if (!cursor) {
+      setAllItems(data.items);
+    } else {
+      setAllItems(prev => [...prev, ...data.items]);
+    }
+  }, [data]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  function applyProvider(p: string | undefined) {
+    setProvider(p);
+    setCursor(undefined);
+    setAllItems([]);
+  }
+
+  function applyStatus(s: 'ok' | 'error' | undefined) {
+    setStatus(s);
+    setCursor(undefined);
+    setAllItems([]);
+  }
+
+  function loadMore() {
+    if (data?.nextCursor) setCursor(data.nextCursor);
+  }
+
+  const items = allItems.length > 0 ? allItems : (data?.items ?? []);
+
+  const COL = '140px 1fr 120px 100px 72px 72px 60px 32px';
+
   return (
     <div className="page">
-      <div className="card" style={{ padding: '40px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 320 }}>
-        <div className="label" style={{ marginBottom: 12 }}>Traces</div>
-        <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--mist)', marginBottom: 8 }}>LLM call log table</div>
-        <div style={{ fontSize: 13, color: 'var(--steel)' }}>Coming soon</div>
+      {/* Filter bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <span className="label">Provider</span>
+        <div className="seg">
+          {PROVIDERS.map(p => (
+            <button
+              key={String(p.id)}
+              className={provider === p.id ? 'on' : ''}
+              onClick={() => applyProvider(p.id)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <span className="label" style={{ marginLeft: 8 }}>Status</span>
+        <div className="seg">
+          {STATUS_OPTS.map(s => (
+            <button
+              key={String(s.id)}
+              className={status === s.id ? 'on' : ''}
+              onClick={() => applyStatus(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--steel)' }}>
+          {items.length} events
+          {isFetching && <span style={{ marginLeft: 8, color: 'var(--graphite)' }}>loading…</span>}
+        </span>
+      </div>
+
+      {/* Table */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ display: 'grid', gridTemplateColumns: COL, padding: '8px 16px', borderBottom: '1px solid var(--line)', gap: 8 }}>
+          {['Time', 'Model', 'Provider', 'Tokens', 'Cost', 'Latency', 'Status', ''].map(h => (
+            <span key={h} className="label" style={{ fontSize: 9 }}>{h}</span>
+          ))}
+        </div>
+
+        {/* Empty state */}
+        {items.length === 0 && !isFetching && (
+          <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--steel)', fontSize: 12 }}>
+            No events in this window
+          </div>
+        )}
+
+        {/* Rows */}
+        {items.map(row => (
+          <div key={row.id}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: COL,
+                padding: '8px 16px',
+                gap: 8,
+                borderBottom: '1px solid var(--line)',
+                cursor: 'pointer',
+                background: expanded === row.id ? 'rgba(111,168,179,.04)' : 'transparent',
+              }}
+              onClick={() => setExpanded(expanded === row.id ? null : row.id)}
+            >
+              <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>
+                {new Date(row.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--fog)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {row.model}
+              </span>
+              <span style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: providerDot(row.provider), flexShrink: 0 }} />
+                <span style={{ color: 'var(--steel)' }}>{row.provider}</span>
+              </span>
+              <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
+                {fmt2(row.inputTokens + row.outputTokens)}
+                {row.cachedTokens > 0 && (
+                  <span style={{ color: 'var(--accent-2)', marginLeft: 4 }}>+{fmt2(row.cachedTokens)}c</span>
+                )}
+              </span>
+              <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
+                {fmtUsd(row.costUsd)}
+              </span>
+              <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
+                {row.latencyMs > 0 ? fmtMs(row.latencyMs) : '—'}
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: row.status === 'error' ? 'var(--bad)' : 'var(--good)' }}>
+                {row.status.toUpperCase()}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--graphite)', textAlign: 'right' }}>
+                {expanded === row.id ? '▲' : '▼'}
+              </span>
+            </div>
+
+            {/* Expanded detail */}
+            {expanded === row.id && (
+              <div style={{ padding: '12px 16px 16px', borderBottom: '1px solid var(--line)', background: 'rgba(11,16,20,.4)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px 16px', marginBottom: 12 }}>
+                  {[
+                    { label: 'Session',          val: row.sessionId    ?? '—' },
+                    { label: 'Project',           val: row.project      ?? '—' },
+                    { label: 'Surface',           val: row.surface      ?? '—' },
+                    { label: 'Content type',      val: row.contentType  ?? '—' },
+                    { label: 'Input tokens',      val: fmt2(row.inputTokens) },
+                    { label: 'Output tokens',     val: fmt2(row.outputTokens) },
+                    { label: 'Cached tokens',     val: fmt2(row.cachedTokens) },
+                    { label: 'Reasoning tokens',  val: fmt2(row.reasoningTokens) },
+                  ].map(({ label, val }) => (
+                    <div key={label}>
+                      <div className="label" style={{ marginBottom: 2 }}>{label}</div>
+                      <div className="mono" style={{ fontSize: 11, color: 'var(--fog)', wordBreak: 'break-all' }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="label" style={{ marginBottom: 6 }}>Raw payload</div>
+                <pre style={{
+                  margin: 0,
+                  padding: '8px 10px',
+                  background: 'rgba(0,0,0,.3)',
+                  borderRadius: 'var(--r)',
+                  fontSize: 10,
+                  color: 'var(--steel)',
+                  overflow: 'auto',
+                  maxHeight: 240,
+                  lineHeight: 1.5,
+                }}>
+                  {JSON.stringify(row.rawPayload, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Load more */}
+        {data?.nextCursor && (
+          <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'center', borderTop: '1px solid var(--line)' }}>
+            <button className="mbtn" onClick={loadMore} disabled={isFetching} style={{ opacity: isFetching ? 0.5 : 1 }}>
+              {isFetching ? 'Loading…' : 'Load more'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
