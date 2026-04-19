@@ -35,6 +35,7 @@ const MOCK_EVENT = {
 };
 
 beforeEach(() => {
+  mockFindMany.mockClear();
   mockFindMany.mockResolvedValue([MOCK_EVENT]);
 });
 
