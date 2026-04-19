@@ -86,7 +86,7 @@ export default function App() {
         />
 
         <div className="page" style={{ paddingTop: 20 }}>
-          {view === 'Traces'   && <TracesView />}
+          {view === 'Traces'   && <TracesView lookback={lookback} />}
           {view === 'Costs'    && <CostDriversView />}
           {view === 'Sessions' && <SessionsView />}
           {view === 'Rules'    && <RulesView />}
