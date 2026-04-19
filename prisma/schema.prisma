@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model LlmEvent {
+  id                   String   @id @default(uuid())
+  ts                   DateTime @default(now())
+  provider             String
+  model                String
+  surface              String?
+  sessionId            String?
+  project              String?
+  inputTokens          Int
+  outputTokens         Int
+  reasoningTokens      Int      @default(0)
+  cachedTokens         Int      @default(0)
+  cacheCreationTokens  Int      @default(0)
+  costUsd              Decimal  @db.Decimal(10, 6)
+  latencyMs            Int?
+  region               String?
+  status               String   @default("ok")
+  contentType          String?
+  qualityScore         Decimal? @db.Decimal(4, 2)
+  rawPayload           Json
+
+  @@index([ts(sort: Desc)])
+  @@index([provider, ts(sort: Desc)])
+  @@index([sessionId, ts])
+  @@index([project])
+  @@map("llm_events")
+}
+
+model Annotation {
+  id       String   @id @default(uuid())
+  ts       DateTime
+  type     String
+  title    String
+  detail   String?
+  impact   String?
+  severity String
+
+  @@index([ts(sort: Desc)])
+  @@map("annotations")
+}
