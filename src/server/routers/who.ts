@@ -19,8 +19,8 @@ export const whoRouter = router({
         SELECT
           provider,
           COUNT(*) AS calls,
-          SUM(cost_usd)::float AS cost,
-          SUM(input_tokens + output_tokens)::float AS tokens
+          SUM("costUsd")::float AS cost,
+          SUM("inputTokens" + "outputTokens")::float AS tokens
         FROM llm_events
         WHERE ts >= ${since}
         GROUP BY provider
@@ -48,9 +48,9 @@ export const whoRouter = router({
           model,
           provider,
           COUNT(*) AS calls,
-          SUM(cost_usd)::float AS cost,
-          AVG(latency_ms)::float AS avg_lat,
-          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95_lat,
+          SUM("costUsd")::float AS cost,
+          AVG("latencyMs")::float AS avg_lat,
+          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs") AS p95_lat,
           (COUNT(*) FILTER (WHERE status = 'error'))::float / COUNT(*) * 100 AS error_rate
         FROM llm_events
         WHERE ts >= ${since}

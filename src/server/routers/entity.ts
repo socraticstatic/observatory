@@ -17,8 +17,8 @@ export const entityRouter = router({
         SELECT
           COALESCE(project, 'untagged') AS project,
           COUNT(*) AS calls,
-          SUM(cost_usd)::float AS cost,
-          COUNT(DISTINCT session_id) AS sessions
+          SUM("costUsd")::float AS cost,
+          COUNT(DISTINCT "sessionId") AS sessions
         FROM llm_events
         WHERE ts >= ${since}
         GROUP BY project
@@ -33,14 +33,14 @@ export const entityRouter = router({
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
       const rows = await ctx.db.$queryRaw<Array<{ session_id: string; calls: bigint; cost: unknown; first_ts: Date; last_ts: Date }>>`
         SELECT
-          session_id,
+          "sessionId" AS session_id,
           COUNT(*) AS calls,
-          SUM(cost_usd)::float AS cost,
+          SUM("costUsd")::float AS cost,
           MIN(ts) AS first_ts,
           MAX(ts) AS last_ts
         FROM llm_events
         WHERE ts >= ${since} AND project = ${input.project}
-        GROUP BY session_id
+        GROUP BY "sessionId"
         ORDER BY last_ts DESC
       `;
       return rows.map(r => ({

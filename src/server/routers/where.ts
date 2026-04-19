@@ -17,8 +17,8 @@ export const whereRouter = router({
         SELECT
           COALESCE(region, 'unknown') AS region,
           COUNT(*) AS calls,
-          SUM(cost_usd)::float AS cost,
-          AVG(latency_ms)::float AS avg_lat
+          SUM("costUsd")::float AS cost,
+          AVG("latencyMs")::float AS avg_lat
         FROM llm_events
         WHERE ts >= ${since}
         GROUP BY region

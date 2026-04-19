@@ -15,15 +15,15 @@ export const contentRouter = router({
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
       const rows = await ctx.db.$queryRaw<Array<{ ct: string; calls: bigint; input: bigint; output: bigint; cost: unknown; avg_quality: unknown }>>`
         SELECT
-          COALESCE(content_type, 'unknown') AS ct,
+          COALESCE("contentType", 'unknown') AS ct,
           COUNT(*) AS calls,
-          SUM(input_tokens) AS input,
-          SUM(output_tokens) AS output,
-          SUM(cost_usd)::float AS cost,
-          AVG(quality_score)::float AS avg_quality
+          SUM("inputTokens") AS input,
+          SUM("outputTokens") AS output,
+          SUM("costUsd")::float AS cost,
+          AVG("qualityScore")::float AS avg_quality
         FROM llm_events
         WHERE ts >= ${since}
-        GROUP BY content_type
+        GROUP BY "contentType"
         ORDER BY cost DESC
       `;
       return rows.map(r => ({

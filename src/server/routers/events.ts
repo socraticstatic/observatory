@@ -21,7 +21,7 @@ export const eventsRouter = router({
           orderBy: { ts: 'asc' },
         }),
         ctx.db.$queryRaw<Array<{ d: Date; cost: unknown }>>`
-          SELECT date_trunc(${trunc}, ts) AS d, SUM(cost_usd)::float AS cost
+          SELECT date_trunc(${trunc}, ts) AS d, SUM("costUsd")::float AS cost
           FROM llm_events WHERE ts >= ${since}
           GROUP BY d ORDER BY d ASC
         `,

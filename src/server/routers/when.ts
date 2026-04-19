@@ -8,7 +8,7 @@ export const whenRouter = router({
         SELECT
           EXTRACT(DOY FROM ts)::int AS d,
           EXTRACT(HOUR FROM ts)::int AS h,
-          SUM(cost_usd)::float AS value
+          SUM("costUsd")::float AS value
         FROM llm_events
         WHERE ts >= ${since}
         GROUP BY d, h

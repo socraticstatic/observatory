@@ -17,10 +17,10 @@ export const whatRouter = router({
       const rows = await ctx.db.$queryRaw<Array<{ bucket: Date; input: bigint; output: bigint; reasoning: bigint; cached: bigint }>>`
         SELECT
           date_trunc(${trunc}, ts) AS bucket,
-          SUM(input_tokens) AS input,
-          SUM(output_tokens) AS output,
-          SUM(reasoning_tokens) AS reasoning,
-          SUM(cached_tokens) AS cached
+          SUM("inputTokens") AS input,
+          SUM("outputTokens") AS output,
+          SUM("reasoningTokens") AS reasoning,
+          SUM("cachedTokens") AS cached
         FROM llm_events
         WHERE ts >= ${since}
         GROUP BY bucket

@@ -92,9 +92,9 @@ export const pulseRouter = router({
       const rows = await ctx.db.$queryRaw<Array<{ bucket: Date; tokens: bigint; cost: unknown; lat_p95: unknown }>>`
         SELECT
           date_trunc(${trunc}, ts) AS bucket,
-          SUM(input_tokens + output_tokens + reasoning_tokens) AS tokens,
-          SUM(cost_usd)::float AS cost,
-          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) AS lat_p95
+          SUM("inputTokens" + "outputTokens" + "reasoningTokens") AS tokens,
+          SUM("costUsd")::float AS cost,
+          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs") AS lat_p95
         FROM llm_events
         WHERE ts >= ${since} AND status = 'ok'
         GROUP BY bucket

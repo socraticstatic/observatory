@@ -9,11 +9,11 @@ export const insightsRouter = router({
       // Cache decay detector
       const [cacheToday, cache7d] = await Promise.all([
         ctx.db.$queryRaw<Array<{ hit_ratio: unknown }>>`
-          SELECT AVG(cached_tokens::float / NULLIF(input_tokens + cached_tokens, 0)) * 100 AS hit_ratio
+          SELECT AVG("cachedTokens"::float / NULLIF("inputTokens" + "cachedTokens", 0)) * 100 AS hit_ratio
           FROM llm_events WHERE ts >= ${since1d}
         `,
         ctx.db.$queryRaw<Array<{ hit_ratio: unknown }>>`
-          SELECT AVG(cached_tokens::float / NULLIF(input_tokens + cached_tokens, 0)) * 100 AS hit_ratio
+          SELECT AVG("cachedTokens"::float / NULLIF("inputTokens" + "cachedTokens", 0)) * 100 AS hit_ratio
           FROM llm_events WHERE ts >= ${since7d} AND ts < ${since1d}
         `,
       ]);
@@ -24,11 +24,11 @@ export const insightsRouter = router({
 
       // Routing opportunity: opus sessions with avg quality < 92
       const routingRows = await ctx.db.$queryRaw<Array<{ project: string; avg_quality: unknown; cost: unknown }>>`
-        SELECT project, AVG(quality_score)::float AS avg_quality, SUM(cost_usd)::float AS cost
+        SELECT project, AVG("qualityScore")::float AS avg_quality, SUM("costUsd")::float AS cost
         FROM llm_events
         WHERE ts >= ${since7d} AND model LIKE '%opus%'
         GROUP BY project
-        HAVING AVG(quality_score) < 92
+        HAVING AVG("qualityScore") < 92
         ORDER BY cost DESC
         LIMIT 3
       `;
@@ -64,17 +64,17 @@ export const insightsRouter = router({
         first_input: bigint; last_input: bigint;
       }>>`
         SELECT
-          session_id,
+          "sessionId" AS session_id,
           project,
           surface,
           COUNT(*) AS steps,
-          SUM(cost_usd)::float AS cost,
+          SUM("costUsd")::float AS cost,
           MAX(ts) AS last_ts,
-          (ARRAY_AGG(input_tokens ORDER BY ts ASC))[1] AS first_input,
-          (ARRAY_AGG(input_tokens ORDER BY ts DESC))[1] AS last_input
+          (ARRAY_AGG("inputTokens" ORDER BY ts ASC))[1] AS first_input,
+          (ARRAY_AGG("inputTokens" ORDER BY ts DESC))[1] AS last_input
         FROM llm_events
-        WHERE ts >= ${since24h} AND session_id IS NOT NULL
-        GROUP BY session_id, project, surface
+        WHERE ts >= ${since24h} AND "sessionId" IS NOT NULL
+        GROUP BY "sessionId", project, surface
         HAVING COUNT(*) > 5
         ORDER BY cost DESC
         LIMIT 20
