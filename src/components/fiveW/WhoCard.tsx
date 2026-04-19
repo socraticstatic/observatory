@@ -3,14 +3,26 @@
 import { useState, useMemo } from 'react';
 import { fmt, fmtMs } from '@/lib/fmt';
 import { makeRng } from '@/lib/rng';
-import { MODELS, LOOKBACKS, Lookback } from '@/lib/models';
+import { MODELS, LOOKBACKS, Lookback, type Model } from '@/lib/models';
 import { Sparkline } from '@/components/shared/Sparkline';
+import { trpc } from '@/lib/trpc-client';
 
 type SortKey = 'tpm' | 'p50' | 'cost';
 
 function buildTrend(modelId: string, n = 12): number[] {
   const r = makeRng(modelId.charCodeAt(0) * 7 + 3);
   return Array.from({ length: n }, () => 0.4 + r() * 0.6);
+}
+
+function modelColor(model: string): string {
+  const m = model.toLowerCase();
+  if (m.includes('opus'))   return '#9BC4CC';
+  if (m.includes('sonnet')) return '#6FA8B3';
+  if (m.includes('haiku'))  return '#4F7B83';
+  if (m.includes('gemini')) return '#C9B08A';
+  if (m.includes('grok'))   return '#B88A8A';
+  if (m.includes('llama'))  return '#7CA893';
+  return '#8A9297';
 }
 
 interface WhoCardProps {
@@ -25,20 +37,38 @@ export function WhoCard({ selected, setSelected, lookback, onDrill }: WhoCardPro
   const [sortKey, setSortKey] = useState<SortKey>('tpm');
   const { costMul } = LOOKBACKS[lookback];
 
+  const { data: modelData } = trpc.who.modelAttribution.useQuery({ lookback });
+
+  const models: Model[] = useMemo(() => {
+    if (!modelData || modelData.length === 0) return MODELS;
+    return modelData.map(m => ({
+      id: m.model,
+      name: m.model,
+      vendor: m.provider,
+      share: m.share / 100,
+      tpm: m.calls,
+      p50: m.avgLatMs,
+      p95: m.p95LatMs,
+      cost: m.cost,
+      err: m.errorRatePct,
+      col: modelColor(m.model),
+    }));
+  }, [modelData]);
+
   const sorted = useMemo(() => {
-    return [...MODELS].sort((a, b) => {
+    return [...models].sort((a, b) => {
       if (sortKey === 'tpm')  return b.tpm - a.tpm;
       if (sortKey === 'p50')  return a.p50 - b.p50;
       if (sortKey === 'cost') return b.cost - a.cost;
       return 0;
     });
-  }, [sortKey]);
+  }, [sortKey, models]);
 
-  const totalTPM = MODELS.reduce((s, m) => s + m.tpm, 0);
+  const totalTPM = models.reduce((s, m) => s + m.tpm, 0);
 
   // Simulation: flash replaces opus
-  const opusModel = MODELS.find(m => m.id === 'opus')!;
-  const flashModel = MODELS.find(m => m.id === 'sonnet')!;
+  const opusModel = models.find(m => m.id.toLowerCase().includes('opus')) ?? models[0] ?? MODELS[0];
+  const flashModel = models.find(m => m.id.toLowerCase().includes('sonnet')) ?? models[1] ?? MODELS[1];
   const opusCost   = opusModel.cost * costMul;
   const simCost    = flashModel.cost * (opusModel.tpm / flashModel.tpm) * costMul;
   const savings    = opusCost - simCost;
@@ -49,7 +79,7 @@ export function WhoCard({ selected, setSelected, lookback, onDrill }: WhoCardPro
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="label">WHO &middot; Model Attribution</span>
-          <span className="chip">6 active</span>
+          <span className="chip">{models.length} active</span>
         </div>
         <button className={`mbtn${simOn ? ' primary' : ''}`} onClick={() => setSimOn(s => !s)}>
           &#8651; Simulate Switch
@@ -95,7 +125,7 @@ export function WhoCard({ selected, setSelected, lookback, onDrill }: WhoCardPro
       <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
         <div className="label" style={{ marginBottom: 6 }}>Traffic share</div>
         <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', gap: 1 }}>
-          {MODELS.map(m => (
+          {models.map(m => (
             <div
               key={m.id}
               title={m.name}
@@ -111,11 +141,11 @@ export function WhoCard({ selected, setSelected, lookback, onDrill }: WhoCardPro
           ))}
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-          {MODELS.map(m => (
+          {models.map(m => (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', opacity: selected && selected !== m.id ? .4 : 1 }}
               onClick={() => setSelected(selected === m.id ? null : m.id)}>
               <span style={{ width: 8, height: 8, borderRadius: 2, background: m.col, display: 'inline-block' }} />
-              <span style={{ fontSize: 10, color: 'var(--fog)' }}>{m.name.split(' ')[1]}</span>
+              <span style={{ fontSize: 10, color: 'var(--fog)' }}>{m.name.split(' ')[1] ?? m.name}</span>
               <span className="num" style={{ fontSize: 10, color: 'var(--steel)' }}>{(m.share * 100).toFixed(0)}%</span>
             </div>
           ))}
@@ -143,7 +173,7 @@ export function WhoCard({ selected, setSelected, lookback, onDrill }: WhoCardPro
           </thead>
           <tbody>
             {sorted.map(m => {
-              const isOpus = m.id === 'opus';
+              const isOpus = m.id.toLowerCase().includes('opus');
               const scaledCost = m.cost * costMul;
               const trend = buildTrend(m.id);
               const isSelected = selected === m.id;

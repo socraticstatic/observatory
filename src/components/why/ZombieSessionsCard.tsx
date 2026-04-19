@@ -1,13 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { trpc } from '@/lib/trpc-client';
 
-const ZOMBIES = [
+interface Zombie {
+  id: string;
+  type: string;
+  steps: number;
+  rate: string;
+  proj: string;
+  severity: 'bad' | 'warn' | 'info';
+}
+
+const FALLBACK_ZOMBIES: readonly Zombie[] = [
   { id: 'research_agent.weekly_digest', type: 'Loop',      steps: 28, rate: '12.4K tok/min', proj: '$18.40', severity: 'bad'  },
   { id: 'inbox_triage.batch_14',        type: 'Bloat',     steps: 6,  rate: '3.2K tok/min',  proj: '$4.20',  severity: 'warn' },
   { id: 'market_research.q4_scan',      type: 'Abandoned', steps: 12, rate: '0 tok/min',     proj: '$0',     severity: 'info' },
   { id: 'code_review.pr_482',           type: 'Runaway',   steps: 44, rate: '28.1K tok/min', proj: '$42.10', severity: 'bad'  },
 ] as const;
+
+function severityFor(bloatRatio: number, type: string): 'bad' | 'warn' | 'info' {
+  if (type === 'Abandoned' || type === 'abandoned') return 'info';
+  if (bloatRatio > 2) return 'bad';
+  if (bloatRatio > 1) return 'warn';
+  return 'info';
+}
+
+function fmtRate(costUsd: number, ageMs: number): string {
+  if (ageMs <= 0) return '0 tok/min';
+  const tokPerMin = (costUsd * 1000000 / 10) / (ageMs / 60000);
+  if (tokPerMin > 1000) return `${(tokPerMin / 1000).toFixed(1)}K tok/min`;
+  return `${Math.round(tokPerMin)} tok/min`;
+}
 
 const SEV_COLOR = {
   bad:  '#B86B6B',
@@ -53,6 +77,19 @@ function ActionButton({ severity, action, onClick }: { severity: Severity; actio
 export function ZombieSessionsCard() {
   const [killed, setKilled] = useState<Set<string>>(new Set());
   const [reviewed, setReviewed] = useState<Set<string>>(new Set());
+  const { data: zombieData } = trpc.insights.zombieSessions.useQuery();
+
+  const ZOMBIES = useMemo<readonly Zombie[]>(() => {
+    if (!zombieData || zombieData.length === 0) return FALLBACK_ZOMBIES;
+    return zombieData.map(z => ({
+      id: z.sessionId,
+      type: z.type.charAt(0).toUpperCase() + z.type.slice(1),
+      steps: z.steps,
+      rate: fmtRate(z.costUsd, z.ageMs),
+      proj: `$${z.costUsd.toFixed(2)}`,
+      severity: severityFor(z.bloatRatio, z.type),
+    }));
+  }, [zombieData]);
 
   const handleKill = (id: string) => {
     setKilled(prev => new Set([...prev, id]));

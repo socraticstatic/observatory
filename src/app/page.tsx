@@ -121,7 +121,7 @@ export default function App() {
               />
 
               <BurnRateRail lookback={lookback} />
-              <StatStrip />
+              <StatStrip lookback={lookback} />
 
               {/* DIAGNOSTICS divider */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 24, marginBottom: -4 }}>
@@ -136,7 +136,7 @@ export default function App() {
 
               <WhyInsightsCard />
               <ZombieSessionsCard />
-              <EntityExplorer />
+              <EntityExplorer lookback={lookback} />
 
               <div id="5w-what" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,1fr)', gap: 16, marginTop: 16 }}>
                 <WhatCard lookback={lookback} onDrill={(b, i) => drillTo('bar', `WHAT · ${b.label}`, 3)} />

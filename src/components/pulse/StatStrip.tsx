@@ -1,5 +1,8 @@
 'use client';
 
+import { type Lookback } from '@/lib/models';
+import { trpc } from '@/lib/trpc-client';
+
 interface Stat {
   label: string;
   value: string;
@@ -7,7 +10,7 @@ interface Stat {
   col: string;
 }
 
-const STATS: Stat[] = [
+const FALLBACK_STATS: Stat[] = [
   { label: 'Total Calls',      value: '14,284', delta: '+284',  col: 'var(--mist)'     },
   { label: 'Cache Hit',        value: '43.8%',  delta: '+2.1%', col: 'var(--accent-2)' },
   { label: 'Avg Quality',      value: '94.2',   delta: '-0.3',  col: 'var(--good)'     },
@@ -24,7 +27,28 @@ function deltaColor(delta: string, col: string): string {
   return 'var(--steel)';
 }
 
-export function StatStrip() {
+function fmtInt(n: number): string {
+  return n.toLocaleString();
+}
+
+interface Props {
+  lookback?: Lookback;
+}
+
+export function StatStrip({ lookback = '24H' }: Props) {
+  const { data } = trpc.pulse.statStrip.useQuery({ lookback });
+
+  const stats: Stat[] = data
+    ? [
+        { label: 'Total Calls',     value: fmtInt(data.totalCalls),        delta: '',     col: 'var(--mist)'     },
+        { label: 'Cache Hit',       value: `${data.cacheHitPct.toFixed(1)}%`, delta: '',  col: 'var(--accent-2)' },
+        { label: 'Avg Quality',     value: data.avgQuality.toFixed(1),     delta: '',     col: 'var(--good)'     },
+        { label: 'Error Rate',      value: `${data.errorRatePct.toFixed(1)}%`, delta: '', col: 'var(--warn)'     },
+        { label: 'Active Sessions', value: String(data.activeSessions),    delta: '',     col: 'var(--mist)'     },
+        { label: 'Avg Latency',     value: `${Math.round(data.avgLatencyMs)}ms`, delta: '', col: 'var(--fog)'    },
+      ]
+    : FALLBACK_STATS;
+
   return (
     <div
       style={{
@@ -34,7 +58,7 @@ export function StatStrip() {
         marginBottom: 12,
       }}
     >
-      {STATS.map((stat) => (
+      {stats.map((stat) => (
         <div
           key={stat.label}
           className="card"

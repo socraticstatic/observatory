@@ -2,17 +2,39 @@
 
 import { useState } from 'react';
 import { fmt, fmtUsd } from '@/lib/fmt';
+import { trpc } from '@/lib/trpc-client';
+import type { Lookback } from '@/lib/models';
 
-const PROJECTS = [
+interface Project {
+  id: string;
+  cost: number;
+  sessions: number;
+  turns: number;
+}
+
+interface Session {
+  id: string;
+  ts: string;
+  tokens: number;
+}
+
+interface Turn {
+  id: string;
+  role: string;
+  tokens: number;
+  content: string;
+}
+
+const FALLBACK_PROJECTS: Project[] = [
   { id: 'research_agent', cost: 14.22, sessions: 3,  turns: 84  },
   { id: 'inbox_triage',   cost: 3.84,  sessions: 8,  turns: 142 },
   { id: 'code_review',    cost: 6.10,  sessions: 2,  turns: 38  },
   { id: 'automation',     cost: 2.18,  sessions: 6,  turns: 210 },
 ];
 
-// Synthetic sessions per project
-function sessionsFor(projectId: string) {
-  const map: Record<string, Array<{ id: string; ts: string; tokens: number }>> = {
+// Synthetic sessions per project (fallback)
+function fallbackSessionsFor(projectId: string): Session[] {
+  const map: Record<string, Session[]> = {
     research_agent: [
       { id: 'ses_a1b2', ts: '2026-04-19 14:32', tokens: 48230 },
       { id: 'ses_c3d4', ts: '2026-04-18 09:11', tokens: 32810 },
@@ -37,8 +59,8 @@ function sessionsFor(projectId: string) {
   return map[projectId] ?? [];
 }
 
-// Synthetic turns per session
-function turnsFor(sessionId: string) {
+// Synthetic turns per session (fallback)
+function fallbackTurnsFor(sessionId: string): Turn[] {
   return [
     { role: 'user',      tokens: 320,  content: 'Analyze the quarterly performance data and identify the top three cost drivers across all projects.' },
     { role: 'assistant', tokens: 1840, content: 'I have reviewed the data. The top cost drivers are: (1) Opus model usage in research_agent at 42% share, (2) high context depth averaging 8.3 turns before summarization, (3) uncached tool result repetition in automation pipeline...' },
@@ -59,12 +81,53 @@ function ColHeader({ label }: { label: string }) {
   );
 }
 
-export function EntityExplorer() {
+interface Props {
+  lookback?: Lookback;
+}
+
+export function EntityExplorer({ lookback = '24H' }: Props) {
   const [selProject, setSelProject] = useState<string | null>(null);
   const [selSession, setSelSession] = useState<string | null>(null);
 
-  const sessions = selProject ? sessionsFor(selProject) : [];
-  const turns    = selSession ? turnsFor(selSession)    : [];
+  const { data: projectData } = trpc.entity.projects.useQuery({ lookback });
+  const { data: sessionData } = trpc.entity.sessions.useQuery(
+    { project: selProject ?? '', lookback },
+    { enabled: !!selProject }
+  );
+  const { data: turnData } = trpc.entity.turns.useQuery(
+    { sessionId: selSession ?? '' },
+    { enabled: !!selSession }
+  );
+
+  const projects: Project[] = projectData && projectData.length > 0
+    ? projectData.map(p => ({
+        id: p.project,
+        cost: p.costUsd,
+        sessions: p.sessions,
+        turns: p.calls,
+      }))
+    : FALLBACK_PROJECTS;
+
+  const sessions: Session[] = selProject
+    ? sessionData && sessionData.length > 0
+      ? sessionData.map(s => ({
+          id: s.sessionId,
+          ts: new Date(s.lastTs).toISOString().slice(0, 16).replace('T', ' '),
+          tokens: s.calls,
+        }))
+      : fallbackSessionsFor(selProject)
+    : [];
+
+  const turns: Turn[] = selSession
+    ? turnData && turnData.length > 0
+      ? turnData.map(t => ({
+          id: t.id,
+          role: t.turn % 2 === 1 ? 'user' : 'assistant',
+          tokens: t.inputTokens + t.outputTokens,
+          content: `${t.model} · ${t.status} · ${t.latencyMs}ms`,
+        }))
+      : fallbackTurnsFor(selSession)
+    : [];
 
   function resetAll()    { setSelProject(null); setSelSession(null); }
   function resetSession(){ setSelSession(null); }
@@ -73,7 +136,7 @@ export function EntityExplorer() {
     <div className="card" style={{ padding: 0 }}>
       {/* header + breadcrumb */}
       <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div className="label">Entity Explorer · project &rarr; session &rarr; turn</div>
+        <div className="label">Entity Explorer &middot; project &rarr; session &rarr; turn</div>
         <div style={{ fontSize: 11, color: 'var(--steel)', display: 'flex', gap: 4, alignItems: 'center' }}>
           <span
             style={{ cursor: 'pointer', color: selProject ? 'var(--accent)' : 'var(--fog)' }}
@@ -106,7 +169,7 @@ export function EntityExplorer() {
         <div style={COL}>
           <ColHeader label="Projects" />
           <div style={{ overflowY: 'auto', flex: 1 }}>
-            {PROJECTS.map(p => (
+            {projects.map(p => (
               <div
                 key={p.id}
                 onClick={() => { setSelProject(p.id); setSelSession(null); }}
@@ -163,7 +226,7 @@ export function EntityExplorer() {
         <div style={COL_LAST}>
           <ColHeader label={selSession ? `Turns — ${selSession}` : 'Turns'} />
           <div style={{ overflowY: 'auto', flex: 1 }}>
-            {selSession ? turns.map((t, i) => (
+            {selSession ? turns.map((t) => (
               <div key={t.id} style={{
                 padding: '10px 12px',
                 borderBottom: '1px solid var(--line)',

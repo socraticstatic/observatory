@@ -1,6 +1,7 @@
 'use client';
 
 import { type Lookback } from '@/lib/models';
+import { trpc } from '@/lib/trpc-client';
 
 interface Props {
   lookback: Lookback;
@@ -11,7 +12,15 @@ const SPENT  = 42.18;
 const UTIL   = SPENT / BUDGET;
 
 export function BurnRateRail({ lookback: _lookback }: Props) {
-  const utilPct = Math.round(UTIL * 100);
+  const { data } = trpc.pulse.burnRate.useQuery();
+  const todayCost = data?.todayCost ?? SPENT;
+  const projected = data?.projected ?? 58.40;
+  const runway = data?.runway ?? 18.2;
+  const utilPct = data ? Math.round(data.utilPct) : Math.round(UTIL * 100);
+  const budget = data?.budget ?? BUDGET;
+  const deltaText = data
+    ? `${data.deltaVsYesterday > 0 ? '+' : ''}${data.deltaVsYesterday.toFixed(0)}% vs yesterday`
+    : '+8% vs yesterday';
 
   return (
     <div
@@ -35,9 +44,9 @@ export function BurnRateRail({ lookback: _lookback }: Props) {
           className="mono"
           style={{ fontSize: 22, fontWeight: 700, color: 'var(--mist)', lineHeight: 1, marginBottom: 4 }}
         >
-          $42.18
+          ${todayCost.toFixed(2)}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--warn)' }}>+8% vs yesterday</div>
+        <div style={{ fontSize: 10, color: 'var(--warn)' }}>{deltaText}</div>
       </div>
 
       {/* Projected */}
@@ -52,7 +61,7 @@ export function BurnRateRail({ lookback: _lookback }: Props) {
           className="mono"
           style={{ fontSize: 18, fontWeight: 600, color: 'var(--fog)', lineHeight: 1, marginBottom: 4 }}
         >
-          $58.40
+          ${projected.toFixed(2)}
         </div>
         <div style={{ fontSize: 10, color: 'var(--steel)' }}>per day at current rate</div>
       </div>
@@ -69,7 +78,7 @@ export function BurnRateRail({ lookback: _lookback }: Props) {
           className="mono"
           style={{ fontSize: 18, fontWeight: 600, color: 'var(--accent)', lineHeight: 1, marginBottom: 4 }}
         >
-          18.2 days
+          {runway.toFixed(1)} days
         </div>
         <div style={{ fontSize: 10, color: 'var(--steel)' }}>at current pace</div>
       </div>
@@ -84,7 +93,7 @@ export function BurnRateRail({ lookback: _lookback }: Props) {
           >
             {utilPct}%
           </span>
-          <span style={{ fontSize: 10, color: 'var(--steel)' }}>of $200</span>
+          <span style={{ fontSize: 10, color: 'var(--steel)' }}>of ${budget}</span>
         </div>
 
         {/* Budget bar */}
@@ -109,7 +118,7 @@ export function BurnRateRail({ lookback: _lookback }: Props) {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
           <span style={{ fontSize: 9, color: 'var(--graphite)' }}>$0</span>
-          <span style={{ fontSize: 9, color: 'var(--graphite)' }}>$200</span>
+          <span style={{ fontSize: 9, color: 'var(--graphite)' }}>${budget}</span>
         </div>
       </div>
     </div>

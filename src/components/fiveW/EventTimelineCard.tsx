@@ -3,8 +3,19 @@
 import { useState, useMemo } from 'react';
 import { makeRng } from '@/lib/rng';
 import { fmtUsd } from '@/lib/fmt';
+import { trpc } from '@/lib/trpc-client';
 
-const ANNOTATIONS = [
+type Sev = 'good' | 'bad' | 'warn' | 'info';
+
+interface Annotation {
+  d: number;
+  type: string;
+  title: string;
+  severity: Sev;
+  detail: string;
+}
+
+const FALLBACK_ANNOTATIONS: readonly Annotation[] = [
   { d: 3,  type: 'cache',  title: 'Cache rules updated',    severity: 'good', detail: '-$8.40/day' },
   { d: 8,  type: 'model',  title: 'Switched to Sonnet',     severity: 'good', detail: '-31% cost' },
   { d: 14, type: 'zombie', title: 'Loop detected',          severity: 'bad',  detail: '+$12 wasted' },
@@ -13,14 +24,17 @@ const ANNOTATIONS = [
   { d: 27, type: 'rule',   title: 'Routing rule added',     severity: 'good', detail: 'Haiku for short' },
 ] as const;
 
+function normalizeSeverity(s: string): Sev {
+  if (s === 'good' || s === 'bad' || s === 'warn' || s === 'info') return s;
+  return 'info';
+}
+
 const SEV_COLOR = {
   good: '#7CA893',
   bad:  '#B86B6B',
   warn: '#C9966B',
   info: '#8A9297',
 } as const;
-
-type Sev = 'good' | 'bad' | 'warn' | 'info';
 
 // SVG dimensions
 const W = 560;
@@ -47,7 +61,9 @@ function buildCurve(data: number[]) {
 export function EventTimelineCard() {
   const [selected, setSelected] = useState<number | null>(null);
 
-  const data = useMemo(() => {
+  const { data: timelineData } = trpc.events.timeline.useQuery();
+
+  const fallbackData = useMemo(() => {
     const rng = makeRng(44);
     return Array.from({ length: 30 }, (_, i) => {
       const base = 20 + rng() * 40;
@@ -58,6 +74,26 @@ export function EventTimelineCard() {
       return Math.max(8, base + spike + drop);
     });
   }, []);
+
+  const data = useMemo<number[]>(() => {
+    if (timelineData && timelineData.daily.length > 0) {
+      return timelineData.daily.map(d => d.costUsd);
+    }
+    return fallbackData;
+  }, [timelineData, fallbackData]);
+
+  const ANNOTATIONS = useMemo<readonly Annotation[]>(() => {
+    if (timelineData && timelineData.annotations.length > 0) {
+      return timelineData.annotations.map((a, i) => ({
+        d: Math.min(29, Math.max(0, i * 5)),
+        type: a.type,
+        title: a.title,
+        severity: normalizeSeverity(a.severity),
+        detail: a.detail ?? '',
+      }));
+    }
+    return FALLBACK_ANNOTATIONS;
+  }, [timelineData]);
 
   const { linePts, areaPath, px, py, min, max } = useMemo(() => buildCurve(data), [data]);
 

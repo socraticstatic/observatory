@@ -4,6 +4,7 @@ import { fmtUsd, fmtMs } from '@/lib/fmt';
 import { makeRng } from '@/lib/rng';
 import { LOOKBACKS, type Lookback } from '@/lib/models';
 import { Sparkline } from '@/components/shared/Sparkline';
+import { trpc } from '@/lib/trpc-client';
 
 interface Props {
   lookback: Lookback;
@@ -50,12 +51,16 @@ function buildSparkData(lookback: Lookback): number[] {
 }
 
 export function OverallCostHero({ lookback }: Props) {
-  const total = LB_TOTAL[lookback];
+  const { data: costData } = trpc.pulse.overallCost.useQuery({ lookback });
+  const { data: burnData } = trpc.pulse.burnRate.useQuery();
+  const { data: chartData } = trpc.pulse.pulseChart.useQuery({ lookback });
+
+  const total = costData?.totalCostUsd ?? LB_TOTAL[lookback];
   const trend = LB_TREND[lookback];
-  const pace  = LB_PACE[lookback];
-  const proj  = LB_PROJ[lookback];
-  const runway = LB_RUNWAY[lookback];
-  const data  = buildSparkData(lookback);
+  const pace  = burnData ? `$${burnData.todayCost.toFixed(2)} today` : LB_PACE[lookback];
+  const proj  = burnData ? `$${(burnData.projected * 30).toFixed(0)}/mo` : LB_PROJ[lookback];
+  const runway = burnData ? `${burnData.runway.toFixed(1)} days` : LB_RUNWAY[lookback];
+  const data  = chartData ? chartData.map(r => r.cost) : buildSparkData(lookback);
 
   return (
     <div

@@ -8,7 +8,16 @@ interface Props {
 
 type Provider = 'all' | 'anthropic' | 'google' | 'xai';
 
-const EVENTS = [
+interface StreamEvent {
+  id: number;
+  ts: string;
+  provider: string;
+  type: string;
+  label: string;
+  data: any;
+}
+
+const EVENTS: StreamEvent[] = [
   {
     id: 1,
     ts: '2026-04-19T09:14:22.441Z',
@@ -110,7 +119,7 @@ const EVENTS = [
       cost_usd: 0.0082,
     },
   },
-] as const;
+];
 
 const PROVIDER_COLORS: Record<string, string> = {
   anthropic: '#9BC4CC',
@@ -155,6 +164,7 @@ export function SystemLogOverlay({ onClose }: Props) {
   const [selected, setSelected] = useState<number>(1);
   const [provider, setProvider] = useState<Provider>('all');
   const [paused, setPaused] = useState(false);
+  const [events, setEvents] = useState<StreamEvent[]>(EVENTS);
 
   const handleKey = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose();
@@ -165,11 +175,35 @@ export function SystemLogOverlay({ onClose }: Props) {
     return () => window.removeEventListener('keydown', handleKey);
   }, [handleKey]);
 
-  const selectedEvent = EVENTS.find(e => e.id === selected) ?? EVENTS[0];
+  useEffect(() => {
+    if (paused) return;
+    const url = `/api/stream${provider !== 'all' ? `?provider=${provider}` : ''}`;
+    let evtSource: EventSource | null = null;
+    try {
+      evtSource = new EventSource(url);
+      evtSource.onmessage = (e) => {
+        try {
+          const event: StreamEvent = JSON.parse(e.data);
+          setEvents(prev => [event, ...prev].slice(0, 512));
+        } catch {
+          // ignore malformed events
+        }
+      };
+      evtSource.onerror = () => {
+        // silently fall back to static events; close stream
+        evtSource?.close();
+      };
+    } catch {
+      // environment without EventSource: keep static events
+    }
+    return () => { evtSource?.close(); };
+  }, [paused, provider]);
+
+  const selectedEvent = events.find(e => e.id === selected) ?? events[0] ?? EVENTS[0];
 
   const filteredEvents = provider === 'all'
-    ? EVENTS
-    : EVENTS.filter(e => e.provider === provider);
+    ? events
+    : events.filter(e => e.provider === provider);
 
   const prettyJson = JSON.stringify(selectedEvent.data, null, 2);
   const highlighted = highlightTokenFields(highlight(prettyJson));

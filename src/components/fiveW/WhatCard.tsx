@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { fmt } from '@/lib/fmt';
 import { makeRng } from '@/lib/rng';
 import { LOOKBACKS, Lookback } from '@/lib/models';
+import { trpc } from '@/lib/trpc-client';
 
 type ViewMode = 'stacked' | 'grouped' | 'flow';
 
@@ -262,7 +263,15 @@ export function WhatCard({ lookback, onDrill }: WhatCardProps) {
   const [width, setWidth] = useState(600);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const data = buildData(lookback);
+  const { data: rawData } = trpc.what.tokenLifecycle.useQuery({ lookback });
+  const data: Bar[] = rawData
+    ? rawData.map(r => ({
+        cached: r.cached,
+        input: r.input,
+        output: r.output,
+        reasoning: r.reasoning,
+      }))
+    : buildData(lookback);
 
   useEffect(() => {
     const el = containerRef.current;

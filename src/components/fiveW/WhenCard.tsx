@@ -1,7 +1,14 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { makeRng } from '@/lib/rng';
+import { trpc } from '@/lib/trpc-client';
+
+function getDayOfYear(date: Date): number {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = date.getTime() - start.getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
 
 const DAYS = 30;
 const HOURS = 24;
@@ -29,7 +36,7 @@ function buildMatrix(): number[][] {
   );
 }
 
-const MATRIX = buildMatrix();
+const FALLBACK_MATRIX = buildMatrix();
 
 const CELL_H = 14;
 const PAD_L  = 44;
@@ -47,6 +54,24 @@ export function WhenCard({ onDrill }: WhenCardProps) {
   const [width, setWidth]   = useState(700);
   const [tooltip, setTip]   = useState<TooltipState | null>(null);
   const containerRef        = useRef<HTMLDivElement>(null);
+
+  const { data: heatData } = trpc.when.heatmap.useQuery();
+
+  const MATRIX = useMemo<number[][]>(() => {
+    if (!heatData || heatData.length === 0) return FALLBACK_MATRIX;
+    const matrix: number[][] = Array.from({ length: DAYS }, () => Array(HOURS).fill(0));
+    const today = new Date();
+    const todayDoy = getDayOfYear(today);
+    // Normalize values to 0-1 range for color lerp
+    const maxVal = Math.max(...heatData.map(c => c.value), 1);
+    for (const cell of heatData) {
+      const dayIdx = (((cell.d - todayDoy) % 365) + 365) % 365;
+      if (dayIdx < DAYS) {
+        matrix[DAYS - 1 - dayIdx][cell.h] = cell.value / maxVal;
+      }
+    }
+    return matrix;
+  }, [heatData]);
 
   useEffect(() => {
     const el = containerRef.current;

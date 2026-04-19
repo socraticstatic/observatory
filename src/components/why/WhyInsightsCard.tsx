@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { trpc } from '@/lib/trpc-client';
 
 interface Attribution {
   label: string;
@@ -17,7 +18,7 @@ interface Insight {
   drillTarget: string;
 }
 
-const INSIGHTS: Insight[] = [
+const FALLBACK_INSIGHTS: Insight[] = [
   {
     id: 1,
     severity: 'bad',
@@ -102,8 +103,28 @@ function AttributionBar({ bars }: { bars: Attribution[] }) {
   );
 }
 
+function normalizeSev(s: string): 'bad' | 'warn' | 'info' {
+  if (s === 'bad' || s === 'warn' || s === 'info') return s;
+  if (s === 'critical' || s === 'error') return 'bad';
+  if (s === 'warning') return 'warn';
+  return 'info';
+}
+
 export function WhyInsightsCard() {
   const [expanded, setExpanded] = useState<number | null>(null);
+  const { data: insightData } = trpc.insights.whyInsights.useQuery();
+
+  const INSIGHTS = useMemo<Insight[]>(() => {
+    if (!insightData || insightData.length === 0) return FALLBACK_INSIGHTS;
+    return insightData.map((r, idx) => ({
+      id: idx + 1,
+      severity: normalizeSev(r.severity),
+      title: r.title,
+      attribution: [{ label: 'Cost', pct: 1, col: '#6FA8B3' }],
+      rec: r.recommendation,
+      drillTarget: 'HowCard',
+    }));
+  }, [insightData]);
 
   return (
     <div className="card">
