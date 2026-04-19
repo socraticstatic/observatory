@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef, useState, useEffect, useMemo } from 'react';
-import { makeRng } from '@/lib/rng';
 import { trpc } from '@/lib/trpc-client';
 
 function getDayOfYear(date: Date): number {
@@ -24,19 +23,7 @@ function lerpColor(t: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
-function buildMatrix(): number[][] {
-  const r = makeRng(21);
-  return Array.from({ length: DAYS }, (_, d) =>
-    Array.from({ length: HOURS }, (_, h) => {
-      const dayPart  = 0.2 + 0.8 * Math.max(0, Math.sin((h - 6) / 24 * Math.PI));
-      const weekPart = (d % 7 === 5 || d % 7 === 6) ? 0.4 : 1;
-      const noise    = 0.4 + r() * 0.6;
-      return Math.min(1, dayPart * weekPart * noise);
-    })
-  );
-}
-
-const FALLBACK_MATRIX = buildMatrix();
+const FALLBACK_MATRIX: number[][] = Array.from({ length: DAYS }, () => Array(HOURS).fill(0));
 
 const CELL_H = 14;
 const PAD_L  = 44;
