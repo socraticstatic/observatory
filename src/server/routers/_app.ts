@@ -12,6 +12,7 @@ import { eventsRouter } from './events';
 import { entityRouter } from './entity';
 import { insightsRouter } from './insights';
 import { tracesRouter } from './traces';
+import { sessionsRouter } from './sessions';
 
 export const appRouter = router({
   pulse:    pulseRouter,
@@ -26,6 +27,7 @@ export const appRouter = router({
   entity:   entityRouter,
   insights: insightsRouter,
   traces:   tracesRouter,
+  sessions: sessionsRouter,
 });
 
 export type AppRouter = typeof appRouter;
