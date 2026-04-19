@@ -30,7 +30,7 @@ import { SessionsView } from '@/components/views/SessionsView';
 import { RulesView } from '@/components/views/RulesView';
 import { ArchiveView } from '@/components/views/ArchiveView';
 import { makeRng } from '@/lib/rng';
-import type { Lookback } from '@/lib/models';
+import type { Lookback } from '@/lib/lookback';
 
 type Density = 'comfortable' | 'compact' | 'dense';
 

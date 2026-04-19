@@ -2,7 +2,7 @@
 
 import { fmtUsd, fmtMs } from '@/lib/fmt';
 import { makeRng } from '@/lib/rng';
-import { LOOKBACKS, type Lookback } from '@/lib/models';
+import { LOOKBACKS, type Lookback } from '@/lib/lookback';
 import { Sparkline } from '@/components/shared/Sparkline';
 import { trpc } from '@/lib/trpc-client';
 

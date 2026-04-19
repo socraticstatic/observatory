@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { fmt } from '@/lib/fmt';
 import { makeRng } from '@/lib/rng';
-import { LOOKBACKS, Lookback } from '@/lib/models';
+import { LOOKBACKS, Lookback } from '@/lib/lookback';
 import { trpc } from '@/lib/trpc-client';
 
 type ViewMode = 'stacked' | 'grouped' | 'flow';

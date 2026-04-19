@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { fmt, fmtMs } from '@/lib/fmt';
-import { LOOKBACKS, Lookback } from '@/lib/models';
+import { LOOKBACKS, Lookback } from '@/lib/lookback';
 
 interface Spike { i: number; }
 

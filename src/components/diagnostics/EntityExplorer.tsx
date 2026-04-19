@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { fmt, fmtUsd } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
-import type { Lookback } from '@/lib/models';
+import type { Lookback } from '@/lib/lookback';
 
 interface Project {
   id: string;

@@ -1,6 +1,6 @@
 'use client';
 
-import { type Lookback } from '@/lib/models';
+import { type Lookback } from '@/lib/lookback';
 import { trpc } from '@/lib/trpc-client';
 
 interface Stat {
