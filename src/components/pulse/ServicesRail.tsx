@@ -8,6 +8,7 @@ import type { Lookback } from '@/lib/models';
 
 interface ServicesRailProps {
   lookback: Lookback;
+  providerFilter?: string;
 }
 
 const PROVIDER_META: Record<string, { label: string; col: string; initial: string }> = {
@@ -24,12 +25,13 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
-export function ServicesRail({ lookback }: ServicesRailProps) {
+export function ServicesRail({ lookback, providerFilter }: ServicesRailProps) {
   const [showModal, setShowModal] = useState(false);
   const { data, refetch } = trpc.who.providerBreakdown.useQuery({ lookback });
 
-  const rows = data ?? [];
-  const total = rows.reduce((s, r) => s + r.costUsd, 0);
+  const allRows = data ?? [];
+  const rows = providerFilter ? allRows.filter(r => r.provider === providerFilter) : allRows;
+  const total = allRows.reduce((s, r) => s + r.costUsd, 0);
 
   return (
     <>

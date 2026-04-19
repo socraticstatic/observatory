@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { fmtUsd } from '@/lib/fmt';
 
 const BASE_DAILY  = 21.72;
@@ -116,15 +116,15 @@ export function CounterfactualSimulator() {
                 { period: 'Monthly', base: BASE_DAILY * 30,    proj: projMonthly },
                 { period: 'Annual',  base: BASE_DAILY * 365,   proj: projAnnual },
               ].map(row => (
-                <>
-                  <span key={`p-${row.period}`} style={{ fontSize: 10, color: 'var(--steel)' }}>{row.period}</span>
-                  <span key={`b-${row.period}`} className="mono" style={{ fontSize: 11, color: 'var(--graphite)', textDecoration: 'line-through' }}>
+                <Fragment key={row.period}>
+                  <span style={{ fontSize: 10, color: 'var(--steel)' }}>{row.period}</span>
+                  <span className="mono" style={{ fontSize: 11, color: 'var(--graphite)', textDecoration: 'line-through' }}>
                     {fmtUsd(row.base)}
                   </span>
-                  <span key={`n-${row.period}`} className="mono" style={{ fontSize: 13, color: deltaDaily < 0 ? 'var(--good)' : 'var(--bad)', fontWeight: 600 }}>
+                  <span className="mono" style={{ fontSize: 13, color: deltaDaily < 0 ? 'var(--good)' : 'var(--bad)', fontWeight: 600 }}>
                     {fmtUsd(row.proj)}
                   </span>
-                </>
+                </Fragment>
               ))}
             </div>
           </div>

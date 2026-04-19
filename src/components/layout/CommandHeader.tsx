@@ -16,10 +16,10 @@ interface Props {
 const LOOKBACK_KEYS = Object.keys(LOOKBACKS) as Lookback[];
 
 const MODEL_TOGGLES: { id: string; label: string; dot: string | null }[] = [
-  { id: 'all',    label: 'ALL',    dot: null },
-  { id: 'claude', label: 'Claude', dot: '#6FA8B3' },
-  { id: 'gemini', label: 'Gemini', dot: '#C9B08A' },
-  { id: 'grok',   label: 'Grok',   dot: '#B88A8A' },
+  { id: 'all',       label: 'ALL',    dot: null },
+  { id: 'anthropic', label: 'Claude', dot: '#6FA8B3' },
+  { id: 'google',    label: 'Gemini', dot: '#C9B08A' },
+  { id: 'xai',       label: 'Grok',   dot: '#B88A8A' },
 ];
 
 // --- LiveBar ---

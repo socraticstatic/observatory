@@ -184,7 +184,10 @@ export function SystemLogOverlay({ onClose }: Props) {
       evtSource.onmessage = (e) => {
         try {
           const event: StreamEvent = JSON.parse(e.data);
-          setEvents(prev => [event, ...prev].slice(0, 512));
+          setEvents(prev => {
+            if (prev.some(p => p.id === event.id)) return prev;
+            return [event, ...prev].slice(0, 512);
+          });
         } catch {
           // ignore malformed events
         }

@@ -107,7 +107,7 @@ export default function App() {
 
           {view === 'Pulse' && (
             <>
-              <ServicesRail lookback={lookback} />
+              <ServicesRail lookback={lookback} providerFilter={modelFilter !== 'all' ? modelFilter : undefined} />
               <OverallCostHero lookback={lookback} />
               <PulseBar
                 tpmHist={pulseData.tpm}
@@ -145,6 +145,7 @@ export default function App() {
                     selected={selectedModel}
                     setSelected={setSelectedModel}
                     lookback={lookback}
+                    providerFilter={modelFilter !== 'all' ? modelFilter : undefined}
                     onDrill={(m) => drillTo('model', `WHO · ${m.name}`, 1)}
                   />
                 </div>

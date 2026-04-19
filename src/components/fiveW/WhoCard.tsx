@@ -29,10 +29,11 @@ interface WhoCardProps {
   selected: string | null;
   setSelected: (id: string | null) => void;
   lookback: Lookback;
+  providerFilter?: string;
   onDrill?: (m: any) => void;
 }
 
-export function WhoCard({ selected, setSelected, lookback, onDrill }: WhoCardProps) {
+export function WhoCard({ selected, setSelected, lookback, providerFilter, onDrill }: WhoCardProps) {
   const [simOn, setSimOn] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('tpm');
   const { costMul } = LOOKBACKS[lookback];
@@ -40,20 +41,22 @@ export function WhoCard({ selected, setSelected, lookback, onDrill }: WhoCardPro
   const { data: modelData } = trpc.who.modelAttribution.useQuery({ lookback });
 
   const models: Model[] = useMemo(() => {
-    if (!modelData || modelData.length === 0) return MODELS;
-    return modelData.map(m => ({
-      id: m.model,
-      name: m.model,
-      vendor: m.provider,
-      share: m.share / 100,
-      tpm: m.calls,
-      p50: m.avgLatMs,
-      p95: m.p95LatMs,
-      cost: m.cost,
-      err: m.errorRatePct,
-      col: modelColor(m.model),
-    }));
-  }, [modelData]);
+    const base = !modelData || modelData.length === 0
+      ? MODELS
+      : modelData.map(m => ({
+          id: m.model,
+          name: m.model,
+          vendor: m.provider,
+          share: m.share / 100,
+          tpm: m.calls,
+          p50: m.avgLatMs,
+          p95: m.p95LatMs,
+          cost: m.cost,
+          err: m.errorRatePct,
+          col: modelColor(m.model),
+        }));
+    return providerFilter ? base.filter(m => m.vendor === providerFilter) : base;
+  }, [modelData, providerFilter]);
 
   const sorted = useMemo(() => {
     return [...models].sort((a, b) => {
