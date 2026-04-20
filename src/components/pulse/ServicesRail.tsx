@@ -5,18 +5,25 @@ import { fmtUsd } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 import { AddServiceModal } from './AddServiceModal';
 import type { Lookback } from '@/lib/lookback';
+import type { RegisteredService } from '@prisma/client';
 
 interface ServicesRailProps {
   lookback: Lookback;
   providerFilter?: string;
 }
 
-const PROVIDER_META: Record<string, { label: string; col: string; initial: string }> = {
-  anthropic: { label: 'Anthropic', col: '#9BC4CC', initial: 'A' },
-  google:    { label: 'Google',    col: '#C9B08A', initial: 'G' },
-  xai:       { label: 'xAI',       col: '#B88A8A', initial: 'X' },
-  local:     { label: 'Local',     col: '#7CA893', initial: 'L' },
-  unknown:   { label: 'Other',     col: '#6A7278', initial: '?' },
+const PROVIDER_META: Record<string, { label: string; col: string; initial: string; category: 'llm' | 'creative' }> = {
+  anthropic:  { label: 'Anthropic',   col: '#9BC4CC', initial: 'A', category: 'llm' },
+  google:     { label: 'Google',      col: '#C9B08A', initial: 'G', category: 'llm' },
+  xai:        { label: 'xAI',         col: '#B88A8A', initial: 'X', category: 'llm' },
+  openai:     { label: 'OpenAI',      col: '#7CA893', initial: 'O', category: 'llm' },
+  mistral:    { label: 'Mistral',     col: '#A899C8', initial: 'M', category: 'llm' },
+  local:      { label: 'Local',       col: '#7CA893', initial: 'L', category: 'llm' },
+  unknown:    { label: 'Other',       col: '#6A7278', initial: '?', category: 'llm' },
+  leonardo:   { label: 'Leonardo',    col: '#C87C6A', initial: 'L', category: 'creative' },
+  heygen:     { label: 'HeyGen',      col: '#6A9CC8', initial: 'H', category: 'creative' },
+  elevenlabs: { label: 'ElevenLabs',  col: '#8AC87C', initial: 'E', category: 'creative' },
+  stability:  { label: 'Stability',   col: '#C8A86A', initial: 'S', category: 'creative' },
 };
 
 function fmtTokens(n: number): string {
@@ -27,16 +34,26 @@ function fmtTokens(n: number): string {
 
 export function ServicesRail({ lookback, providerFilter }: ServicesRailProps) {
   const [showModal, setShowModal] = useState(false);
-  const { data, refetch } = trpc.who.providerBreakdown.useQuery({ lookback });
+  const { data: liveData, refetch } = trpc.who.providerBreakdown.useQuery({ lookback });
+  const { data: registered }        = trpc.services.list.useQuery();
 
-  const allRows = data ?? [];
-  const rows = providerFilter ? allRows.filter(r => r.provider === providerFilter) : allRows;
-  const total = allRows.reduce((s, r) => s + r.costUsd, 0);
+  const liveRows  = liveData ?? [];
+  const liveSet   = new Set(liveRows.map(r => r.provider));
+  const total     = liveRows.reduce((s, r) => s + r.costUsd, 0);
+
+  // Creative services that have been registered but have no live events yet
+  const registeredOnly = (registered ?? [] as RegisteredService[]).filter((s: RegisteredService) => !liveSet.has(s.provider));
+
+  const allRows = providerFilter
+    ? liveRows.filter(r => r.provider === providerFilter)
+    : liveRows;
+
+  const showRegisteredOnly = !providerFilter;
 
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'row', gap: 12, marginBottom: 16, overflowX: 'auto' }}>
-        {rows.map((row) => {
+        {allRows.map((row) => {
           const meta = PROVIDER_META[row.provider] ?? PROVIDER_META.unknown;
           const sharePct = total > 0 ? Math.round((row.costUsd / total) * 100) : 0;
           return (
@@ -55,17 +72,13 @@ export function ServicesRail({ lookback, providerFilter }: ServicesRailProps) {
                 </div>
                 <span className="dot live" />
               </div>
-
               <span className="label" style={{ fontSize: 9 }}>{meta.label}</span>
-
               <div className="mono" style={{ fontSize: 18, fontWeight: 600, color: 'var(--mist)', lineHeight: 1 }}>
                 {fmtUsd(row.costUsd)}
               </div>
-
               <div style={{ fontSize: 10, color: 'var(--steel)' }}>
                 {fmtTokens(row.tokens)} tok
               </div>
-
               <div style={{ marginTop: 4 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                   <span style={{ fontSize: 9, color: 'var(--graphite)', letterSpacing: '.06em', textTransform: 'uppercase' }}>share</span>
@@ -74,6 +87,36 @@ export function ServicesRail({ lookback, providerFilter }: ServicesRailProps) {
                 <div style={{ height: 3, borderRadius: 2, background: 'var(--line)', overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${sharePct}%`, borderRadius: 2, background: meta.col, opacity: 0.85 }} />
                 </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Registered-only services (no live events yet) */}
+        {showRegisteredOnly && registeredOnly.map((svc: RegisteredService) => {
+          const meta = PROVIDER_META[svc.provider] ?? { label: svc.label, col: '#6A7278', initial: svc.label[0].toUpperCase(), category: svc.category as 'llm' | 'creative' };
+          return (
+            <div
+              key={svc.provider}
+              className="card"
+              style={{ width: 180, flexShrink: 0, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, opacity: 0.6 }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: 4, background: meta.col,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 700, color: 'var(--ink)', flexShrink: 0,
+                }}>
+                  {meta.initial}
+                </div>
+                <span className="dot" style={{ background: 'var(--graphite)' }} />
+              </div>
+              <span className="label" style={{ fontSize: 9 }}>{meta.label}</span>
+              <div className="mono" style={{ fontSize: 18, fontWeight: 600, color: 'var(--mist)', lineHeight: 1 }}>
+                {fmtUsd(0)}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--graphite)' }}>
+                {svc.category === 'creative' ? 'no ingest yet' : 'no events yet'}
               </div>
             </div>
           );
