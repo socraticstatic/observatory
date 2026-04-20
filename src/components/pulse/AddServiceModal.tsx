@@ -197,7 +197,7 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
               padding: '6px 16px',
               borderColor: status === 'ok'
                 ? 'rgba(124,168,147,.4)'
-                : 'rgba(217,119,87,.35)',
+                : 'rgba(111,168,179,.35)',
               color: status === 'ok'
                 ? 'var(--good)'
                 : 'var(--accent-2)',

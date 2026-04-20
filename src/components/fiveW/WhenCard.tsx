@@ -12,7 +12,7 @@ function getDayOfYear(date: Date): number {
 const DAYS = 30;
 const HOURS = 24;
 
-// Color interpolation from ink (#0B1014) to accent (#D97757)
+// Color interpolation from ink (#0B1014) to accent (#6FA8B3)
 const INK  = { r: 0x0B, g: 0x10, b: 0x14 };
 const ACCT = { r: 0xD9, g: 0x77, b: 0x57 };
 

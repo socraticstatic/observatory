@@ -7,11 +7,11 @@ import { trpc } from '@/lib/trpc-client';
 // Color by content type
 const TYPE_COL: Record<string, string> = {
   user_turn:      '#A89276',
-  assistant_turn: '#D97757',
+  assistant_turn: '#6FA8B3',
   tool_call:      '#C9966B',
   tool_result:    '#C9966B',
-  cache_read:     '#7A9E8A',
-  cache_write:    '#7A9E8A',
+  cache_read:     '#7CA893',
+  cache_write:    '#7CA893',
   llm_call:       '#A89276',
   unknown:        '#7A7068',
 };

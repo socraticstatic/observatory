@@ -15,7 +15,7 @@ function nDaysAgoStr(n: number): string {
 }
 
 function providerDot(p: string): string {
-  if (p === 'anthropic') return '#D97757';
+  if (p === 'anthropic') return '#6FA8B3';
   if (p === 'google')    return '#8BA89C';
   if (p === 'xai')       return '#B88A8A';
   return '#7A7068';

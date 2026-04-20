@@ -14,12 +14,12 @@ interface ServicesRailProps {
 
 const PROVIDER_META: Record<string, { label: string; col: string; initial: string; category: 'llm' | 'creative' }> = {
   // LLM providers — warm palette
-  anthropic:  { label: 'Anthropic',   col: '#D97757', initial: 'A', category: 'llm' },
+  anthropic:  { label: 'Anthropic',   col: '#6FA8B3', initial: 'A', category: 'llm' },
   google:     { label: 'Google',      col: '#8BA89C', initial: 'G', category: 'llm' },
   xai:        { label: 'xAI',         col: '#B88A8A', initial: 'X', category: 'llm' },
   openai:     { label: 'OpenAI',      col: '#7CA893', initial: 'O', category: 'llm' },
   mistral:    { label: 'Mistral',     col: '#A89276', initial: 'M', category: 'llm' },
-  local:      { label: 'Local',       col: '#9EA87A', initial: 'L', category: 'llm' },
+  local:      { label: 'Local',       col: '#7CA893', initial: 'L', category: 'llm' },
   unknown:    { label: 'Other',       col: '#7A7068', initial: '?', category: 'llm' },
   // Creative service providers
   leonardo:   { label: 'Leonardo',    col: '#C96442', initial: 'L', category: 'creative' },

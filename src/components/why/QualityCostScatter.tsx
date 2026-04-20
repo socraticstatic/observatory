@@ -1,53 +1,91 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useLayoutEffect, Fragment } from 'react';
 import { fmtUsd } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 import type { Lookback } from '@/lib/lookback';
 
-// Claude warm terracotta palette
-function modelColor(model: string): string {
-  if (model.includes('opus'))   return '#D97757';
-  if (model.includes('sonnet')) return '#C9966B';
-  if (model.includes('haiku'))  return '#9EA87A';
-  if (model.includes('gemini')) return '#8BA89C';
-  if (model.includes('grok'))   return '#A08870';
-  return '#7A8878';
+function quadrantColor(normCost: number, normQuality: number): string {
+  const highQuality = normQuality >= 0.5;
+  const highCost    = normCost    >= 0.5;
+  if (highQuality && !highCost)  return '#7CA893'; // efficient
+  if (highQuality &&  highCost)  return '#9BC4CC'; // premium
+  if (!highQuality && !highCost) return '#8A9297'; // low-value
+  return '#B86B6B';                                // over-spend
 }
 
+function quadrantTag(normCost: number, normQuality: number): string {
+  const highQuality = normQuality >= 0.5;
+  const highCost    = normCost    >= 0.5;
+  if (highQuality && !highCost)  return 'efficient';
+  if (highQuality &&  highCost)  return 'premium';
+  if (!highQuality && !highCost) return 'low-value';
+  return 'over-spend';
+}
 
-const PL = 52, PR = 24, PT = 28, PB = 44;
-const W = 460, H = 300;
-const DW = W - PL - PR;
-const DH = H - PT - PB;
+interface Pt {
+  label: string;
+  cost: number;
+  quality: number;
+  normCost: number;
+  normQuality: number;
+  size: number;
+  col: string;
+  tag: string;
+  hasQuality: boolean;
+}
 
-interface Pt { label: string; costUsd: number; quality: number; model: string; hasQuality: boolean }
-interface TT  { label: string; model: string; cost: number; quality: number; hasQuality: boolean; x: number; y: number }
+const H = 280;
+const PAD = { l: 40, r: 16, t: 14, b: 30 };
 
 export function QualityCostScatter({ lookback }: { lookback: Lookback }) {
-  const [hovered, setHovered] = useState<string | null>(null);
-  const [tooltip, setTooltip] = useState<TT | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(520);
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver(() => {
+      if (ref.current) setW(ref.current.offsetWidth);
+    });
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const [hover, setHover] = useState<number | null>(null);
 
   const { data: raw } = trpc.costDrivers.qualityCostByProject.useQuery({ lookback });
 
-  const points = useMemo<Pt[]>(() => raw as Pt[] ?? [], [raw]);
+  const { points, iw, ih } = useMemo(() => {
+    const rows = raw ?? [];
+    const iw   = w - PAD.l - PAD.r;
+    const ih   = H - PAD.t - PAD.b;
 
-  const allNoQuality = points.every(p => !p.hasQuality);
-  const costMax = Math.max(...points.map(p => p.costUsd)) * 1.15 || 1;
-  const qualMin = allNoQuality ? 60 : Math.max(0,   Math.min(...points.map(p => p.quality)) - 8);
-  const qualMax = allNoQuality ? 100 : Math.min(100, Math.max(...points.map(p => p.quality)) + 4);
+    if (!rows.length) return { points: [] as Pt[], iw, ih };
 
-  const cR = costMax || 1;
-  const qR = qualMax - qualMin || 1;
+    const maxCost    = Math.max(...rows.map(r => r.costUsd)) || 1;
+    const hasQuality = rows.some(r => r.hasQuality);
+    const maxQuality = hasQuality ? 100 : 1;
 
-  const toX  = (c: number) => PL + (c / cR) * DW;
-  const toY  = (q: number) => PT + (1 - (q - qualMin) / qR) * DH;
-  const toYP = (p: Pt)     => p.hasQuality ? toY(p.quality) : toY(qualMin + qR * 0.5);
-  const toR  = (c: number) => 5 + (c / costMax) * 7;
+    const points: Pt[] = rows.map(r => {
+      const normCost    = r.costUsd / maxCost;
+      const normQuality = r.hasQuality ? r.quality / maxQuality : 0.5;
+      return {
+        label:       r.label,
+        cost:        r.costUsd,
+        quality:     r.quality,
+        normCost,
+        normQuality,
+        size:        5 + normCost * 9,
+        col:         quadrantColor(normCost, normQuality),
+        tag:         quadrantTag(normCost, normQuality),
+        hasQuality:  r.hasQuality,
+      };
+    });
 
-  const xTicks = [0, 0.25, 0.5, 0.75, 1].map(t => t * costMax);
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(t => qualMin + t * qR);
-  const usedModels = [...new Set(points.map(p => p.model))];
+    return { points, iw, ih };
+  }, [raw, w]);
+
+  const cx = (normCost: number)    => PAD.l + normCost    * iw;
+  const cy = (normQuality: number) => PAD.t + (1 - normQuality) * ih;
 
   if (!raw) return (
     <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
@@ -55,207 +93,135 @@ export function QualityCostScatter({ lookback }: { lookback: Lookback }) {
     </div>
   );
 
-  if (points.length === 0) return (
-    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
-      <span style={{ fontSize: 12, color: 'var(--steel)' }}>No project data for this window.</span>
-    </div>
-  );
-
   return (
-    <div className="card" style={{ padding: '20px 24px' }}>
+    <div className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
+      <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fog)', letterSpacing: '-.01em', lineHeight: 1.2 }}>
-            Quality × Cost
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="label">VALUE</span>
+            <span style={{ width: 14, height: 1, background: 'var(--line-2)' }} />
+            <span style={{ fontSize: 13, fontWeight: 500 }}>Quality × Cost per project</span>
           </div>
-          <div style={{ fontSize: 10, color: 'var(--graphite)', marginTop: 3, letterSpacing: '.08em' }}>
-            efficiency frontier · 24h window
+          <div className="label" style={{ marginTop: 4, color: 'var(--graphite)' }}>
+            {points.length} projects · {lookback.toLowerCase()} window · quality-score composite
           </div>
         </div>
-        {allNoQuality && points.length > 0 && (
-          <div style={{
-            fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase',
-            color: 'var(--graphite)', background: 'rgba(255,255,255,.03)',
-            border: '1px solid var(--line)',
-            padding: '3px 8px', borderRadius: 4,
-          }}>
-            no scores
-          </div>
-        )}
-      </div>
-
-      <div style={{ position: 'relative' }}>
-        <svg
-          width={W} height={H}
-          viewBox={`0 0 ${W} ${H}`}
-          style={{ display: 'block', maxWidth: '100%', overflow: 'visible' }}
-        >
-          <defs>
-            {usedModels.map(m => {
-              const col = modelColor(m);
-              const id  = `rg-${m.replace(/[^a-z0-9]/gi, '')}`;
-              return (
-                <radialGradient key={id} id={id} cx="38%" cy="32%" r="68%">
-                  <stop offset="0%"   stopColor={col} stopOpacity="1" />
-                  <stop offset="100%" stopColor={col} stopOpacity="0.4" />
-                </radialGradient>
-              );
-            })}
-            <filter id="scatter-glow" x="-60%" y="-60%" width="220%" height="220%">
-              <feGaussianBlur stdDeviation="4" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* Warm chart-area tint */}
-          <rect x={PL} y={PT} width={DW} height={DH}
-            fill="rgba(217,119,87,.014)" rx="3" />
-
-          {/* Grid */}
-          {xTicks.map((v, i) => (
-            <line key={`gx${i}`} x1={toX(v)} y1={PT} x2={toX(v)} y2={PT + DH}
-              stroke="rgba(255,255,255,.032)" strokeWidth="1" />
-          ))}
-          {yTicks.map((v, i) => (
-            <line key={`gy${i}`} x1={PL} y1={toY(v)} x2={PL + DW} y2={toY(v)}
-              stroke="rgba(255,255,255,.032)" strokeWidth="1" />
-          ))}
-
-          {/* X tick labels */}
-          {xTicks.map((v, i) => (
-            <text key={`tx${i}`} x={toX(v)} y={PT + DH + 17}
-              textAnchor="middle"
-              fontFamily="'JetBrains Mono', monospace" fontSize="9"
-              fill="rgba(200,185,165,.36)"
-            >
-              {v < 0.005 ? '$0' : v < 1 ? `$${v.toFixed(2)}` : `$${Math.round(v)}`}
-            </text>
-          ))}
-
-          {/* Y tick labels */}
-          {yTicks.map((v, i) => (
-            <text key={`ty${i}`} x={PL - 7} y={toY(v) + 3.5}
-              textAnchor="end"
-              fontFamily="'JetBrains Mono', monospace" fontSize="9"
-              fill="rgba(200,185,165,.36)"
-            >
-              {v.toFixed(0)}
-            </text>
-          ))}
-
-          {/* Axis labels */}
-          <text x={PL + DW / 2} y={H - 4} textAnchor="middle"
-            fontSize="9" letterSpacing=".13em" fill="rgba(200,185,165,.26)">
-            COST (USD)
-          </text>
-          <text x={11} y={PT + DH / 2} textAnchor="middle"
-            fontSize="9" letterSpacing=".13em" fill="rgba(200,185,165,.26)"
-            transform={`rotate(-90, 11, ${PT + DH / 2})`}>
-            QUALITY
-          </text>
-
-          {/* Efficiency frontier */}
-          <line
-            x1={toX(0)} y1={toY(qualMin + qR * 0.08)}
-            x2={toX(costMax * 0.9)} y2={toY(qualMax * 0.99)}
-            stroke="rgba(217,119,87,.16)" strokeWidth="1.5" strokeDasharray="5 5"
-          />
-
-          {/* Data points — rendered back to front by cost so large dots are on top */}
-          {[...points].sort((a, b) => a.costUsd - b.costUsd).map(p => {
-            const cx  = toX(p.costUsd);
-            const cy  = toYP(p);
-            const r   = toR(p.costUsd);
-            const col = modelColor(p.model);
-            const gid = `rg-${p.model.replace(/[^a-z0-9]/gi, '')}`;
-            const on  = hovered === p.label;
-
+        <div style={{ display: 'flex', gap: 10, fontSize: 10, color: 'var(--steel)', letterSpacing: '.1em', textTransform: 'uppercase' }}>
+          {(['efficient', 'premium', 'low-value', 'over-spend'] as const).map(tag => {
+            const colors: Record<string, string> = { efficient: '#7CA893', premium: '#9BC4CC', 'low-value': '#8A9297', 'over-spend': '#B86B6B' };
             return (
-              <g key={p.label} style={{ cursor: 'pointer' }}
-                onMouseEnter={() => {
-                  setHovered(p.label);
-                  setTooltip({ label: p.label, model: p.model, cost: p.costUsd, quality: p.quality, hasQuality: p.hasQuality, x: cx, y: cy });
-                }}
-                onMouseLeave={() => { setHovered(null); setTooltip(null); }}
-              >
-                {on && (
-                  <circle cx={cx} cy={cy} r={r + 6}
-                    fill="none" stroke={col} strokeWidth="1" strokeOpacity=".22" />
-                )}
-                {!p.hasQuality && (
-                  <circle cx={cx} cy={cy} r={r + 3}
-                    fill="none" stroke={col} strokeWidth="1"
-                    strokeOpacity=".28" strokeDasharray="3 2.5" />
-                )}
-                <circle
-                  cx={cx} cy={cy} r={on ? r + 2 : r}
-                  fill={`url(#${gid})`}
-                  stroke={col}
-                  strokeWidth={on ? 1.5 : 1}
-                  strokeOpacity={on ? 1 : 0.65}
-                  filter={on ? 'url(#scatter-glow)' : undefined}
-                />
-                {on && (
-                  <text x={cx} y={cy - r - 9}
-                    textAnchor="middle" fontSize="10" fontWeight="500"
-                    fill={col}>
-                    {p.label.replace(/_/g, '\u00a0')}
-                  </text>
-                )}
-              </g>
+              <span key={tag} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors[tag] }} />
+                {tag.charAt(0).toUpperCase() + tag.slice(1)}
+              </span>
             );
           })}
-        </svg>
+        </div>
+      </div>
 
-        {tooltip && (
+      <div ref={ref} style={{ padding: 4, position: 'relative' }}>
+        {points.length === 0 ? (
+          <div style={{ height: H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 12, color: 'var(--steel)' }}>No project data for this window.</span>
+          </div>
+        ) : (
+          <svg width={w} height={H} style={{ display: 'block' }}>
+            {/* Quadrant fills */}
+            <rect x={PAD.l}       y={PAD.t}        width={iw / 2} height={ih / 2} fill="rgba(155,196,204,.03)" />
+            <rect x={PAD.l+iw/2} y={PAD.t}        width={iw / 2} height={ih / 2} fill="rgba(155,196,204,.06)" />
+            <rect x={PAD.l}       y={PAD.t+ih/2}   width={iw / 2} height={ih / 2} fill="rgba(138,146,151,.04)" />
+            <rect x={PAD.l+iw/2} y={PAD.t+ih/2}   width={iw / 2} height={ih / 2} fill="rgba(184,107,107,.06)" />
+
+            {/* Grid lines */}
+            {[0.25, 0.5, 0.75].map((p, i) => (
+              <Fragment key={i}>
+                <line x1={PAD.l} x2={PAD.l+iw} y1={PAD.t+ih*p} y2={PAD.t+ih*p} stroke="rgba(138,146,151,.1)" strokeDasharray="2 3" />
+                <line y1={PAD.t} y2={PAD.t+ih} x1={PAD.l+iw*p} x2={PAD.l+iw*p} stroke="rgba(138,146,151,.1)" strokeDasharray="2 3" />
+              </Fragment>
+            ))}
+
+            {/* Quadrant dividers */}
+            <line x1={PAD.l+iw/2} x2={PAD.l+iw/2} y1={PAD.t}      y2={PAD.t+ih} stroke="var(--accent)" strokeDasharray="4 4" opacity=".4" />
+            <line y1={PAD.t+ih/2} y2={PAD.t+ih/2} x1={PAD.l}       x2={PAD.l+iw} stroke="var(--accent)" strokeDasharray="4 4" opacity=".4" />
+
+            {/* Pareto frontier */}
+            <path
+              d={`M ${PAD.l} ${PAD.t+ih*.05} Q ${PAD.l+iw*.3} ${PAD.t+ih*.1} ${PAD.l+iw*.6} ${PAD.t+ih*.35} T ${PAD.l+iw} ${PAD.t+ih*.6}`}
+              stroke="#6FA8B3" strokeWidth="1" fill="none" strokeDasharray="1 3" opacity=".5"
+            />
+
+            {/* Quadrant labels */}
+            <text x={PAD.l+8}     y={PAD.t+14}   fill="#7CA893" fontFamily="JetBrains Mono" fontSize="9" letterSpacing="1">EFFICIENT</text>
+            <text x={PAD.l+iw-8}  y={PAD.t+14}   textAnchor="end" fill="#9BC4CC" fontFamily="JetBrains Mono" fontSize="9" letterSpacing="1">PREMIUM</text>
+            <text x={PAD.l+8}     y={PAD.t+ih-6} fill="#8A9297" fontFamily="JetBrains Mono" fontSize="9" letterSpacing="1">LOW-VALUE</text>
+            <text x={PAD.l+iw-8}  y={PAD.t+ih-6} textAnchor="end" fill="#B86B6B" fontFamily="JetBrains Mono" fontSize="9" letterSpacing="1">OVER-SPEND</text>
+
+            {/* Axes */}
+            <line x1={PAD.l} x2={PAD.l+iw} y1={PAD.t+ih} y2={PAD.t+ih} stroke="var(--line-2)" />
+            <line x1={PAD.l} x2={PAD.l}    y1={PAD.t}     y2={PAD.t+ih} stroke="var(--line-2)" />
+
+            {/* Axis labels */}
+            <text x={PAD.l+iw/2} y={H-4} textAnchor="middle" fill="var(--graphite)" fontFamily="JetBrains Mono" fontSize="9" letterSpacing="1">COST (USD)</text>
+            <text x={9} y={PAD.t+ih/2} textAnchor="middle" fill="var(--graphite)" fontFamily="JetBrains Mono" fontSize="9" letterSpacing="1" transform={`rotate(-90,9,${PAD.t+ih/2})`}>QUALITY</text>
+
+            {/* Data points */}
+            {points.map((pt, i) => {
+              const x   = cx(pt.normCost);
+              const y   = cy(pt.normQuality);
+              const on  = hover === i;
+              return (
+                <g key={pt.label} style={{ cursor: 'pointer' }}
+                  onMouseEnter={() => setHover(i)}
+                  onMouseLeave={() => setHover(null)}>
+                  {on && <circle cx={x} cy={y} r={pt.size + 6} fill="none" stroke={pt.col} strokeWidth="1" strokeOpacity=".22" />}
+                  {!pt.hasQuality && (
+                    <circle cx={x} cy={y} r={pt.size + 3} fill="none" stroke={pt.col} strokeWidth="1" strokeOpacity=".28" strokeDasharray="3 2.5" />
+                  )}
+                  <circle cx={x} cy={y} r={on ? pt.size + 2 : pt.size}
+                    fill={pt.col} fillOpacity={on ? 0.9 : 0.7}
+                    stroke={pt.col} strokeWidth={on ? 1.5 : 1} strokeOpacity={on ? 1 : 0.65}
+                  />
+                  {on && (
+                    <text x={x} y={y - pt.size - 7} textAnchor="middle" fontSize="10" fontWeight="500" fill={pt.col}>
+                      {pt.label.replace(/_/g, '\u00a0')}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </svg>
+        )}
+
+        {/* Tooltip */}
+        {hover !== null && points[hover] && (
           <div style={{
             position: 'absolute',
-            left: Math.min(tooltip.x + 14, W - 172),
-            top: Math.max(4, tooltip.y - 46),
+            left: Math.min(cx(points[hover].normCost) + 14, w - 172),
+            top: Math.max(4, cy(points[hover].normQuality) - 46),
             pointerEvents: 'none',
-            background: 'linear-gradient(160deg, #211C18 0%, #19150F 100%)',
-            border: '1px solid rgba(217,119,87,.22)',
-            borderRadius: 6,
+            background: 'linear-gradient(160deg, #1A2125 0%, #141A1E 100%)',
+            border: `1px solid ${points[hover].col}44`,
+            borderRadius: 'var(--r)',
             padding: '9px 13px',
             minWidth: 158,
             boxShadow: '0 10px 32px rgba(0,0,0,.65)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#E8D5C0', marginBottom: 7, lineHeight: 1.3 }}>
-              {tooltip.label.replace(/_/g, ' ')}
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--mist)', marginBottom: 7, lineHeight: 1.3 }}>
+              {points[hover].label.replace(/_/g, ' ')}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '3px 10px' }}>
-              <span style={{ fontSize: 10, color: 'rgba(200,185,165,.5)' }}>model</span>
-              <span className="mono" style={{ fontSize: 9, color: 'rgba(200,185,165,.65)' }}>{tooltip.model}</span>
-              <span style={{ fontSize: 10, color: 'rgba(200,185,165,.5)' }}>cost</span>
-              <span className="mono" style={{ fontSize: 11, color: '#D97757', fontWeight: 600 }}>{fmtUsd(tooltip.cost)}</span>
-              <span style={{ fontSize: 10, color: 'rgba(200,185,165,.5)' }}>quality</span>
-              <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: tooltip.hasQuality ? '#9EA87A' : 'rgba(200,185,165,.3)' }}>
-                {tooltip.hasQuality ? tooltip.quality.toFixed(1) : 'n/a'}
+              <span style={{ fontSize: 10, color: 'var(--steel)' }}>tag</span>
+              <span className="mono" style={{ fontSize: 9, color: points[hover].col }}>{points[hover].tag}</span>
+              <span style={{ fontSize: 10, color: 'var(--steel)' }}>cost</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>{fmtUsd(points[hover].cost)}</span>
+              <span style={{ fontSize: 10, color: 'var(--steel)' }}>quality</span>
+              <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: points[hover].hasQuality ? '#9BC4CC' : 'var(--graphite)' }}>
+                {points[hover].hasQuality ? points[hover].quality.toFixed(1) : 'n/a'}
               </span>
             </div>
           </div>
         )}
-      </div>
-
-      {/* Legend */}
-      <div style={{
-        display: 'flex', gap: 14, marginTop: 12, flexWrap: 'wrap',
-        paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.04)',
-      }}>
-        {usedModels.map(m => (
-          <span key={m} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10 }}>
-            <span style={{
-              width: 7, height: 7, borderRadius: '50%',
-              background: modelColor(m), display: 'inline-block',
-              boxShadow: `0 0 5px ${modelColor(m)}55`,
-            }} />
-            <span style={{ color: 'var(--steel)' }}>{m}</span>
-          </span>
-        ))}
       </div>
     </div>
   );

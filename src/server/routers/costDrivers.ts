@@ -8,20 +8,32 @@ function msSince(interval: string): number {
   return 30 * 86_400_000;
 }
 
-// Claude-inspired warm terracotta palette — matches component layer
-const COLORS = ['#D97757', '#C9966B', '#A89276', '#8BA89C', '#9EA87A', '#7A8878', '#A08870', '#7A9E8A'];
+const COLORS = ['#6FA8B3', '#9BC4CC', '#C9B08A', '#C8CED1', '#8A9297', '#7CA893', '#B89FC9', '#B88A8A'];
 
-type RawRow = { label: string | null; cost: unknown };
+type DetailRow = {
+  label:       string | null;
+  cost:        unknown;
+  calls:       bigint;
+  sessions:    bigint;
+  avg_lat_ms:  unknown;
+  p95_lat_ms:  unknown;
+};
 
-function mapDim(rows: RawRow[]) {
+function mapDim(rows: DetailRow[]) {
   const total = rows.reduce((s, r) => s + Number(r.cost), 0);
   return rows.map((r, i) => ({
-    label:   r.label ?? '(unknown)',
-    costUsd: Number(r.cost),
-    pct:     total > 0 ? (Number(r.cost) / total) * 100 : 0,
-    color:   COLORS[i % COLORS.length],
+    label:    r.label ?? '(unknown)',
+    costUsd:  Number(r.cost),
+    pct:      total > 0 ? (Number(r.cost) / total) * 100 : 0,
+    color:    COLORS[i % COLORS.length] as string,
+    calls:    Number(r.calls),
+    sessions: Number(r.sessions),
+    avgLatMs: r.avg_lat_ms != null ? Math.round(Number(r.avg_lat_ms)) : null,
+    p95LatMs: r.p95_lat_ms != null ? Math.round(Number(r.p95_lat_ms)) : null,
   }));
 }
+
+const DIM_SQL = (col: string) => col; // label for TS — SQL written inline per dim
 
 export const costDriversRouter = router({
   sixDimension: publicProcedure
@@ -29,31 +41,50 @@ export const costDriversRouter = router({
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
       const [byProvider, byModel, bySurface, byProject, byContentType, byRegion] = await Promise.all([
-        ctx.db.$queryRaw<RawRow[]>`
-          SELECT provider AS label, SUM("costUsd")::float AS cost
+        ctx.db.$queryRaw<DetailRow[]>`
+          SELECT provider AS label, SUM("costUsd")::float AS cost,
+            COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
+            AVG("latencyMs")::float AS avg_lat_ms,
+            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
           FROM llm_events WHERE ts >= ${since}
           GROUP BY provider ORDER BY cost DESC LIMIT 8`,
-        ctx.db.$queryRaw<RawRow[]>`
-          SELECT model AS label, SUM("costUsd")::float AS cost
+        ctx.db.$queryRaw<DetailRow[]>`
+          SELECT model AS label, SUM("costUsd")::float AS cost,
+            COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
+            AVG("latencyMs")::float AS avg_lat_ms,
+            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
           FROM llm_events WHERE ts >= ${since}
           GROUP BY model ORDER BY cost DESC LIMIT 8`,
-        ctx.db.$queryRaw<RawRow[]>`
-          SELECT surface AS label, SUM("costUsd")::float AS cost
+        ctx.db.$queryRaw<DetailRow[]>`
+          SELECT surface AS label, SUM("costUsd")::float AS cost,
+            COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
+            AVG("latencyMs")::float AS avg_lat_ms,
+            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
           FROM llm_events WHERE ts >= ${since}
           GROUP BY surface ORDER BY cost DESC LIMIT 8`,
-        ctx.db.$queryRaw<RawRow[]>`
-          SELECT project AS label, SUM("costUsd")::float AS cost
+        ctx.db.$queryRaw<DetailRow[]>`
+          SELECT project AS label, SUM("costUsd")::float AS cost,
+            COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
+            AVG("latencyMs")::float AS avg_lat_ms,
+            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
           FROM llm_events WHERE ts >= ${since}
           GROUP BY project ORDER BY cost DESC LIMIT 8`,
-        ctx.db.$queryRaw<RawRow[]>`
-          SELECT "contentType" AS label, SUM("costUsd")::float AS cost
+        ctx.db.$queryRaw<DetailRow[]>`
+          SELECT "contentType" AS label, SUM("costUsd")::float AS cost,
+            COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
+            AVG("latencyMs")::float AS avg_lat_ms,
+            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
           FROM llm_events WHERE ts >= ${since}
           GROUP BY "contentType" ORDER BY cost DESC LIMIT 8`,
-        ctx.db.$queryRaw<RawRow[]>`
-          SELECT region AS label, SUM("costUsd")::float AS cost
+        ctx.db.$queryRaw<DetailRow[]>`
+          SELECT region AS label, SUM("costUsd")::float AS cost,
+            COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
+            AVG("latencyMs")::float AS avg_lat_ms,
+            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
           FROM llm_events WHERE ts >= ${since}
           GROUP BY region ORDER BY cost DESC LIMIT 8`,
       ]);
+      void DIM_SQL; // suppress unused warning
       return {
         provider:    mapDim(byProvider),
         model:       mapDim(byModel),
@@ -130,9 +161,9 @@ export const costDriversRouter = router({
       return {
         totalTokens: Math.round(total),
         segments: [
-          seg(r.cached,           'Cached Context', '#7A9E8A'),
+          seg(r.cached,           'Cached Context', '#7CA893'),
           seg(r.cache_creation,   'Cache Write',    '#8BA49C'),
-          seg(r.fresh_input,      'Fresh Input',    '#D97757'),
+          seg(r.fresh_input,      'Fresh Input',    '#6FA8B3'),
           seg(r.output_tokens,    'Output',         '#C9966B'),
           seg(r.reasoning_tokens, 'Reasoning',      '#A89276'),
         ].filter(s => s.tokens > 0),

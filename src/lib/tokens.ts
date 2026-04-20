@@ -1,29 +1,29 @@
 export const colors = {
-  mist:     '#E8E5DE',
-  fog:      '#C4BFB4',
-  steel:    '#87867F',
-  graphite: '#5E5D59',
-  slate:    '#30302E',
-  ink:      '#141413',
-  ink2:     '#0E0E0D',
-  panel:    '#1C1B19',
-  panel2:   '#211F1D',
-  line:     '#2A2825',
-  line2:    '#34312E',
-  accent:   '#D97757',
-  accent2:  '#C96442',
+  mist:     '#E9ECEC',
+  fog:      '#C8CED1',
+  steel:    '#8A9297',
+  graphite: '#4A5358',
+  slate:    '#232A2E',
+  ink:      '#11171B',
+  ink2:     '#0B1014',
+  panel:    '#171D21',
+  panel2:   '#1C2327',
+  line:     '#2A3137',
+  line2:    '#343C42',
+  accent:   '#6FA8B3',
+  accent2:  '#9BC4CC',
   warn:     '#C9966B',
   bad:      '#B86B6B',
   good:     '#7CA893',
 } as const;
 
 export const modelColors = {
-  opus:   '#C96442',
-  sonnet: '#D97757',
-  haiku:  '#A89276',
+  opus:   '#9BC4CC',
+  sonnet: '#6FA8B3',
+  haiku:  '#7CA893',
   gemini: '#C9B08A',
   grok:   '#B88A8A',
-  local:  '#7CA893',
+  local:  '#8A9297',
 } as const;
 
-export const radius = '6px';
+export const radius = '4px';

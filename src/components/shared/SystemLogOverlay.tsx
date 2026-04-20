@@ -123,7 +123,7 @@ const EVENTS: StreamEvent[] = [
 ];
 
 const PROVIDER_COLORS: Record<string, string> = {
-  anthropic: '#D97757',
+  anthropic: '#6FA8B3',
   google:    '#8BA89C',
   xai:       '#B88A8A',
 };
@@ -131,7 +131,7 @@ const PROVIDER_COLORS: Record<string, string> = {
 const TYPE_COLORS: Record<string, string> = {
   request:   'var(--steel)',
   response:  'var(--accent)',
-  cache_hit: '#7A9E8A',
+  cache_hit: '#7CA893',
 };
 
 // Simple JSON syntax highlighter
@@ -141,13 +141,13 @@ function highlight(json: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     // Keys
-    .replace(/"([^"]+)":/g, '<span style="color:#8BA89C">"$1"</span>:')
+    .replace(/"([^"]+)":/g, '<span style="color:#9BC4CC">"$1"</span>:')
     // String values (not keys)
-    .replace(/:\s*"([^"]*)"/g, ': <span style="color:#A89276">"$1"</span>')
+    .replace(/:\s*"([^"]*)"/g, ': <span style="color:#C9B08A">"$1"</span>')
     // Numbers
     .replace(/:\s*(-?\d+\.?\d*)/g, (_m, n) => {
       const isToken = false;
-      return `: <span style="color:#9EA87A${isToken ? ';background:rgba(201,150,107,.15);border-radius:2px;padding:0 2px' : ''}">${n}</span>`;
+      return `: <span style="color:#7CA893${isToken ? ';background:rgba(111,168,179,.15);border-radius:2px;padding:0 2px' : ''}">${n}</span>`;
     })
     // Booleans
     .replace(/:\s*(true|false)/g, ': <span style="color:#B89FC9">$1</span>');
@@ -405,7 +405,7 @@ export function SystemLogOverlay({ onClose }: Props) {
             {[
               { label: 'Keys', color: '#8BA89C' },
               { label: 'Strings', color: '#A89276' },
-              { label: 'Numbers', color: '#9EA87A' },
+              { label: 'Numbers', color: '#7CA893' },
               { label: 'Booleans', color: '#B89FC9' },
             ].map(({ label, color }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -414,7 +414,7 @@ export function SystemLogOverlay({ onClose }: Props) {
               </div>
             ))}
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ padding: '0 4px', background: 'rgba(201,150,107,.18)', borderRadius: 2, fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: '#9EA87A' }}>
+              <div style={{ padding: '0 4px', background: 'rgba(201,150,107,.18)', borderRadius: 2, fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: '#7CA893' }}>
                 1840
               </div>
               <span style={{ fontSize: 9, color: 'var(--steel)' }}>Token field (amber highlight)</span>

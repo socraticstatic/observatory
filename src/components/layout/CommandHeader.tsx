@@ -17,7 +17,7 @@ const LOOKBACK_KEYS = Object.keys(LOOKBACKS) as Lookback[];
 
 const MODEL_TOGGLES: { id: string; label: string; dot: string | null }[] = [
   { id: 'ALL',       label: 'ALL',    dot: null },
-  { id: 'anthropic', label: 'Claude', dot: '#D97757' },
+  { id: 'anthropic', label: 'Claude', dot: '#6FA8B3' },
   { id: 'google',    label: 'Gemini', dot: '#8BA89C' },
   { id: 'xai',       label: 'Grok',   dot: '#B88A8A' },
 ];

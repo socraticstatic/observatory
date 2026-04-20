@@ -64,7 +64,7 @@ function Slider({ label, value, min, max, onChange }: SliderProps) {
           position: 'absolute', top: '50%', left: 0,
           transform: 'translateY(-50%)', height: 3,
           width: `${pct}%`,
-          background: 'linear-gradient(90deg, rgba(217,119,87,.4), #D97757)',
+          background: 'linear-gradient(90deg, rgba(111,168,179,.4), #6FA8B3)',
           borderRadius: 2,
         }} />
         <input
@@ -74,7 +74,7 @@ function Slider({ label, value, min, max, onChange }: SliderProps) {
             position: 'relative', width: '100%',
             appearance: 'none', background: 'transparent',
             height: 20, cursor: 'pointer',
-            accentColor: '#D97757',
+            accentColor: '#6FA8B3',
           }}
         />
       </div>
@@ -118,7 +118,7 @@ export function CounterfactualSimulator() {
   const projAnnual  = projDaily * 365;
 
   const verdict = deltaDaily < 0 && qualityShift > -1
-    ? { col: '#7A9E8A', bg: 'rgba(122,158,138,.08)', border: 'rgba(122,158,138,.2)',  icon: '✓', text: 'Net improvement — cost down, quality stable.' }
+    ? { col: '#7CA893', bg: 'rgba(122,158,138,.08)', border: 'rgba(122,158,138,.2)',  icon: '✓', text: 'Net improvement — cost down, quality stable.' }
     : deltaDaily < 0 && qualityShift <= -1
     ? { col: '#C9966B', bg: 'rgba(201,150,107,.08)', border: 'rgba(201,150,107,.2)',  icon: '~', text: 'Cost savings at meaningful quality cost. Review before applying.' }
     : { col: '#B87070', bg: 'rgba(184,112,112,.08)', border: 'rgba(184,112,112,.2)',  icon: '✗', text: 'This configuration increases cost. Adjust sliders.' };
@@ -154,10 +154,10 @@ export function CounterfactualSimulator() {
               style={{
                 marginTop: 4, padding: '4px 12px',
                 fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 600,
-                border: '1px solid rgba(217,119,87,.25)',
+                border: '1px solid rgba(111,168,179,.25)',
                 borderRadius: 'var(--r)',
-                color: '#D97757',
-                background: 'rgba(217,119,87,.06)',
+                color: '#6FA8B3',
+                background: 'rgba(111,168,179,.06)',
                 cursor: 'pointer',
               }}
             >
@@ -186,7 +186,7 @@ export function CounterfactualSimulator() {
                   </span>
                   <span className="mono" style={{
                     fontSize: 13, fontWeight: 600,
-                    color: deltaDaily < 0 ? '#7A9E8A' : '#B87070',
+                    color: deltaDaily < 0 ? '#7CA893' : '#B87070',
                   }}>
                     {fmtUsd(row.proj)}
                   </span>
@@ -201,7 +201,7 @@ export function CounterfactualSimulator() {
               <span style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--graphite)', fontWeight: 500 }}>
                 Quality index
               </span>
-              <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: qualityShift >= 0 ? '#7A9E8A' : '#C9966B' }}>
+              <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: qualityShift >= 0 ? '#7CA893' : '#C9966B' }}>
                 {qEffective.toFixed(1)}{' '}
                 <span style={{ fontSize: 9, fontWeight: 400 }}>
                   {qualityShift >= 0 ? `+${qualityShift.toFixed(1)}` : qualityShift.toFixed(1)}
@@ -211,7 +211,7 @@ export function CounterfactualSimulator() {
             <div style={{ height: 4, background: 'rgba(255,255,255,.06)', borderRadius: 2, overflow: 'hidden' }}>
               <div style={{
                 height: '100%', width: `${qualityBarW}%`,
-                background: qualityShift >= 0 ? '#7A9E8A' : '#C9966B',
+                background: qualityShift >= 0 ? '#7CA893' : '#C9966B',
                 borderRadius: 2, transition: 'width 0.2s ease',
               }} />
             </div>
@@ -225,8 +225,8 @@ export function CounterfactualSimulator() {
             <div style={{ display: 'flex', gap: 18 }}>
               {[
                 { label: 'baseline',  val: (baseDaily / 94.2).toFixed(3),                       col: 'rgba(200,185,165,.5)' },
-                { label: 'projected', val: (projDaily / Math.max(qEffective, 1)).toFixed(3),     col: effImprove > 0 ? '#7A9E8A' : '#B87070' },
-                { label: 'delta',     val: `${effImprove > 0 ? '+' : ''}${effImprove.toFixed(1)}%`, col: effImprove > 0 ? '#7A9E8A' : '#B87070' },
+                { label: 'projected', val: (projDaily / Math.max(qEffective, 1)).toFixed(3),     col: effImprove > 0 ? '#7CA893' : '#B87070' },
+                { label: 'delta',     val: `${effImprove > 0 ? '+' : ''}${effImprove.toFixed(1)}%`, col: effImprove > 0 ? '#7CA893' : '#B87070' },
               ].map(m => (
                 <div key={m.label}>
                   <div style={{ fontSize: 9, color: 'rgba(200,185,165,.35)', marginBottom: 3, letterSpacing: '.06em' }}>

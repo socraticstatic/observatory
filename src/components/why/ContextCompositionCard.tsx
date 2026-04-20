@@ -156,7 +156,7 @@ export function ContextCompositionCard({ lookback }: { lookback: Lookback }) {
         <div style={{
           marginTop: 14, padding: '8px 12px',
           background: 'rgba(122,158,138,.07)', border: '1px solid rgba(122,158,138,.18)',
-          borderRadius: 'var(--r)', fontSize: 11, color: '#7A9E8A', lineHeight: 1.5,
+          borderRadius: 'var(--r)', fontSize: 11, color: '#7CA893', lineHeight: 1.5,
         }}>
           <span style={{ fontWeight: 600 }}>Cache hit rate healthy.</span>{' '}
           {segments.find(s => s.label === 'Cached Context')!.pct.toFixed(0)}% of context is reused.
@@ -165,8 +165,8 @@ export function ContextCompositionCard({ lookback }: { lookback: Lookback }) {
       {!isEmpty && segments.find(s => s.label === 'Fresh Input' && s.pct > 60) && (
         <div style={{
           marginTop: 14, padding: '8px 12px',
-          background: 'rgba(217,119,87,.07)', border: '1px solid rgba(217,119,87,.18)',
-          borderRadius: 'var(--r)', fontSize: 11, color: '#D97757', lineHeight: 1.5,
+          background: 'rgba(111,168,179,.07)', border: '1px solid rgba(111,168,179,.18)',
+          borderRadius: 'var(--r)', fontSize: 11, color: '#6FA8B3', lineHeight: 1.5,
         }}>
           <span style={{ fontWeight: 600 }}>Low cache utilization.</span>{' '}
           Most context is sent fresh each turn. Consider prompt caching to reduce cost.

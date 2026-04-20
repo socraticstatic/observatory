@@ -4,7 +4,7 @@ import { fmt, fmtUsd, fmtMs } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 import type { Lookback } from '@/lib/lookback';
 
-const PALETTE = ['#D97757', '#C9966B', '#A89276', '#B88A8A', '#9EA87A', '#8BA89C'];
+const PALETTE = ['#6FA8B3', '#C9966B', '#A89276', '#B88A8A', '#7CA893', '#8BA89C'];
 
 const LOOKBACK_MINUTES: Record<Lookback, number> = {
   '1H':  60,

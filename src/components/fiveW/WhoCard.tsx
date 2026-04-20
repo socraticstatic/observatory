@@ -23,13 +23,13 @@ interface ModelRow {
 
 function modelColor(model: string): string {
   const m = model.toLowerCase();
-  if (m.includes('opus'))   return '#D97757';
-  if (m.includes('sonnet')) return '#C9966B';
-  if (m.includes('haiku'))  return '#A89276';
-  if (m.includes('gemini')) return '#8BA89C';
+  if (m.includes('opus'))   return '#9BC4CC';
+  if (m.includes('sonnet')) return '#6FA8B3';
+  if (m.includes('haiku'))  return '#7CA893';
+  if (m.includes('gemini')) return '#C9B08A';
   if (m.includes('grok'))   return '#B88A8A';
-  if (m.includes('llama'))  return '#9EA87A';
-  return '#7A7068';
+  if (m.includes('llama'))  return '#8A9297';
+  return '#4A5358';
 }
 
 interface WhoCardProps {
