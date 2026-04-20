@@ -9,47 +9,39 @@ interface Props {
   lookback: Lookback;
 }
 
-const LB_TOTAL: Record<Lookback, number> = {
-  '1H':  1.76,
-  '24H': 21.72,
-  '30D': 651.60,
-};
+// Savings per cached read token (Claude Sonnet pricing: ~$2.70/M savings vs input)
+const CACHE_SAVINGS_PER_M = 2.70;
 
-const LB_TREND: Record<Lookback, string> = {
-  '1H':  '+4.2%',
-  '24H': '+12.4%',
-  '30D': '+8.1%',
-};
-
-const LB_PACE: Record<Lookback, string> = {
-  '1H':  '$42.18/day pace',
-  '24H': '$42.18 today',
-  '30D': '$21.72/day avg',
-};
-
-const LB_PROJ: Record<Lookback, string> = {
-  '1H':  '$1,265/mo',
-  '24H': '$1,265/mo',
-  '30D': '$651.60 this mo',
-};
-
-const LB_RUNWAY: Record<Lookback, string> = {
-  '1H':  '18.2 days',
-  '24H': '18.2 days',
-  '30D': '5.8 days',
-};
+function fmtDelta(pct: number): { text: string; color: string } {
+  if (Math.abs(pct) < 0.5) return { text: '±0%', color: 'var(--steel)' };
+  const sign = pct > 0 ? '+' : '';
+  const color = pct > 0 ? 'var(--warn)' : 'var(--good)';
+  return { text: `${sign}${pct.toFixed(1)}%`, color };
+}
 
 export function OverallCostHero({ lookback }: Props) {
   const { data: costData } = trpc.pulse.overallCost.useQuery({ lookback });
   const { data: burnData } = trpc.pulse.burnRate.useQuery();
   const { data: chartData } = trpc.pulse.pulseChart.useQuery({ lookback });
+  const { data: stripData } = trpc.pulse.statStrip.useQuery({ lookback });
 
-  const total = costData?.totalCostUsd ?? LB_TOTAL[lookback];
-  const trend = LB_TREND[lookback];
-  const pace  = burnData ? `$${burnData.todayCost.toFixed(2)} today` : LB_PACE[lookback];
-  const proj  = burnData ? `$${(burnData.projected * 30).toFixed(0)}/mo` : LB_PROJ[lookback];
-  const runway = burnData ? `${burnData.runway.toFixed(1)} days` : LB_RUNWAY[lookback];
-  const data  = chartData?.map(r => r.cost) ?? [];
+  const total   = costData?.totalCostUsd ?? 0;
+  const sparkData = chartData?.map(r => r.cost) ?? [];
+
+  // Day-over-day trend — only meaningful for 24H; show nothing for other windows
+  const delta = lookback === '24H' && burnData ? fmtDelta(burnData.deltaVsYesterday) : null;
+
+  const pace   = burnData ? `$${burnData.todayCost.toFixed(2)} today` : '—';
+  const proj   = burnData ? `$${(burnData.projected * 30).toFixed(0)}/mo` : '—';
+  const runway = burnData ? `${burnData.runway.toFixed(1)} days` : '—';
+
+  // Cache savings from real token data
+  const cacheSavings = costData
+    ? (costData.totalCachedTokens * CACHE_SAVINGS_PER_M) / 1_000_000
+    : null;
+
+  const errorPct = stripData?.errorRatePct ?? null;
+  const latency  = stripData?.avgLatencyMs ?? null;
 
   return (
     <div
@@ -62,7 +54,7 @@ export function OverallCostHero({ lookback }: Props) {
           gridTemplateColumns: '1fr 160px 1fr',
         }}
       >
-        {/* Left - total cost */}
+        {/* Left — total cost */}
         <div style={{ padding: '18px 20px', borderRight: '1px solid var(--line)' }}>
           <div className="label" style={{ marginBottom: 8 }}>
             {LOOKBACKS[lookback].label} spend
@@ -75,12 +67,15 @@ export function OverallCostHero({ lookback }: Props) {
             >
               {fmtUsd(total)}
             </span>
-            <span
-              className="mono"
-              style={{ fontSize: 12, color: 'var(--warn)', fontWeight: 500 }}
-            >
-              {trend}
-            </span>
+            {delta && (
+              <span
+                className="mono"
+                style={{ fontSize: 12, color: delta.color, fontWeight: 500 }}
+                title="vs. yesterday"
+              >
+                {delta.text}
+              </span>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -99,7 +94,7 @@ export function OverallCostHero({ lookback }: Props) {
           </div>
         </div>
 
-        {/* Center - sparkline */}
+        {/* Center — sparkline */}
         <div
           style={{
             padding: '18px 16px',
@@ -112,10 +107,10 @@ export function OverallCostHero({ lookback }: Props) {
           }}
         >
           <div className="label" style={{ fontSize: 9 }}>{LOOKBACKS[lookback].label} activity</div>
-          <Sparkline data={data} color="var(--accent)" h={48} w={120} area />
+          <Sparkline data={sparkData} color="var(--accent)" h={48} w={120} area />
         </div>
 
-        {/* Right - mini stats */}
+        {/* Right — real metrics */}
         <div
           style={{
             padding: '18px 20px',
@@ -128,19 +123,24 @@ export function OverallCostHero({ lookback }: Props) {
           <div>
             <div className="label" style={{ marginBottom: 3 }}>Cache savings</div>
             <div className="mono" style={{ fontSize: 15, color: 'var(--good)', fontWeight: 600 }}>
-              $8.42<span style={{ fontSize: 10, color: 'var(--steel)', fontWeight: 400 }}>/day</span>
+              {cacheSavings != null
+                ? <>{fmtUsd(cacheSavings)}<span style={{ fontSize: 10, color: 'var(--steel)', fontWeight: 400 }}> est.</span></>
+                : <span style={{ color: 'var(--graphite)' }}>—</span>
+              }
             </div>
           </div>
 
           <div>
             <div className="label" style={{ marginBottom: 3 }}>Error rate</div>
-            <div className="mono" style={{ fontSize: 15, color: 'var(--warn)', fontWeight: 600 }}>0.4%</div>
+            <div className="mono" style={{ fontSize: 15, fontWeight: 600, color: errorPct != null && errorPct > 1 ? 'var(--warn)' : 'var(--good)' }}>
+              {errorPct != null ? `${errorPct.toFixed(1)}%` : '—'}
+            </div>
           </div>
 
           <div>
             <div className="label" style={{ marginBottom: 3 }}>Avg latency</div>
             <div className="mono" style={{ fontSize: 15, color: 'var(--fog)', fontWeight: 600 }}>
-              {fmtMs(612)}
+              {latency != null && latency > 0 ? fmtMs(latency) : '—'}
             </div>
           </div>
         </div>

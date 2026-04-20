@@ -107,7 +107,7 @@ export function PulseBar({ onDrillSpike, lookback, setLookback }: Props) {
         <div style={{
           padding: '16px 20px',
           borderRight: '1px solid var(--line)',
-          background: 'rgba(111,168,179,.04)',
+          background: 'rgba(217,119,87,.04)',
         }}>
           <div className="label" style={{ marginBottom: 6 }}>Tokens / Minute</div>
           <div className="num" style={{ fontSize: 34, fontWeight: 600, lineHeight: 1, color: 'var(--mist)' }}>

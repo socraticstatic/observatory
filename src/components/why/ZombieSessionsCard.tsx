@@ -12,12 +12,6 @@ interface Zombie {
   severity: 'bad' | 'warn' | 'info';
 }
 
-const FALLBACK_ZOMBIES: readonly Zombie[] = [
-  { id: 'research_agent.weekly_digest', type: 'Loop',      steps: 28, rate: '12.4K tok/min', proj: '$18.40', severity: 'bad'  },
-  { id: 'inbox_triage.batch_14',        type: 'Bloat',     steps: 6,  rate: '3.2K tok/min',  proj: '$4.20',  severity: 'warn' },
-  { id: 'market_research.q4_scan',      type: 'Abandoned', steps: 12, rate: '0 tok/min',     proj: '$0',     severity: 'info' },
-  { id: 'code_review.pr_482',           type: 'Runaway',   steps: 44, rate: '28.1K tok/min', proj: '$42.10', severity: 'bad'  },
-] as const;
 
 function severityFor(bloatRatio: number, type: string): 'bad' | 'warn' | 'info' {
   if (type === 'Abandoned' || type === 'abandoned') return 'info';
@@ -36,7 +30,7 @@ function fmtRate(costUsd: number, ageMs: number): string {
 const SEV_COLOR = {
   bad:  '#B86B6B',
   warn: '#C9966B',
-  info: '#8A9297',
+  info: '#87867F',
 } as const;
 
 type Severity = 'bad' | 'warn' | 'info';
@@ -80,7 +74,7 @@ export function ZombieSessionsCard() {
   const { data: zombieData } = trpc.insights.zombieSessions.useQuery();
 
   const ZOMBIES = useMemo<readonly Zombie[]>(() => {
-    if (!zombieData || zombieData.length === 0) return FALLBACK_ZOMBIES;
+    if (!zombieData || zombieData.length === 0) return [];
     return zombieData.map(z => ({
       id: z.sessionId,
       type: z.type.charAt(0).toUpperCase() + z.type.slice(1),
@@ -101,6 +95,24 @@ export function ZombieSessionsCard() {
 
   const active = ZOMBIES.filter(z => !killed.has(z.id));
   const killedCount = killed.size;
+
+  if (!zombieData) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 120 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
+
+  if (ZOMBIES.length === 0) return (
+    <div className="card" style={{ padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', justifyContent: 'center', minHeight: 120 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--good)' }} />
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fog)' }}>No zombie sessions</span>
+      </div>
+      <span style={{ fontSize: 11, color: 'var(--graphite)', textAlign: 'center', maxWidth: 340 }}>
+        All sessions are within normal bounds. Loops, bloat, and runaway costs appear here when detected.
+      </span>
+    </div>
+  );
 
   return (
     <div className="card">

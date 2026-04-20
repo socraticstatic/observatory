@@ -2,6 +2,7 @@
 # Usage: litellm --config litellm/config.yaml --port 4000
 
 model_list:
+  # Anthropic — model_name must match what the seed script (and clients) send
   - model_name: claude-opus-4-7
     litellm_params:
       model: anthropic/claude-opus-4-7
@@ -17,9 +18,10 @@ model_list:
       model: anthropic/claude-haiku-4-5-20251001
       api_key: os.environ/ANTHROPIC_API_KEY
 
+  # Gemini — use stable GA model IDs (preview-05-06 is defunct)
   - model_name: gemini-2.5-pro
     litellm_params:
-      model: gemini/gemini-2.5-pro-preview-05-06
+      model: gemini/gemini-2.5-pro
       api_key: os.environ/GEMINI_API_KEY
 
   - model_name: gemini-2.5-flash
@@ -27,11 +29,13 @@ model_list:
       model: gemini/gemini-2.5-flash
       api_key: os.environ/GEMINI_API_KEY
 
+  # xAI
   - model_name: grok-3
     litellm_params:
       model: xai/grok-3
       api_key: os.environ/XAI_API_KEY
 
+  # Local — optional; requires Ollama running on :11434
   - model_name: llama-3.1-70b
     litellm_params:
       model: ollama/llama3.1:70b

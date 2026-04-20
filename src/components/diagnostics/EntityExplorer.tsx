@@ -25,50 +25,6 @@ interface Turn {
   content: string;
 }
 
-const FALLBACK_PROJECTS: Project[] = [
-  { id: 'research_agent', cost: 14.22, sessions: 3,  turns: 84  },
-  { id: 'inbox_triage',   cost: 3.84,  sessions: 8,  turns: 142 },
-  { id: 'code_review',    cost: 6.10,  sessions: 2,  turns: 38  },
-  { id: 'automation',     cost: 2.18,  sessions: 6,  turns: 210 },
-];
-
-// Synthetic sessions per project (fallback)
-function fallbackSessionsFor(projectId: string): Session[] {
-  const map: Record<string, Session[]> = {
-    research_agent: [
-      { id: 'ses_a1b2', ts: '2026-04-19 14:32', tokens: 48230 },
-      { id: 'ses_c3d4', ts: '2026-04-18 09:11', tokens: 32810 },
-      { id: 'ses_e5f6', ts: '2026-04-17 17:44', tokens: 21440 },
-    ],
-    inbox_triage: [
-      { id: 'ses_g7h8', ts: '2026-04-19 13:05', tokens: 12880 },
-      { id: 'ses_i9j0', ts: '2026-04-19 10:22', tokens: 9640  },
-      { id: 'ses_k1l2', ts: '2026-04-18 16:55', tokens: 8310  },
-    ],
-    code_review: [
-      { id: 'ses_m3n4', ts: '2026-04-19 11:30', tokens: 27400 },
-      { id: 'ses_o5p6', ts: '2026-04-17 14:08', tokens: 19200 },
-      { id: 'ses_q7r8', ts: '2026-04-16 08:45', tokens: 14950 },
-    ],
-    automation: [
-      { id: 'ses_s9t0', ts: '2026-04-19 12:18', tokens: 11420 },
-      { id: 'ses_u1v2', ts: '2026-04-18 20:33', tokens: 8770  },
-      { id: 'ses_w3x4', ts: '2026-04-17 11:00', tokens: 7340  },
-    ],
-  };
-  return map[projectId] ?? [];
-}
-
-// Synthetic turns per session (fallback)
-function fallbackTurnsFor(sessionId: string): Turn[] {
-  return [
-    { role: 'user',      tokens: 320,  content: 'Analyze the quarterly performance data and identify the top three cost drivers across all projects.' },
-    { role: 'assistant', tokens: 1840, content: 'I have reviewed the data. The top cost drivers are: (1) Opus model usage in research_agent at 42% share, (2) high context depth averaging 8.3 turns before summarization, (3) uncached tool result repetition in automation pipeline...' },
-    { role: 'user',      tokens: 184,  content: 'Can you give me a recommendation for reducing Opus usage without compromising research quality?' },
-    { role: 'assistant', tokens: 2210, content: 'To reduce Opus share while protecting quality, consider routing initial triage steps to Sonnet and escalating only when the task requires multi-step reasoning over 6+ documents. Based on current routing rules...' },
-    { role: 'user',      tokens: 96,   content: 'Draft a summary I can share with the team.' },
-  ].map((t, i) => ({ ...t, id: `turn_${sessionId}_${i}` }));
-}
 
 const COL = { width: '33.33%', minWidth: 0, display: 'flex', flexDirection: 'column' as const, borderRight: '1px solid var(--line)', overflow: 'hidden' };
 const COL_LAST = { ...COL, borderRight: 'none' };
@@ -99,34 +55,30 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
     { enabled: !!selSession }
   );
 
-  const projects: Project[] = projectData && projectData.length > 0
+  const projects: Project[] = projectData
     ? projectData.map(p => ({
         id: p.project,
         cost: p.costUsd,
         sessions: p.sessions,
         turns: p.calls,
       }))
-    : FALLBACK_PROJECTS;
+    : [];
 
   const sessions: Session[] = selProject
-    ? sessionData && sessionData.length > 0
-      ? sessionData.map(s => ({
-          id: s.sessionId,
-          ts: new Date(s.lastTs).toISOString().slice(0, 16).replace('T', ' '),
-          tokens: s.calls,
-        }))
-      : fallbackSessionsFor(selProject)
+    ? (sessionData ?? []).map(s => ({
+        id: s.sessionId,
+        ts: new Date(s.lastTs).toISOString().slice(0, 16).replace('T', ' '),
+        tokens: s.calls,
+      }))
     : [];
 
   const turns: Turn[] = selSession
-    ? turnData && turnData.length > 0
-      ? turnData.map(t => ({
-          id: t.id,
-          role: t.turn % 2 === 1 ? 'user' : 'assistant',
-          tokens: t.inputTokens + t.outputTokens,
-          content: `${t.model} · ${t.status} · ${t.latencyMs}ms`,
-        }))
-      : fallbackTurnsFor(selSession)
+    ? (turnData ?? []).map(t => ({
+        id: t.id,
+        role: t.turn % 2 === 1 ? 'user' : 'assistant',
+        tokens: t.inputTokens + t.outputTokens,
+        content: `${t.model} · ${t.status} · ${t.latencyMs}ms`,
+      }))
     : [];
 
   function resetAll()    { setSelProject(null); setSelSession(null); }
@@ -169,6 +121,11 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
         <div style={COL}>
           <ColHeader label="Projects" />
           <div style={{ overflowY: 'auto', flex: 1 }}>
+            {projects.length === 0 && (
+              <div style={{ padding: '20px 12px', fontSize: 11, color: 'var(--graphite)', textAlign: 'center' }}>
+                {projectData ? 'No projects yet' : 'Loading…'}
+              </div>
+            )}
             {projects.map(p => (
               <div
                 key={p.id}
@@ -177,7 +134,7 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
                   padding: '10px 12px',
                   cursor: 'pointer',
                   borderBottom: '1px solid var(--line)',
-                  background: selProject === p.id ? 'rgba(111,168,179,.07)' : 'transparent',
+                  background: selProject === p.id ? 'rgba(217,119,87,.07)' : 'transparent',
                   boxShadow: selProject === p.id ? 'inset 2px 0 0 var(--accent)' : 'none',
                   transition: 'background 0.12s',
                 }}
@@ -205,7 +162,7 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
                   padding: '10px 12px',
                   cursor: 'pointer',
                   borderBottom: '1px solid var(--line)',
-                  background: selSession === s.id ? 'rgba(111,168,179,.07)' : 'transparent',
+                  background: selSession === s.id ? 'rgba(217,119,87,.07)' : 'transparent',
                   boxShadow: selSession === s.id ? 'inset 2px 0 0 var(--accent)' : 'none',
                   transition: 'background 0.12s',
                 }}

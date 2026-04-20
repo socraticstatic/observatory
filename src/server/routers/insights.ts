@@ -75,7 +75,7 @@ export const insightsRouter = router({
         FROM llm_events
         WHERE ts >= ${since24h} AND "sessionId" IS NOT NULL
         GROUP BY "sessionId", project, surface
-        HAVING COUNT(*) > 5
+        HAVING COUNT(*) >= 2
         ORDER BY cost DESC
         LIMIT 20
       `;
@@ -85,10 +85,10 @@ export const insightsRouter = router({
         const steps = Number(r.steps);
         const bloatRatio = Number(r.first_input) > 0 ? Number(r.last_input) / Number(r.first_input) : 1;
         let type = 'active';
-        if (steps > 12 && ageMs > 5 * 60_000) type = 'loop';
-        else if (bloatRatio > 1.8) type = 'bloat';
-        else if (ageMs > 30 * 60_000) type = 'abandoned';
-        else if (Number(r.cost) > 10 && r.surface === 'automation') type = 'runaway';
+        if (steps > 8 && ageMs > 3 * 60_000) type = 'loop';
+        else if (bloatRatio > 1.5) type = 'bloat';
+        else if (ageMs > 5 * 60_000) type = 'abandoned';
+        else if (Number(r.cost) > 5 && r.surface === 'automation') type = 'runaway';
         return {
           sessionId: r.session_id,
           project: r.project,

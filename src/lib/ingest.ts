@@ -71,6 +71,9 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
   const project: string | undefined = body.metadata?.project ?? body.metadata?.tags?.project;
   const surface: string | undefined = body.metadata?.surface ?? body.metadata?.tags?.surface;
   const status: string = body.response?.choices?.[0]?.finish_reason === 'stop' ? 'ok' : (body.error ? 'error' : 'ok');
+  // Optional quality score — seeder or caller can pass via metadata
+  const qualityRaw = body.metadata?.quality_score ?? body.quality_score;
+  const qualityScore: string | undefined = qualityRaw != null ? Number(qualityRaw).toFixed(2) : undefined;
 
   let inputTokens = 0;
   let outputTokens = 0;
@@ -127,6 +130,7 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
     costUsd,
     latencyMs,
     status,
+    qualityScore,
     rawPayload: body,
   };
 }
