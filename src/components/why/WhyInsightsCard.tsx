@@ -10,71 +10,25 @@ interface Attribution {
 }
 
 interface Insight {
-  id: number;
+  id: string;
   severity: 'bad' | 'warn' | 'info';
   title: string;
-  attribution: Attribution[];
+  detail: string;
+  attribution?: Attribution[];
   rec: string;
   drillTarget: string;
 }
 
-const FALLBACK_INSIGHTS: Insight[] = [
-  {
-    id: 1,
-    severity: 'bad',
-    title: 'Loop detected: research_agent.weekly_digest',
-    attribution: [
-      { label: 'Opus',  pct: .72, col: '#9BC4CC' },
-      { label: 'Tool',  pct: .28, col: '#C9966B' },
-    ],
-    rec: 'Add step-count guard: exit after 8 iterations',
-    drillTarget: 'HowCard',
-  },
-  {
-    id: 2,
-    severity: 'warn',
-    title: 'Cache decay: hit ratio fell 38%→22% today',
-    attribution: [
-      { label: 'Input',  pct: .85, col: '#6FA8B3' },
-      { label: 'Cached', pct: .15, col: '#4F7B83' },
-    ],
-    rec: 'Reanchor system prompt position before tools',
-    drillTarget: 'WhatCard',
-  },
-  {
-    id: 3,
-    severity: 'warn',
-    title: 'Routing opportunity: Opus for low-complexity tasks',
-    attribution: [
-      { label: 'Opus',   pct: .42, col: '#9BC4CC' },
-      { label: 'Sonnet', pct: .58, col: '#6FA8B3' },
-    ],
-    rec: 'Route quality<88 tasks to Sonnet - saves ~$6.40/day',
-    drillTarget: 'WhoCard',
-  },
-  {
-    id: 4,
-    severity: 'info',
-    title: 'Retry waste: 14 failed tool calls retried today',
-    attribution: [
-      { label: 'Tool',  pct: .60, col: '#C9966B' },
-      { label: 'Error', pct: .40, col: '#B86B6B' },
-    ],
-    rec: 'Add exponential backoff with jitter in automation surface',
-    drillTarget: 'HowCard',
-  },
-];
-
 const SEV_COLOR = {
   bad:  '#B86B6B',
   warn: '#C9966B',
-  info: '#8A9297',
+  info: '#87867F',
 } as const;
 
 const SEV_BG = {
   bad:  'rgba(184,107,107,.07)',
   warn: 'rgba(201,150,107,.07)',
-  info: 'rgba(138,146,151,.04)',
+  info: 'rgba(135,134,127,.04)',
 } as const;
 
 function AttributionBar({ bars }: { bars: Attribution[] }) {
@@ -111,20 +65,38 @@ function normalizeSev(s: string): 'bad' | 'warn' | 'info' {
 }
 
 export function WhyInsightsCard() {
-  const [expanded, setExpanded] = useState<number | null>(null);
-  const { data: insightData } = trpc.insights.whyInsights.useQuery();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const { data: insightData, isLoading } = trpc.insights.whyInsights.useQuery();
 
-  const INSIGHTS = useMemo<Insight[]>(() => {
-    if (!insightData || insightData.length === 0) return FALLBACK_INSIGHTS;
-    return insightData.map((r, idx) => ({
-      id: idx + 1,
+  const insights = useMemo<Insight[]>(() => {
+    if (!insightData) return [];
+    return insightData.map(r => ({
+      id: r.id,
       severity: normalizeSev(r.severity),
       title: r.title,
-      attribution: [{ label: 'Cost', pct: 1, col: '#6FA8B3' }],
+      detail: r.detail ?? '',
       rec: r.recommendation,
       drillTarget: 'HowCard',
     }));
   }, [insightData]);
+
+  if (isLoading) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 120 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
+
+  if (insights.length === 0) return (
+    <div className="card" style={{ padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', justifyContent: 'center', minHeight: 120 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--good)' }} />
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fog)' }}>No anomalies detected</span>
+      </div>
+      <span style={{ fontSize: 11, color: 'var(--graphite)', textAlign: 'center', maxWidth: 320 }}>
+        Cache hit rate and routing look healthy over the past 7 days. Run more traffic to surface routing opportunities.
+      </span>
+    </div>
+  );
 
   return (
     <div className="card">
@@ -134,7 +106,7 @@ export function WhyInsightsCard() {
         <span style={{ fontSize: 10, color: 'var(--steel)', letterSpacing: '.08em' }}>Insights & Anomalies</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
           {(['bad', 'warn', 'info'] as const).map(s => {
-            const count = INSIGHTS.filter(i => i.severity === s).length;
+            const count = insights.filter(i => i.severity === s).length;
             return count > 0 ? (
               <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: SEV_COLOR[s] }} />
@@ -149,7 +121,7 @@ export function WhyInsightsCard() {
 
       {/* Insight rows */}
       <div style={{ padding: '8px 0' }}>
-        {INSIGHTS.map((ins, idx) => {
+        {insights.map((ins, idx) => {
           const isExpanded = expanded === ins.id;
           const color = SEV_COLOR[ins.severity];
           const bg = SEV_BG[ins.severity];
@@ -160,7 +132,7 @@ export function WhyInsightsCard() {
               onClick={() => setExpanded(isExpanded ? null : ins.id)}
               style={{
                 padding: '10px 18px',
-                borderBottom: idx < INSIGHTS.length - 1 ? '1px solid var(--line)' : 'none',
+                borderBottom: idx < insights.length - 1 ? '1px solid var(--line)' : 'none',
                 cursor: 'pointer',
                 background: isExpanded ? bg : 'transparent',
                 transition: 'background .12s',
@@ -169,7 +141,7 @@ export function WhyInsightsCard() {
                 gap: 14,
               }}
             >
-              {/* Severity border */}
+              {/* Severity indicator */}
               <div style={{
                 borderRadius: 2,
                 background: color,
@@ -180,12 +152,9 @@ export function WhyInsightsCard() {
 
               <div>
                 {/* Title row */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--mist)', lineHeight: 1.4, marginBottom: 6 }}>
-                      {ins.title}
-                    </div>
-                    <AttributionBar bars={ins.attribution} />
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: ins.detail ? 6 : 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--mist)', lineHeight: 1.4 }}>
+                    {ins.title}
                   </div>
                   <button
                     onClick={e => { e.stopPropagation(); setExpanded(isExpanded ? null : ins.id); }}
@@ -203,9 +172,19 @@ export function WhyInsightsCard() {
                       flexShrink: 0,
                     }}
                   >
-                    {isExpanded ? 'Collapse' : `Drill → ${ins.drillTarget}`}
+                    {isExpanded ? 'Collapse' : 'Detail'}
                   </button>
                 </div>
+
+                {/* Detail line — always visible */}
+                {ins.detail && (
+                  <div style={{ fontSize: 11, color: 'var(--graphite)', marginBottom: ins.attribution ? 6 : 0 }}>
+                    {ins.detail}
+                  </div>
+                )}
+
+                {/* Attribution bars — only when present */}
+                {ins.attribution && <AttributionBar bars={ins.attribution} />}
 
                 {/* Expanded: recommendation */}
                 {isExpanded && (

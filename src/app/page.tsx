@@ -42,7 +42,7 @@ export default function App() {
   const [railExpanded, setRailExpanded] = useState(false);
   const [systemLogOpen, setSystemLogOpen] = useState(false);
   const [tweaksOpen, setTweaksOpen] = useState(false);
-  const [accent, setAccent] = useState('#6FA8B3');
+  const [accent, setAccent] = useState('#D97757');
   const [density, setDensity] = useState<Density>('comfortable');
   const [showTicker, setShowTicker] = useState(true);
   const [drill, setDrill] = useState<{ type: string; source: string; stepHint?: number; at?: number } | null>(null);
@@ -138,8 +138,8 @@ export default function App() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)', gap: 16, marginTop: 16 }}>
-                <div id="5w-where"><WhereCard /></div>
-                <AppSurfaceCard />
+                <div id="5w-where"><WhereCard lookback={lookback} /></div>
+                <AppSurfaceCard lookback={lookback} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)', gap: 16, marginTop: 16 }}>

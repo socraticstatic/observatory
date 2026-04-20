@@ -13,17 +13,19 @@ interface ServicesRailProps {
 }
 
 const PROVIDER_META: Record<string, { label: string; col: string; initial: string; category: 'llm' | 'creative' }> = {
-  anthropic:  { label: 'Anthropic',   col: '#9BC4CC', initial: 'A', category: 'llm' },
-  google:     { label: 'Google',      col: '#C9B08A', initial: 'G', category: 'llm' },
+  // LLM providers — warm palette
+  anthropic:  { label: 'Anthropic',   col: '#D97757', initial: 'A', category: 'llm' },
+  google:     { label: 'Google',      col: '#8BA89C', initial: 'G', category: 'llm' },
   xai:        { label: 'xAI',         col: '#B88A8A', initial: 'X', category: 'llm' },
   openai:     { label: 'OpenAI',      col: '#7CA893', initial: 'O', category: 'llm' },
-  mistral:    { label: 'Mistral',     col: '#A899C8', initial: 'M', category: 'llm' },
-  local:      { label: 'Local',       col: '#7CA893', initial: 'L', category: 'llm' },
-  unknown:    { label: 'Other',       col: '#6A7278', initial: '?', category: 'llm' },
-  leonardo:   { label: 'Leonardo',    col: '#C87C6A', initial: 'L', category: 'creative' },
-  heygen:     { label: 'HeyGen',      col: '#6A9CC8', initial: 'H', category: 'creative' },
-  elevenlabs: { label: 'ElevenLabs',  col: '#8AC87C', initial: 'E', category: 'creative' },
-  stability:  { label: 'Stability',   col: '#C8A86A', initial: 'S', category: 'creative' },
+  mistral:    { label: 'Mistral',     col: '#A89276', initial: 'M', category: 'llm' },
+  local:      { label: 'Local',       col: '#9EA87A', initial: 'L', category: 'llm' },
+  unknown:    { label: 'Other',       col: '#7A7068', initial: '?', category: 'llm' },
+  // Creative service providers
+  leonardo:   { label: 'Leonardo',    col: '#C96442', initial: 'L', category: 'creative' },
+  heygen:     { label: 'HeyGen',      col: '#C9966B', initial: 'H', category: 'creative' },
+  elevenlabs: { label: 'ElevenLabs',  col: '#7CA893', initial: 'E', category: 'creative' },
+  stability:  { label: 'Stability',   col: '#A89276', initial: 'S', category: 'creative' },
 };
 
 function fmtTokens(n: number): string {

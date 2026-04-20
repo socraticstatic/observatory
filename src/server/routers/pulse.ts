@@ -60,27 +60,71 @@ export const pulseRouter = router({
     .query(async ({ ctx, input }) => {
       const interval = lookbackToInterval(input.lookback);
       const since = new Date(Date.now() - msSince(interval));
-      const [agg, errors, sessions] = await Promise.all([
+      // Also query the prior period for delta
+      const ms = msSince(interval);
+      const prevSince = new Date(Date.now() - 2 * ms);
+      const [agg, errors, sessions, prevAgg] = await Promise.all([
         ctx.db.llmEvent.aggregate({
           where: { ts: { gte: since } },
           _count: { id: true },
-          _sum: { cachedTokens: true, inputTokens: true },
+          _sum: { cachedTokens: true, inputTokens: true, outputTokens: true },
           _avg: { latencyMs: true, qualityScore: true },
         }),
         ctx.db.llmEvent.count({ where: { ts: { gte: since }, status: 'error' } }),
         ctx.db.llmEvent.findMany({ where: { ts: { gte: since } }, distinct: ['sessionId'], select: { sessionId: true } }),
+        ctx.db.llmEvent.aggregate({
+          where: { ts: { gte: prevSince, lt: since } },
+          _count: { id: true },
+          _sum: { cachedTokens: true, inputTokens: true },
+        }),
       ]);
       const total = Number(agg._count.id ?? 0);
+      const prevTotal = Number(prevAgg._count.id ?? 0);
       const totalCached = Number(agg._sum.cachedTokens ?? 0);
       const totalInput  = Number(agg._sum.inputTokens ?? 0);
+      const totalOutput = Number(agg._sum.outputTokens ?? 0);
+      const prevCached  = Number(prevAgg._sum.cachedTokens ?? 0);
+      const prevInput   = Number(prevAgg._sum.inputTokens ?? 0);
       return {
-        totalCalls:     total,
-        cacheHitPct:    totalInput > 0 ? (totalCached / (totalInput + totalCached)) * 100 : 0,
-        avgLatencyMs:   Number(agg._avg.latencyMs ?? 0),
-        avgQuality:     Number(agg._avg.qualityScore ?? 0),
-        errorRatePct:   total > 0 ? (errors / total) * 100 : 0,
-        activeSessions: sessions.length,
+        totalCalls:       total,
+        prevTotalCalls:   prevTotal,
+        cacheHitPct:      totalInput > 0 ? (totalCached / (totalInput + totalCached)) * 100 : 0,
+        prevCacheHitPct:  prevInput > 0 ? (prevCached / (prevInput + prevCached)) * 100 : 0,
+        avgLatencyMs:     Number(agg._avg.latencyMs ?? 0),
+        avgQuality:       Number(agg._avg.qualityScore ?? 0),
+        errorRatePct:     total > 0 ? (errors / total) * 100 : 0,
+        activeSessions:   sessions.length,
+        // Token efficiency: output tokens per input token (higher = more verbose responses)
+        efficiency:       totalInput > 0 ? totalOutput / totalInput : 0,
+        // Total tokens for context window utilization estimate
+        totalInputTokens: totalInput,
+        totalOutputTokens: totalOutput,
+        totalCachedTokens: totalCached,
       };
+    }),
+
+  // 7-day daily cache hit % trend for sparkline
+  cacheHitTrend: publicProcedure
+    .query(async ({ ctx }) => {
+      const since7d = new Date(Date.now() - 7 * 86_400_000);
+      const rows = await ctx.db.$queryRaw<Array<{
+        day: Date; cached: bigint; input: bigint;
+      }>>`
+        SELECT
+          date_trunc('day', ts) AS day,
+          SUM("cachedTokens") AS cached,
+          SUM("inputTokens")  AS input
+        FROM llm_events
+        WHERE ts >= ${since7d}
+        GROUP BY day
+        ORDER BY day ASC
+      `;
+      return rows.map(r => ({
+        day:    r.day.toISOString().slice(0, 10),
+        hitPct: (Number(r.input) + Number(r.cached)) > 0
+          ? (Number(r.cached) / (Number(r.input) + Number(r.cached))) * 100
+          : 0,
+      }));
     }),
 
   pulseChart: publicProcedure

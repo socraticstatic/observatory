@@ -12,8 +12,8 @@ import { eventsRouter } from './events';
 import { entityRouter } from './entity';
 import { insightsRouter } from './insights';
 import { tracesRouter } from './traces';
-import { costDriversRouter } from './cost-drivers';
 import { sessionsRouter } from './sessions';
+import { costDriversRouter } from './costDrivers';
 import { servicesRouter } from './services';
 
 export const appRouter = router({
@@ -29,8 +29,8 @@ export const appRouter = router({
   entity:       entityRouter,
   insights:     insightsRouter,
   traces:       tracesRouter,
-  costDrivers:  costDriversRouter,
   sessions:     sessionsRouter,
+  costDrivers:  costDriversRouter,
   services:     servicesRouter,
 });
 

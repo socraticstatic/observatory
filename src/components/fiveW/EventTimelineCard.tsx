@@ -29,7 +29,7 @@ function normalizeSeverity(s: string): Sev {
 }
 
 const SEV_COLOR = {
-  good: '#7CA893',
+  good: '#9EA87A',
   bad:  '#B86B6B',
   warn: '#C9966B',
   info: '#8A9297',
@@ -124,8 +124,8 @@ export function EventTimelineCard() {
         >
           <defs>
             <linearGradient id="etg" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#6FA8B3" stopOpacity=".22" />
-              <stop offset="100%" stopColor="#6FA8B3" stopOpacity="0" />
+              <stop offset="0%" stopColor="#D97757" stopOpacity=".22" />
+              <stop offset="100%" stopColor="#D97757" stopOpacity="0" />
             </linearGradient>
           </defs>
 
@@ -169,7 +169,7 @@ export function EventTimelineCard() {
           <path d={areaPath} fill="url(#etg)" />
 
           {/* Line */}
-          <path d={linePts} fill="none" stroke="#6FA8B3" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+          <path d={linePts} fill="none" stroke="#D97757" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
 
           {/* Annotation pins */}
           {ANNOTATIONS.map((ann, i) => {
