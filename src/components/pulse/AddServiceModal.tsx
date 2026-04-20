@@ -77,16 +77,26 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
     >
       <div
         className="card"
-        style={{ width: 400, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}
+        style={{
+          width: 420,
+          padding: '22px 24px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 18,
+          background: 'linear-gradient(180deg, #252523 0%, #1E1E1C 100%)',
+          border: '1px solid var(--line-2)',
+          boxShadow: '0 24px 64px rgba(0,0,0,.72)',
+        }}
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--mist)' }}>
+          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--steel)' }}>
             Add Service
           </span>
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--graphite)', fontSize: 16, lineHeight: 1 }}
+            className="mbtn"
+            style={{ padding: '2px 7px', fontSize: 14, lineHeight: 1, color: 'var(--graphite)', borderColor: 'transparent', background: 'none' }}
           >
             ×
           </button>
@@ -99,21 +109,31 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
         </div>
 
         {category === 'creative' && (
-          <div style={{ fontSize: 10, color: 'var(--steel)', lineHeight: 1.5, borderLeft: '2px solid var(--accent)', paddingLeft: 8 }}>
+          <div style={{
+            fontSize: 10, color: 'var(--steel)', lineHeight: 1.6,
+            borderLeft: '2px solid var(--accent)', paddingLeft: 10,
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
             Creative APIs are registered and key-stored only. Cost tracking requires manual entry or future ingest integration.
           </div>
         )}
 
         {/* Provider select */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label className="label" style={{ fontSize: 9 }}>PROVIDER</label>
+          <label className="label" style={{ fontSize: 9 }}>Provider</label>
           <select
             value={provider}
             onChange={e => setProvider(e.target.value)}
             style={{
-              background: 'var(--panel)', border: '1px solid var(--line)',
-              borderRadius: 4, color: 'var(--mist)', fontSize: 12,
-              padding: '7px 10px', outline: 'none',
+              background: 'var(--ink-2)',
+              border: '1px solid var(--line-2)',
+              borderRadius: 'var(--r)',
+              color: 'var(--mist)',
+              fontSize: 11,
+              padding: '7px 10px',
+              outline: 'none',
+              fontFamily: "'JetBrains Mono', monospace",
+              cursor: 'pointer',
             }}
           >
             {visibleProviders.map(p => (
@@ -124,7 +144,7 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
 
         {/* API key input */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label className="label" style={{ fontSize: 9 }}>API KEY</label>
+          <label className="label" style={{ fontSize: 9 }}>API Key</label>
           <div style={{ display: 'flex', gap: 6 }}>
             <input
               type={show ? 'text' : 'password'}
@@ -133,18 +153,22 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
               placeholder={prov.placeholder}
               onKeyDown={e => { if (e.key === 'Enter') save(); }}
               style={{
-                flex: 1, background: 'var(--panel)', border: '1px solid var(--line)',
-                borderRadius: 4, color: 'var(--mist)', fontSize: 12,
-                padding: '7px 10px', outline: 'none', fontFamily: 'monospace',
+                flex: 1,
+                background: 'var(--ink-2)',
+                border: '1px solid var(--line-2)',
+                borderRadius: 'var(--r)',
+                color: 'var(--mist)',
+                fontSize: 11,
+                padding: '7px 10px',
+                outline: 'none',
+                fontFamily: "'JetBrains Mono', monospace",
+                letterSpacing: show ? undefined : '.08em',
               }}
             />
             <button
               onClick={() => setShow(s => !s)}
-              style={{
-                background: 'var(--panel)', border: '1px solid var(--line)',
-                borderRadius: 4, color: 'var(--steel)', fontSize: 10,
-                padding: '0 10px', cursor: 'pointer',
-              }}
+              className="mbtn"
+              style={{ padding: '0 12px', fontSize: 10 }}
             >
               {show ? 'hide' : 'show'}
             </button>
@@ -152,30 +176,35 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
         </div>
 
         {status === 'err' && (
-          <span style={{ fontSize: 10, color: '#e57373' }}>{errMsg}</span>
+          <span style={{ fontSize: 10, color: 'var(--bad)', fontFamily: "'JetBrains Mono', monospace" }}>{errMsg}</span>
         )}
 
         {/* Actions */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 2, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
           <button
             onClick={onClose}
-            style={{
-              background: 'none', border: '1px solid var(--line)',
-              borderRadius: 4, color: 'var(--graphite)',
-              fontSize: 11, padding: '6px 14px', cursor: 'pointer',
-            }}
+            className="mbtn"
+            style={{ fontSize: 11, padding: '6px 16px' }}
           >
             Cancel
           </button>
           <button
             onClick={save}
             disabled={!key.trim() || status === 'saving' || status === 'ok'}
+            className="mbtn"
             style={{
-              background: status === 'ok' ? '#4caf50' : 'var(--accent)',
-              border: 'none', borderRadius: 4,
-              color: '#fff', fontSize: 11,
-              padding: '6px 14px', cursor: 'pointer',
-              opacity: !key.trim() || status === 'saving' ? 0.5 : 1,
+              fontSize: 11,
+              padding: '6px 16px',
+              borderColor: status === 'ok'
+                ? 'rgba(124,168,147,.4)'
+                : 'rgba(217,119,87,.35)',
+              color: status === 'ok'
+                ? 'var(--good)'
+                : 'var(--accent-2)',
+              background: status === 'ok'
+                ? 'linear-gradient(180deg, #1A2420, #131A17)'
+                : 'linear-gradient(180deg, #251E18, #1A1410)',
+              opacity: !key.trim() || status === 'saving' ? 0.45 : 1,
             }}
           >
             {status === 'saving' ? 'Saving...' : status === 'ok' ? 'Saved' : 'Save & Connect'}
