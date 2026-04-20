@@ -12,11 +12,11 @@ interface ServicesRailProps {
 }
 
 const PROVIDER_META: Record<string, { label: string; col: string; initial: string }> = {
-  anthropic: { label: 'Anthropic', col: '#9BC4CC', initial: 'A' },
-  google:    { label: 'Google',    col: '#C9B08A', initial: 'G' },
+  anthropic: { label: 'Anthropic', col: '#D97757', initial: 'A' },
+  google:    { label: 'Google',    col: '#8BA89C', initial: 'G' },
   xai:       { label: 'xAI',       col: '#B88A8A', initial: 'X' },
-  local:     { label: 'Local',     col: '#7CA893', initial: 'L' },
-  unknown:   { label: 'Other',     col: '#6A7278', initial: '?' },
+  local:     { label: 'Local',     col: '#9EA87A', initial: 'L' },
+  unknown:   { label: 'Other',     col: '#7A7068', initial: '?' },
 };
 
 function fmtTokens(n: number): string {

@@ -16,10 +16,10 @@ interface Bar {
 }
 
 const LAYERS: { key: keyof Bar; label: string; color: string }[] = [
-  { key: 'cached',        label: 'Cached',      color: '#4F7B83' },
+  { key: 'cached',        label: 'Cached',      color: '#7A9E8A' },
   { key: 'cacheCreation', label: 'Cache Write',  color: 'var(--warn)' },
-  { key: 'input',         label: 'Input',        color: '#6FA8B3' },
-  { key: 'output',        label: 'Output',       color: '#9BC4CC' },
+  { key: 'input',         label: 'Input',        color: '#A89276' },
+  { key: 'output',        label: 'Output',       color: '#D97757' },
   { key: 'reasoning',     label: 'Reasoning',    color: '#C9966B' },
 ];
 

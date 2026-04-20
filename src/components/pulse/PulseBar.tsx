@@ -139,7 +139,7 @@ export function PulseBar({ onDrillSpike, lookback, setLookback }: Props) {
               {/* legend */}
               <div style={{ display: 'flex', gap: 10, marginRight: 8 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--steel)' }}>
-                  <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke="#6FA8B3" strokeWidth="1.4"/></svg>
+                  <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke="#D97757" strokeWidth="1.4"/></svg>
                   TPM
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--steel)' }}>
@@ -182,7 +182,7 @@ export function PulseBar({ onDrillSpike, lookback, setLookback }: Props) {
 
             {/* TPM path */}
             {tpmLine && (
-              <path d={tpmLine} fill="none" stroke="#6FA8B3" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" />
+              <path d={tpmLine} fill="none" stroke="#D97757" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" />
             )}
 
             {/* Latency dashed path */}

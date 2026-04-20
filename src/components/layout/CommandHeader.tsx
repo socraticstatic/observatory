@@ -17,8 +17,8 @@ const LOOKBACK_KEYS = Object.keys(LOOKBACKS) as Lookback[];
 
 const MODEL_TOGGLES: { id: string; label: string; dot: string | null }[] = [
   { id: 'all',       label: 'ALL',    dot: null },
-  { id: 'anthropic', label: 'Claude', dot: '#6FA8B3' },
-  { id: 'google',    label: 'Gemini', dot: '#C9B08A' },
+  { id: 'anthropic', label: 'Claude', dot: '#D97757' },
+  { id: 'google',    label: 'Gemini', dot: '#8BA89C' },
   { id: 'xai',       label: 'Grok',   dot: '#B88A8A' },
 ];
 
@@ -136,7 +136,7 @@ function Avatar() {
         width: 28,
         height: 28,
         borderRadius: '50%',
-        background: 'linear-gradient(135deg, #1E2B2F, #6FA8B3)',
+        background: 'linear-gradient(135deg, #1E1510, #D97757)',
         border: '1.5px solid #44545B',
         display: 'flex',
         alignItems: 'center',

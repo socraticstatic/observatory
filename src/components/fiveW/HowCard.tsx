@@ -6,14 +6,14 @@ import { trpc } from '@/lib/trpc-client';
 
 // Color by content type
 const TYPE_COL: Record<string, string> = {
-  user_turn:      '#9BC4CC',
-  assistant_turn: '#6FA8B3',
+  user_turn:      '#A89276',
+  assistant_turn: '#D97757',
   tool_call:      '#C9966B',
   tool_result:    '#C9966B',
-  cache_read:     '#4F7B83',
-  cache_write:    '#4F7B83',
-  llm_call:       '#9BC4CC',
-  unknown:        '#6A737A',
+  cache_read:     '#7A9E8A',
+  cache_write:    '#7A9E8A',
+  llm_call:       '#A89276',
+  unknown:        '#7A7068',
 };
 
 const TYPE_LABELS: Record<string, string> = {
