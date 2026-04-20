@@ -14,14 +14,6 @@ interface Annotation {
   detail: string;
 }
 
-const FALLBACK_ANNOTATIONS: readonly Annotation[] = [
-  { d: 3,  type: 'cache',  title: 'Cache rules updated',    severity: 'good', detail: '-$8.40/day' },
-  { d: 8,  type: 'model',  title: 'Switched to Sonnet',     severity: 'good', detail: '-31% cost' },
-  { d: 14, type: 'zombie', title: 'Loop detected',          severity: 'bad',  detail: '+$12 wasted' },
-  { d: 18, type: 'budget', title: 'Budget alert fired',     severity: 'warn', detail: '80% threshold' },
-  { d: 22, type: 'edit',   title: 'System prompt refactor', severity: 'info', detail: '-18% input' },
-  { d: 27, type: 'rule',   title: 'Routing rule added',     severity: 'good', detail: 'Haiku for short' },
-] as const;
 
 function normalizeSeverity(s: string): Sev {
   if (s === 'good' || s === 'bad' || s === 'warn' || s === 'info') return s;
@@ -60,7 +52,7 @@ function buildCurve(data: number[]) {
 export function EventTimelineCard() {
   const [selected, setSelected] = useState<number | null>(null);
 
-  const { data: timelineData } = trpc.events.timeline.useQuery();
+  const { data: timelineData, isLoading } = trpc.events.timeline.useQuery();
 
   const data = useMemo<number[]>(() => {
     if (timelineData && timelineData.daily.length > 0) {
@@ -79,16 +71,26 @@ export function EventTimelineCard() {
         detail: a.detail ?? '',
       }));
     }
-    return FALLBACK_ANNOTATIONS;
+    return [];
   }, [timelineData]);
 
-  const { linePts, areaPath, px, py, min, max } = useMemo(() => buildCurve(data), [data]);
+  const chartData = data.length >= 2 ? data : null;
+  const curve = useMemo(() => chartData ? buildCurve(chartData) : null, [chartData]);
 
-  if (!data.length) return (
+  if (isLoading) return (
     <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
       <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
     </div>
   );
+
+  if (!chartData) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 200, gap: 8 }}>
+      <span style={{ fontSize: 13, color: 'var(--fog)' }}>Event Timeline</span>
+      <span style={{ fontSize: 11, color: 'var(--graphite)' }}>No spend data yet — run traffic to populate the 30-day curve.</span>
+    </div>
+  );
+
+  const { linePts, areaPath, px, py, min, max } = curve!;
 
   const selectedAnn = selected !== null ? ANNOTATIONS[selected] : null;
 
@@ -124,8 +126,8 @@ export function EventTimelineCard() {
         >
           <defs>
             <linearGradient id="etg" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#6FA8B3" stopOpacity=".22" />
-              <stop offset="100%" stopColor="#6FA8B3" stopOpacity="0" />
+              <stop offset="0%" stopColor="#D97757" stopOpacity=".18" />
+              <stop offset="100%" stopColor="#D97757" stopOpacity="0" />
             </linearGradient>
           </defs>
 
@@ -169,7 +171,7 @@ export function EventTimelineCard() {
           <path d={areaPath} fill="url(#etg)" />
 
           {/* Line */}
-          <path d={linePts} fill="none" stroke="#6FA8B3" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+          <path d={linePts} fill="none" stroke="#D97757" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
 
           {/* Annotation pins */}
           {ANNOTATIONS.map((ann, i) => {

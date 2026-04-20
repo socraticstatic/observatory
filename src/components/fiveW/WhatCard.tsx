@@ -16,11 +16,11 @@ interface Bar {
 }
 
 const LAYERS: { key: keyof Bar; label: string; color: string }[] = [
-  { key: 'cached',        label: 'Cached',      color: '#4F7B83' },
-  { key: 'cacheCreation', label: 'Cache Write',  color: 'var(--warn)' },
-  { key: 'input',         label: 'Input',        color: '#6FA8B3' },
-  { key: 'output',        label: 'Output',       color: '#9BC4CC' },
-  { key: 'reasoning',     label: 'Reasoning',    color: '#C9966B' },
+  { key: 'cached',        label: 'Cached',      color: '#7A9E8A' },
+  { key: 'cacheCreation', label: 'Cache Write',  color: '#A89276' },
+  { key: 'input',         label: 'Input',        color: '#D97757' },
+  { key: 'output',        label: 'Output',       color: '#C9966B' },
+  { key: 'reasoning',     label: 'Reasoning',    color: '#B88A8A' },
 ];
 
 interface LCProps {
@@ -229,10 +229,12 @@ function Sidebar({ data, lookback }: SidebarProps) {
         })}
       </div>
 
-      <div style={{ marginTop: 'auto', padding: '10px 10px', background: 'rgba(79,123,131,.08)', border: '1px solid rgba(79,123,131,.2)', borderRadius: 'var(--r)' }}>
+      <div style={{ marginTop: 'auto', padding: '10px 10px', background: 'rgba(122,158,138,.07)', border: '1px solid rgba(122,158,138,.2)', borderRadius: 'var(--r)' }}>
         <div className="label" style={{ marginBottom: 4 }}>Cache Savings</div>
-        <div className="num" style={{ fontSize: 18, color: 'var(--accent)', fontWeight: 600 }}>$8.42</div>
-        <div style={{ fontSize: 10, color: 'var(--steel)' }}>/ day est.</div>
+        <div className="num" style={{ fontSize: 18, color: '#7A9E8A', fontWeight: 600 }}>
+          ${((totals.cached * 2.70) / 1_000_000).toFixed(2)}
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--steel)' }}>/ {LOOKBACKS[lookback].label.toLowerCase()} est.</div>
       </div>
     </div>
   );

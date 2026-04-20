@@ -35,7 +35,7 @@ function buildDonut(segments: Seg[]) {
 
     paths.push({
       label: seg.label,
-      col: seg.col,
+      col: seg.color,
       d: [
         `M ${x1o.toFixed(2)} ${y1o.toFixed(2)}`,
         `A ${R_OUTER} ${R_OUTER} 0 ${large} 1 ${x2o.toFixed(2)} ${y2o.toFixed(2)}`,
