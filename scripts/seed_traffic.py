@@ -21,6 +21,8 @@ PROXY_KEY  = "sk-observatory"
 # update litellm/config.yaml when correct model names are known.
 ANTHROPIC_MODELS = [
     "claude-haiku-4-5-20251001",
+    "claude-sonnet-4-6",
+    "claude-opus-4-7",
 ]
 
 GEMINI_MODELS = [
