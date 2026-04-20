@@ -94,7 +94,7 @@ export default function App() {
 
           {view === 'Pulse' && (
             <>
-              <ServicesRail lookback={lookback} providerFilter={modelFilter !== 'all' ? modelFilter : undefined} />
+              <ServicesRail lookback={lookback} providerFilter={modelFilter !== 'ALL' ? modelFilter : undefined} />
               <OverallCostHero lookback={lookback} />
               <PulseBar
                 lookback={lookback}

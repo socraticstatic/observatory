@@ -40,16 +40,30 @@ const LB_RUNWAY: Record<Lookback, string> = {
 };
 
 export function OverallCostHero({ lookback }: Props) {
-  const { data: costData } = trpc.pulse.overallCost.useQuery({ lookback });
-  const { data: burnData } = trpc.pulse.burnRate.useQuery();
+  const { data: costData }  = trpc.pulse.overallCost.useQuery({ lookback });
+  const { data: burnData }  = trpc.pulse.burnRate.useQuery();
   const { data: chartData } = trpc.pulse.pulseChart.useQuery({ lookback });
+  const { data: statData }  = trpc.pulse.statStrip.useQuery({ lookback });
 
-  const total = costData?.totalCostUsd ?? LB_TOTAL[lookback];
-  const trend = LB_TREND[lookback];
-  const pace  = burnData ? `$${burnData.todayCost.toFixed(2)} today` : LB_PACE[lookback];
-  const proj  = burnData ? `$${(burnData.projected * 30).toFixed(0)}/mo` : LB_PROJ[lookback];
-  const runway = burnData ? `${burnData.runway.toFixed(1)} days` : LB_RUNWAY[lookback];
-  const data  = chartData?.map(r => r.cost) ?? [];
+  const total   = costData?.totalCostUsd ?? 0;
+  const pace    = burnData ? `$${burnData.todayCost.toFixed(2)} today` : LB_PACE[lookback];
+  const proj    = burnData ? `$${(burnData.projected * 30).toFixed(0)}/mo` : LB_PROJ[lookback];
+  const runway  = burnData ? `${burnData.runway.toFixed(1)} days` : LB_RUNWAY[lookback];
+  const deltaVsYesterday = burnData?.deltaVsYesterday;
+  const trend   = deltaVsYesterday != null
+    ? `${deltaVsYesterday >= 0 ? '+' : ''}${deltaVsYesterday.toFixed(1)}%`
+    : null;
+  const data    = chartData?.map(r => r.cost) ?? [];
+
+  // Cache savings: cached tokens cost ~10x less than input; savings = cachedTokens * avg_input_price * 0.9
+  // Use blended ~$3/M token input price estimate
+  const cachedTok     = costData?.totalCachedTokens ?? 0;
+  const cacheSavings  = cachedTok * 0.0000027;
+  const lbDays        = lookback === '1H' ? (1/24) : lookback === '24H' ? 1 : 30;
+  const cacheSavingsPerDay = lbDays > 0 ? cacheSavings / lbDays : 0;
+
+  const errorRate  = statData ? `${statData.errorRatePct.toFixed(1)}%` : '—';
+  const avgLatency = statData?.avgLatencyMs ? fmtMs(statData.avgLatencyMs) : fmtMs(0);
 
   return (
     <div
@@ -75,12 +89,14 @@ export function OverallCostHero({ lookback }: Props) {
             >
               {fmtUsd(total)}
             </span>
-            <span
-              className="mono"
-              style={{ fontSize: 12, color: 'var(--warn)', fontWeight: 500 }}
-            >
-              {trend}
-            </span>
+            {trend && (
+              <span
+                className="mono"
+                style={{ fontSize: 12, color: Number(deltaVsYesterday) > 0 ? 'var(--warn)' : 'var(--good)', fontWeight: 500 }}
+              >
+                {trend}
+              </span>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -128,19 +144,19 @@ export function OverallCostHero({ lookback }: Props) {
           <div>
             <div className="label" style={{ marginBottom: 3 }}>Cache savings</div>
             <div className="mono" style={{ fontSize: 15, color: 'var(--good)', fontWeight: 600 }}>
-              $8.42<span style={{ fontSize: 10, color: 'var(--steel)', fontWeight: 400 }}>/day</span>
+              ${cacheSavingsPerDay.toFixed(2)}<span style={{ fontSize: 10, color: 'var(--steel)', fontWeight: 400 }}>/day</span>
             </div>
           </div>
 
           <div>
             <div className="label" style={{ marginBottom: 3 }}>Error rate</div>
-            <div className="mono" style={{ fontSize: 15, color: 'var(--warn)', fontWeight: 600 }}>0.4%</div>
+            <div className="mono" style={{ fontSize: 15, color: 'var(--warn)', fontWeight: 600 }}>{errorRate}</div>
           </div>
 
           <div>
             <div className="label" style={{ marginBottom: 3 }}>Avg latency</div>
             <div className="mono" style={{ fontSize: 15, color: 'var(--fog)', fontWeight: 600 }}>
-              {fmtMs(612)}
+              {avgLatency}
             </div>
           </div>
         </div>
