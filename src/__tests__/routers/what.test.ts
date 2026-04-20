@@ -4,6 +4,7 @@ import { whatRouter } from '@/server/routers/what';
 
 const createCaller = createCallerFactory(whatRouter);
 const mockDb = { $queryRaw: vi.fn() };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const caller = createCaller({ db: mockDb as any });
 
 beforeEach(() => vi.clearAllMocks());

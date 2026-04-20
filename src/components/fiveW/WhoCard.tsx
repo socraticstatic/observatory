@@ -37,7 +37,7 @@ interface WhoCardProps {
   setSelected: (id: string | null) => void;
   lookback: Lookback;
   providerFilter?: string;
-  onDrill?: (m: any) => void;
+  onDrill?: (m: ModelRow) => void;
 }
 
 export function WhoCard({ selected, setSelected, lookback, providerFilter, onDrill }: WhoCardProps) {

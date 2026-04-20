@@ -4,6 +4,7 @@ import { contentRouter } from '@/server/routers/content';
 
 const createCaller = createCallerFactory(contentRouter);
 const mockDb = { $queryRaw: vi.fn() };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const caller = createCaller({ db: mockDb as any });
 
 beforeEach(() => vi.clearAllMocks());

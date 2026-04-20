@@ -96,11 +96,16 @@ export function CounterfactualSimulator() {
   const [reasoningBudget, setReasoningBudget] = useState(FALLBACK_BASE.reasoningBudgetPct);
   const [seeded,          setSeeded]          = useState(false);
 
+  // One-time seed from API data — intentional, not a cascade risk
   useEffect(() => {
     if (baselineData && !seeded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpusShare(baselineData.opusSharePct);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCacheDepth(baselineData.cacheDepthPct);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReasoningBudget(baselineData.reasoningBudgetPct);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSeeded(true);
     }
   }, [baselineData, seeded]);
