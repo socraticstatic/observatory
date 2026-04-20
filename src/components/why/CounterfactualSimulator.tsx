@@ -1,23 +1,38 @@
 'use client';
 
-import { useState, Fragment } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { fmtUsd } from '@/lib/fmt';
+import { trpc } from '@/lib/trpc-client';
 
-const BASE_DAILY  = 21.72;
+const FALLBACK_BASE = {
+  dailyCostUsd:       21.72,
+  opusSharePct:       42,
+  cacheDepthPct:      44,
+  reasoningBudgetPct: 38,
+};
 
-function derive(opusShare: number, cacheDepth: number, reasoningBudget: number) {
-  const opusDelta      = ((opusShare - 42) / 100) * 14.22;
-  const cacheDelta     = -((cacheDepth - 44) / 100) * 8.42;
-  const reasoningDelta = ((reasoningBudget - 38) / 100) * 6.80;
+interface Base {
+  dailyCostUsd: number;
+  opusSharePct: number;
+  cacheDepthPct: number;
+  reasoningBudgetPct: number;
+}
+
+function derive(base: Base, opusShare: number, cacheDepth: number, reasoningBudget: number) {
+  const b = Math.max(base.dailyCostUsd, 0.01);
+  const opusDelta      = ((opusShare      - base.opusSharePct)       / 100) * b * 0.655;
+  const cacheDelta     = -((cacheDepth    - base.cacheDepthPct)      / 100) * b * 0.388;
+  const reasoningDelta = ((reasoningBudget - base.reasoningBudgetPct) / 100) * b * 0.313;
   const deltaDaily     = opusDelta + cacheDelta + reasoningDelta;
-  const projDaily      = BASE_DAILY + deltaDaily;
+  const projDaily      = b + deltaDaily;
 
-  const qualityNow  = 94.2;
-  const qualityShift = (opusShare - 42) * 0.06 - (cacheDepth - 44) * 0.02;
-  const qEffective  = qualityNow + qualityShift;
+  const baseQuality    = 94.2;
+  const qualityShift   = ((opusShare - base.opusSharePct) / 100) * 6
+                       - ((cacheDepth - base.cacheDepthPct) / 100) * 2;
+  const qEffective     = baseQuality + qualityShift;
 
-  const effNow     = BASE_DAILY / qualityNow;
-  const effNew     = projDaily / Math.max(qEffective, 1);
+  const effNow    = b / baseQuality;
+  const effNew    = projDaily / Math.max(qEffective, 1);
   const effImprove = ((effNow - effNew) / effNow) * 100;
 
   return { deltaDaily, projDaily, qualityShift, qEffective, effImprove };
@@ -56,12 +71,28 @@ function Slider({ label, value, min, max, onChange, unit = '%' }: SliderProps) {
 }
 
 export function CounterfactualSimulator() {
-  const [opusShare,       setOpusShare]       = useState(42);
-  const [cacheDepth,      setCacheDepth]      = useState(44);
-  const [reasoningBudget, setReasoningBudget] = useState(38);
+  const { data: baselineData } = trpc.costDrivers.baseline.useQuery();
 
-  const { deltaDaily, projDaily, qualityShift, qEffective, effImprove } = derive(opusShare, cacheDepth, reasoningBudget);
+  const activeBase: Base = baselineData ?? FALLBACK_BASE;
 
+  const [opusShare,       setOpusShare]       = useState(FALLBACK_BASE.opusSharePct);
+  const [cacheDepth,      setCacheDepth]      = useState(FALLBACK_BASE.cacheDepthPct);
+  const [reasoningBudget, setReasoningBudget] = useState(FALLBACK_BASE.reasoningBudgetPct);
+  const [seeded,          setSeeded]          = useState(false);
+
+  useEffect(() => {
+    if (baselineData && !seeded) {
+      setOpusShare(baselineData.opusSharePct);
+      setCacheDepth(baselineData.cacheDepthPct);
+      setReasoningBudget(baselineData.reasoningBudgetPct);
+      setSeeded(true);
+    }
+  }, [baselineData, seeded]);
+
+  const { deltaDaily, projDaily, qualityShift, qEffective, effImprove } =
+    derive(activeBase, opusShare, cacheDepth, reasoningBudget);
+
+  const baseDaily   = activeBase.dailyCostUsd;
   const projMonthly = projDaily * 30;
   const projAnnual  = projDaily * 365;
 
@@ -103,6 +134,29 @@ export function CounterfactualSimulator() {
             max={100}
             onChange={setReasoningBudget}
           />
+          {baselineData && (
+            <button
+              onClick={() => {
+                setOpusShare(baselineData.opusSharePct);
+                setCacheDepth(baselineData.cacheDepthPct);
+                setReasoningBudget(baselineData.reasoningBudgetPct);
+              }}
+              style={{
+                marginTop: 4,
+                padding: '4px 10px',
+                fontSize: 9,
+                letterSpacing: '.1em',
+                textTransform: 'uppercase',
+                border: '1px solid var(--line-2)',
+                borderRadius: 'var(--r)',
+                color: 'var(--steel)',
+                background: 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              Reset to actual
+            </button>
+          )}
         </div>
 
         {/* Projections */}
@@ -112,16 +166,20 @@ export function CounterfactualSimulator() {
             <div className="label" style={{ marginBottom: 8 }}>Projected spend</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '4px 16px', alignItems: 'baseline' }}>
               {[
-                { period: 'Daily',   base: BASE_DAILY,         proj: projDaily },
-                { period: 'Monthly', base: BASE_DAILY * 30,    proj: projMonthly },
-                { period: 'Annual',  base: BASE_DAILY * 365,   proj: projAnnual },
+                { period: 'Daily',   base: baseDaily,        proj: projDaily },
+                { period: 'Monthly', base: baseDaily * 30,   proj: projMonthly },
+                { period: 'Annual',  base: baseDaily * 365,  proj: projAnnual },
               ].map(row => (
                 <Fragment key={row.period}>
                   <span style={{ fontSize: 10, color: 'var(--steel)' }}>{row.period}</span>
                   <span className="mono" style={{ fontSize: 11, color: 'var(--graphite)', textDecoration: 'line-through' }}>
                     {fmtUsd(row.base)}
                   </span>
-                  <span className="mono" style={{ fontSize: 13, color: deltaDaily < 0 ? 'var(--good)' : 'var(--bad)', fontWeight: 600 }}>
+                  <span className="mono" style={{
+                    fontSize: 13,
+                    color: deltaDaily < 0 ? 'var(--good)' : 'var(--bad)',
+                    fontWeight: 600,
+                  }}>
                     {fmtUsd(row.proj)}
                   </span>
                 </Fragment>
@@ -138,7 +196,13 @@ export function CounterfactualSimulator() {
               </span>
             </div>
             <div style={{ height: 6, background: 'var(--line)', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${qualityBarW}%`, background: qualityShift >= 0 ? 'var(--good)' : 'var(--warn)', borderRadius: 3, transition: 'width 0.2s' }} />
+              <div style={{
+                height: '100%',
+                width: `${qualityBarW}%`,
+                background: qualityShift >= 0 ? 'var(--good)' : 'var(--warn)',
+                borderRadius: 3,
+                transition: 'width 0.2s',
+              }} />
             </div>
           </div>
 
@@ -148,7 +212,9 @@ export function CounterfactualSimulator() {
             <div style={{ display: 'flex', gap: 16 }}>
               <div>
                 <div style={{ fontSize: 9, color: 'var(--graphite)', marginBottom: 2 }}>baseline</div>
-                <div className="num" style={{ fontSize: 13, color: 'var(--fog)' }}>{(BASE_DAILY / 94.2).toFixed(3)}</div>
+                <div className="num" style={{ fontSize: 13, color: 'var(--fog)' }}>
+                  {(baseDaily / 94.2).toFixed(3)}
+                </div>
               </div>
               <div>
                 <div style={{ fontSize: 9, color: 'var(--graphite)', marginBottom: 2 }}>projected</div>
