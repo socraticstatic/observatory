@@ -1,28 +1,49 @@
 'use client';
 
 import { useState } from 'react';
+import { trpc } from '@/lib/trpc-client';
+import type { Lookback } from '@/lib/lookback';
 
 type Status = 'ok' | 'warn' | 'bad';
 
 interface Region {
   id: string;
   city: string;
-  x: number;   // percent of viewBox width
-  y: number;   // percent of viewBox height
-  lat: number; // latency ms
-  vol: number; // volume weight
+  x: number;
+  y: number;
+  lat: number;
+  vol: number;
   status: Status;
 }
 
-const regions: Region[] = [
-  { id: 'us-east-1',      city: 'Virginia',   x: 28, y: 38, lat: 142, vol: 28, status: 'ok' },
-  { id: 'us-west-2',      city: 'Oregon',     x: 14, y: 34, lat: 218, vol: 22, status: 'warn' },
-  { id: 'eu-west-1',      city: 'Dublin',     x: 48, y: 30, lat: 92,  vol: 18, status: 'ok' },
-  { id: 'eu-central-1',   city: 'Frankfurt',  x: 51, y: 33, lat: 108, vol: 14, status: 'ok' },
-  { id: 'ap-south-1',     city: 'Mumbai',     x: 68, y: 48, lat: 284, vol: 9,  status: 'warn' },
-  { id: 'ap-northeast-1', city: 'Tokyo',      x: 85, y: 40, lat: 312, vol: 11, status: 'warn' },
-  { id: 'sa-east-1',      city: 'São Paulo',  x: 34, y: 68, lat: 402, vol: 4,  status: 'bad' },
-];
+// Static coordinate lookup for known AWS region IDs
+const REGION_META: Record<string, { city: string; x: number; y: number }> = {
+  'us-east-1':      { city: 'Virginia',   x: 28, y: 38 },
+  'us-east-2':      { city: 'Ohio',       x: 26, y: 36 },
+  'us-west-1':      { city: 'California', x: 12, y: 40 },
+  'us-west-2':      { city: 'Oregon',     x: 14, y: 34 },
+  'eu-west-1':      { city: 'Dublin',     x: 48, y: 30 },
+  'eu-west-2':      { city: 'London',     x: 49, y: 28 },
+  'eu-west-3':      { city: 'Paris',      x: 50, y: 31 },
+  'eu-central-1':   { city: 'Frankfurt',  x: 51, y: 33 },
+  'eu-north-1':     { city: 'Stockholm',  x: 52, y: 24 },
+  'ap-south-1':     { city: 'Mumbai',     x: 68, y: 48 },
+  'ap-southeast-1': { city: 'Singapore',  x: 78, y: 58 },
+  'ap-southeast-2': { city: 'Sydney',     x: 84, y: 74 },
+  'ap-northeast-1': { city: 'Tokyo',      x: 85, y: 40 },
+  'ap-northeast-2': { city: 'Seoul',      x: 83, y: 38 },
+  'ap-east-1':      { city: 'Hong Kong',  x: 80, y: 44 },
+  'sa-east-1':      { city: 'São Paulo',  x: 34, y: 68 },
+  'ca-central-1':   { city: 'Montreal',   x: 25, y: 30 },
+  'me-south-1':     { city: 'Bahrain',    x: 61, y: 44 },
+  'af-south-1':     { city: 'Cape Town',  x: 52, y: 78 },
+};
+
+function latencyToStatus(ms: number): Status {
+  if (ms < 200) return 'ok';
+  if (ms < 400) return 'warn';
+  return 'bad';
+}
 
 const STATUS_COL: Record<Status, string> = {
   ok:   '#7CA893',
@@ -33,7 +54,6 @@ const STATUS_COL: Record<Status, string> = {
 const VB_W = 820;
 const VB_H = 340;
 
-// Convert percent coords to viewBox absolute
 const px = (pct: number) => (pct / 100) * VB_W;
 const py = (pct: number) => (pct / 100) * VB_H;
 
@@ -49,19 +69,47 @@ const LAND_PATHS = [
   'M 720 230 Q 760 220 790 235 Q 800 255 785 275 Q 755 285 730 275 Q 715 255 720 230 Z',
 ];
 
-// Cubic bezier arc from hub to node
 function arcPath(x1: number, y1: number, x2: number, y2: number): string {
   const mx = (x1 + x2) / 2;
   const my = (y1 + y2) / 2 - 30;
   return `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`;
 }
 
-export function WhereCard() {
+interface Props {
+  lookback?: Lookback;
+}
+
+export function WhereCard({ lookback = '24H' }: Props) {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; r: Region } | null>(null);
+
+  const { data: raw } = trpc.where.regional.useQuery({ lookback });
+
+  const regions: Region[] = (() => {
+    if (!raw || raw.length === 0) return [];
+    const totalCalls = raw.reduce((s, r) => s + r.calls, 0) || 1;
+    let unknownIdx = 0;
+    // Fallback x/y positions for regions not in lookup (spread around edges)
+    const FALLBACKS = [
+      { x: 60, y: 55 }, { x: 35, y: 55 }, { x: 70, y: 65 },
+      { x: 20, y: 55 }, { x: 75, y: 30 }, { x: 40, y: 75 },
+    ];
+    return raw.map(r => {
+      const meta = REGION_META[r.region];
+      const pos = meta ?? FALLBACKS[unknownIdx++ % FALLBACKS.length];
+      return {
+        id: r.region,
+        city: meta?.city ?? r.region,
+        x: pos.x,
+        y: pos.y,
+        lat: r.avgLatMs,
+        vol: Math.round((r.calls / totalCalls) * 100),
+        status: latencyToStatus(r.avgLatMs),
+      };
+    });
+  })();
 
   return (
     <div className="card">
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)', flexWrap: 'wrap', gap: 8 }}>
         <span className="label">WHERE &middot; Regional Distribution</span>
         <div style={{ display: 'flex', gap: 12 }}>
@@ -74,7 +122,6 @@ export function WhereCard() {
         </div>
       </div>
 
-      {/* Map */}
       <div style={{ padding: '8px 0', position: 'relative' }}>
         <svg viewBox={`0 0 ${VB_W} ${VB_H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
           <defs>
@@ -90,12 +137,10 @@ export function WhereCard() {
             </radialGradient>
           </defs>
 
-          {/* Landmasses */}
           {LAND_PATHS.map((d, i) => (
             <path key={i} d={d} fill="rgba(138,146,151,.09)" stroke="rgba(200,206,209,.25)" strokeWidth=".8" />
           ))}
 
-          {/* Arc connections from hub to each region */}
           {regions.map(r => {
             const rx = px(r.x);
             const ry = py(r.y);
@@ -112,7 +157,6 @@ export function WhereCard() {
             );
           })}
 
-          {/* Hub concentric circles */}
           {[24, 14, 6].map((radius, i) => (
             <circle
               key={i}
@@ -129,7 +173,11 @@ export function WhereCard() {
           <text x={HUB_X} y={HUB_Y + 44} textAnchor="middle" fill="var(--accent)"
             fontSize={9} fontFamily="JetBrains Mono, monospace" letterSpacing=".12em">HUB</text>
 
-          {/* Region nodes */}
+          {regions.length === 0 && (
+            <text x={HUB_X} y={HUB_Y + 70} textAnchor="middle" fill="var(--steel)"
+              fontSize={10} fontFamily="JetBrains Mono, monospace">No regional data</text>
+          )}
+
           {regions.map(r => {
             const rx = px(r.x);
             const ry = py(r.y);
@@ -162,11 +210,11 @@ export function WhereCard() {
             </div>
             <div style={{ fontSize: 10, color: 'var(--steel)', marginBottom: 4 }}>{tooltip.r.id}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 3 }}>
-              <span style={{ color: 'var(--fog)', fontSize: 11 }}>Latency</span>
+              <span style={{ color: 'var(--fog)', fontSize: 11 }}>Avg latency</span>
               <span className="num" style={{ fontSize: 11 }}>{tooltip.r.lat}ms</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-              <span style={{ color: 'var(--fog)', fontSize: 11 }}>Volume</span>
+              <span style={{ color: 'var(--fog)', fontSize: 11 }}>Traffic share</span>
               <span className="num" style={{ fontSize: 11 }}>{tooltip.r.vol}%</span>
             </div>
           </div>
