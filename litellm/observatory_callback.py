@@ -56,13 +56,22 @@ class ObservatoryLogger(CustomLogger):
                 "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", 0),
             }
 
+        # In LiteLLM proxy, user-supplied metadata lands in litellm_params.metadata.
+        # Extract only plain fields — the dict also contains non-serializable objects.
+        _lp_meta = (kwargs.get("litellm_params") or {}).get("metadata") or {}
+        raw_meta = {
+            "session_id": _lp_meta.get("session_id"),
+            "surface":    _lp_meta.get("surface"),
+            "project":    _lp_meta.get("project"),
+        }
+
         payload = {
             "model": kwargs.get("model", ""),
             "custom_llm_provider": kwargs.get("custom_llm_provider", ""),
             "usage": usage_dict,
             "response_cost": kwargs.get("response_cost"),
             "response_time": latency,
-            "metadata": kwargs.get("metadata", {}),
+            "metadata": raw_meta,
             "response": response_obj.model_dump() if hasattr(response_obj, "model_dump") else {},
         }
         threading.Thread(target=self._post, args=(payload,), daemon=True).start()
