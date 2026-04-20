@@ -1,14 +1,7 @@
 'use client';
 
 import { trpc } from '@/lib/trpc-client';
-
-const DEMO_SEGMENTS = [
-  { label: 'Cached Context', tokens: 35840, pct: 28, color: '#7A9E8A' },
-  { label: 'Fresh Input',    tokens: 44800, pct: 35, color: '#D97757' },
-  { label: 'Output',         tokens: 28160, pct: 22, color: '#C9966B' },
-  { label: 'Reasoning',      tokens: 19200, pct: 15, color: '#A89276' },
-];
-const DEMO_TOTAL = 128000;
+import type { Lookback } from '@/lib/lookback';
 
 const CX = 80, CY = 80, R_OUTER = 66, R_INNER = 43;
 
@@ -55,12 +48,12 @@ function fmtTok(n: number) {
   return String(n);
 }
 
-export function ContextCompositionCard() {
-  const { data } = trpc.costDrivers.contextComposition.useQuery({ lookback: '24H' });
+export function ContextCompositionCard({ lookback }: { lookback: Lookback }) {
+  const { data } = trpc.costDrivers.contextComposition.useQuery({ lookback });
 
-  const isDemo   = !data || data.totalTokens === 0;
-  const segments = isDemo ? DEMO_SEGMENTS : data!.segments;
-  const total    = isDemo ? DEMO_TOTAL    : data!.totalTokens;
+  const isEmpty  = !data || data.totalTokens === 0;
+  const segments = data?.segments ?? [];
+  const total    = data?.totalTokens ?? 0;
 
   const paths = buildDonut(segments);
 
@@ -79,16 +72,6 @@ export function ContextCompositionCard() {
             what fills the context window · 24h
           </div>
         </div>
-        {isDemo && (
-          <div style={{
-            fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 600,
-            color: '#D97757', background: 'rgba(217,119,87,.08)',
-            border: '1px solid rgba(217,119,87,.2)',
-            padding: '3px 8px', borderRadius: 4,
-          }}>
-            demo
-          </div>
-        )}
       </div>
 
       <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
@@ -164,43 +147,29 @@ export function ContextCompositionCard() {
         </div>
       </div>
 
-      {/* Insight — only shown when cache > 30% (good signal) */}
-      {!isDemo && segments.find(s => s.label === 'Cached Context' && s.pct > 30) && (
-        <div style={{
-          marginTop: 14, padding: '8px 12px',
-          background: 'rgba(122,158,138,.07)',
-          border: '1px solid rgba(122,158,138,.18)',
-          borderRadius: 'var(--r)',
-          fontSize: 11, color: '#7A9E8A', lineHeight: 1.5,
-        }}>
-          <span style={{ fontWeight: 600 }}>Cache hit rate healthy.</span>
-          {' '}
-          {segments.find(s => s.label === 'Cached Context')!.pct.toFixed(0)}% of context is reused — cache is working.
+      {isEmpty && (
+        <div style={{ marginTop: 14, textAlign: 'center', fontSize: 11, color: 'var(--steel)', padding: '8px 0' }}>
+          No token data yet for this window.
         </div>
       )}
-      {!isDemo && segments.find(s => s.label === 'Fresh Input' && s.pct > 60) && (
+      {!isEmpty && segments.find(s => s.label === 'Cached Context' && s.pct > 30) && (
         <div style={{
           marginTop: 14, padding: '8px 12px',
-          background: 'rgba(217,119,87,.07)',
-          border: '1px solid rgba(217,119,87,.18)',
-          borderRadius: 'var(--r)',
-          fontSize: 11, color: '#D97757', lineHeight: 1.5,
+          background: 'rgba(122,158,138,.07)', border: '1px solid rgba(122,158,138,.18)',
+          borderRadius: 'var(--r)', fontSize: 11, color: '#7A9E8A', lineHeight: 1.5,
         }}>
-          <span style={{ fontWeight: 600 }}>Low cache utilization.</span>
-          {' '}
+          <span style={{ fontWeight: 600 }}>Cache hit rate healthy.</span>{' '}
+          {segments.find(s => s.label === 'Cached Context')!.pct.toFixed(0)}% of context is reused.
+        </div>
+      )}
+      {!isEmpty && segments.find(s => s.label === 'Fresh Input' && s.pct > 60) && (
+        <div style={{
+          marginTop: 14, padding: '8px 12px',
+          background: 'rgba(217,119,87,.07)', border: '1px solid rgba(217,119,87,.18)',
+          borderRadius: 'var(--r)', fontSize: 11, color: '#D97757', lineHeight: 1.5,
+        }}>
+          <span style={{ fontWeight: 600 }}>Low cache utilization.</span>{' '}
           Most context is sent fresh each turn. Consider prompt caching to reduce cost.
-        </div>
-      )}
-      {isDemo && (
-        <div style={{
-          marginTop: 14, padding: '8px 12px',
-          background: 'rgba(201,150,107,.07)',
-          border: '1px solid rgba(201,150,107,.18)',
-          borderRadius: 'var(--r)',
-          fontSize: 11, color: 'var(--warn)', lineHeight: 1.5,
-        }}>
-          <span style={{ fontWeight: 600 }}>Recommendation: </span>
-          Prior turn accumulation above threshold. Consider summarization after turn 8.
         </div>
       )}
     </div>

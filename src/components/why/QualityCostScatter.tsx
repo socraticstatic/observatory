@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { fmtUsd } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
+import type { Lookback } from '@/lib/lookback';
 
 // Claude warm terracotta palette
 function modelColor(model: string): string {
@@ -14,16 +15,6 @@ function modelColor(model: string): string {
   return '#7A8878';
 }
 
-const DEMO_POINTS = [
-  { label: 'research_agent', costUsd: 14.2, quality: 96, model: 'claude-opus-4',   hasQuality: true },
-  { label: 'inbox_triage',   costUsd: 1.8,  quality: 84, model: 'claude-haiku-4',  hasQuality: true },
-  { label: 'code_review',    costUsd: 8.4,  quality: 94, model: 'claude-sonnet-4', hasQuality: true },
-  { label: 'trip_planning',  costUsd: 2.2,  quality: 91, model: 'gemini-2.0',      hasQuality: true },
-  { label: 'market_scan',    costUsd: 1.1,  quality: 78, model: 'grok-3',          hasQuality: true },
-  { label: 'quick_edits',    costUsd: 0.4,  quality: 88, model: 'claude-haiku-4',  hasQuality: true },
-  { label: 'deep_research',  costUsd: 18.8, quality: 98, model: 'claude-opus-4',   hasQuality: true },
-  { label: 'automation',     costUsd: 6.2,  quality: 72, model: 'grok-3',          hasQuality: true },
-];
 
 const PL = 52, PR = 24, PT = 28, PB = 44;
 const W = 460, H = 300;
@@ -33,18 +24,13 @@ const DH = H - PT - PB;
 interface Pt { label: string; costUsd: number; quality: number; model: string; hasQuality: boolean }
 interface TT  { label: string; model: string; cost: number; quality: number; hasQuality: boolean; x: number; y: number }
 
-export function QualityCostScatter() {
+export function QualityCostScatter({ lookback }: { lookback: Lookback }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<TT | null>(null);
 
-  const { data: raw } = trpc.costDrivers.qualityCostByProject.useQuery({ lookback: '24H' });
+  const { data: raw } = trpc.costDrivers.qualityCostByProject.useQuery({ lookback });
 
-  const isDemo = !raw || raw.length === 0;
-
-  const points = useMemo<Pt[]>(() => {
-    if (!isDemo) return raw as Pt[];
-    return DEMO_POINTS;
-  }, [raw, isDemo]);
+  const points = useMemo<Pt[]>(() => raw as Pt[] ?? [], [raw]);
 
   const allNoQuality = points.every(p => !p.hasQuality);
   const costMax = Math.max(...points.map(p => p.costUsd)) * 1.15 || 1;
@@ -63,6 +49,18 @@ export function QualityCostScatter() {
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map(t => qualMin + t * qR);
   const usedModels = [...new Set(points.map(p => p.model))];
 
+  if (!raw) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
+
+  if (points.length === 0) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>No project data for this window.</span>
+    </div>
+  );
+
   return (
     <div className="card" style={{ padding: '20px 24px' }}>
       {/* Header */}
@@ -75,17 +73,7 @@ export function QualityCostScatter() {
             efficiency frontier · 24h window
           </div>
         </div>
-        {isDemo && (
-          <div style={{
-            fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 600,
-            color: '#D97757', background: 'rgba(217,119,87,.08)',
-            border: '1px solid rgba(217,119,87,.2)',
-            padding: '3px 8px', borderRadius: 4,
-          }}>
-            demo
-          </div>
-        )}
-        {!isDemo && allNoQuality && (
+        {allNoQuality && points.length > 0 && (
           <div style={{
             fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase',
             color: 'var(--graphite)', background: 'rgba(255,255,255,.03)',

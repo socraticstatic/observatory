@@ -14,14 +14,6 @@ interface Annotation {
   detail: string;
 }
 
-const FALLBACK_ANNOTATIONS: readonly Annotation[] = [
-  { d: 3,  type: 'cache',  title: 'Cache rules updated',    severity: 'good', detail: '-$8.40/day' },
-  { d: 8,  type: 'model',  title: 'Switched to Sonnet',     severity: 'good', detail: '-31% cost' },
-  { d: 14, type: 'zombie', title: 'Loop detected',          severity: 'bad',  detail: '+$12 wasted' },
-  { d: 18, type: 'budget', title: 'Budget alert fired',     severity: 'warn', detail: '80% threshold' },
-  { d: 22, type: 'edit',   title: 'System prompt refactor', severity: 'info', detail: '-18% input' },
-  { d: 27, type: 'rule',   title: 'Routing rule added',     severity: 'good', detail: 'Haiku for short' },
-] as const;
 
 function normalizeSeverity(s: string): Sev {
   if (s === 'good' || s === 'bad' || s === 'warn' || s === 'info') return s;
@@ -70,23 +62,27 @@ export function EventTimelineCard() {
   }, [timelineData]);
 
   const ANNOTATIONS = useMemo<readonly Annotation[]>(() => {
-    if (timelineData && timelineData.annotations.length > 0) {
-      return timelineData.annotations.map((a, i) => ({
-        d: Math.min(29, Math.max(0, i * 5)),
-        type: a.type,
-        title: a.title,
-        severity: normalizeSeverity(a.severity),
-        detail: a.detail ?? '',
-      }));
-    }
-    return FALLBACK_ANNOTATIONS;
+    if (!timelineData || timelineData.annotations.length === 0) return [];
+    return timelineData.annotations.map((a, i) => ({
+      d: Math.min(29, Math.max(0, i * 5)),
+      type: a.type,
+      title: a.title,
+      severity: normalizeSeverity(a.severity),
+      detail: a.detail ?? '',
+    }));
   }, [timelineData]);
 
   const { linePts, areaPath, px, py, min, max } = useMemo(() => buildCurve(data), [data]);
 
-  if (!data.length) return (
+  if (!timelineData) return (
     <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
       <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
+
+  if (!data.length) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>No events in this window.</span>
     </div>
   );
 

@@ -9,6 +9,7 @@ interface Zombie {
   steps: number;
   rate: string;
   proj: string;
+  costUsd: number;
   severity: 'bad' | 'warn' | 'info';
 }
 
@@ -81,6 +82,7 @@ export function ZombieSessionsCard() {
       steps: z.steps,
       rate: fmtRate(z.costUsd, z.ageMs),
       proj: `$${z.costUsd.toFixed(2)}`,
+      costUsd: z.costUsd,
       severity: severityFor(z.bloatRatio, z.type),
     }));
   }, [zombieData]);
@@ -239,9 +241,9 @@ export function ZombieSessionsCard() {
       {/* Footer: projected total */}
       <div style={{ padding: '10px 18px', borderTop: '1px solid var(--line)', display: 'flex', gap: 24, alignItems: 'center' }}>
         <div style={{ fontSize: 10, color: 'var(--steel)' }}>
-          Projected total risk:
+          Total at risk:
           <span className="mono" style={{ color: '#B86B6B', fontWeight: 600, marginLeft: 6 }}>
-            $64.70 / 24h
+            ${active.reduce((s, z) => s + z.costUsd, 0).toFixed(2)}
           </span>
         </div>
         <div style={{ fontSize: 10, color: 'var(--steel)', marginLeft: 'auto' }}>

@@ -134,7 +134,7 @@ export default function App() {
               </div>
 
               <div style={{ marginTop: 16 }}>
-                <ContentTypeCard />
+                <ContentTypeCard lookback={lookback} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)', gap: 16, marginTop: 16 }}>
@@ -154,8 +154,8 @@ export default function App() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1fr)', gap: 16, marginTop: 16 }}>
-                <ContextCompositionCard />
-                <QualityCostScatter />
+                <ContextCompositionCard lookback={lookback} />
+                <QualityCostScatter lookback={lookback} />
               </div>
 
               <div style={{ marginTop: 16 }}>
