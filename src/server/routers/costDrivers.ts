@@ -8,17 +8,18 @@ function msSince(interval: string): number {
   return 30 * 86_400_000;
 }
 
-const COLORS = ['#6FA8B3', '#9BC4CC', '#C9966B', '#4F7B83', '#C9B08A', '#B88A8A', '#8A9297', '#7A8A60'];
+// Claude-inspired warm terracotta palette — matches component layer
+const COLORS = ['#D97757', '#C9966B', '#A89276', '#8BA89C', '#9EA87A', '#7A8878', '#A08870', '#7A9E8A'];
 
 type RawRow = { label: string | null; cost: unknown };
 
 function mapDim(rows: RawRow[]) {
   const total = rows.reduce((s, r) => s + Number(r.cost), 0);
   return rows.map((r, i) => ({
-    label: r.label ?? '(unknown)',
+    label:   r.label ?? '(unknown)',
     costUsd: Number(r.cost),
-    pct: total > 0 ? (Number(r.cost) / total) * 100 : 0,
-    color: COLORS[i % COLORS.length],
+    pct:     total > 0 ? (Number(r.cost) / total) * 100 : 0,
+    color:   COLORS[i % COLORS.length],
   }));
 }
 
@@ -72,24 +73,70 @@ export const costDriversRouter = router({
         cost: unknown;
         avg_quality: unknown;
         dominant_model: string | null;
+        has_quality: boolean;
       }>>`
         SELECT
           COALESCE(project, surface, 'unknown') AS label,
-          SUM("costUsd")::float AS cost,
-          AVG("qualityScore")::float AS avg_quality,
-          MODE() WITHIN GROUP (ORDER BY model) AS dominant_model
+          SUM("costUsd")::float                 AS cost,
+          COALESCE(AVG("qualityScore"), 0)::float AS avg_quality,
+          MODE() WITHIN GROUP (ORDER BY model)  AS dominant_model,
+          (COUNT("qualityScore") > 0)            AS has_quality
         FROM llm_events
-        WHERE ts >= ${since} AND "qualityScore" IS NOT NULL
+        WHERE ts >= ${since}
         GROUP BY COALESCE(project, surface, 'unknown')
         ORDER BY cost DESC
         LIMIT 20
       `;
       return rows.map(r => ({
-        label:   r.label ?? 'unknown',
-        costUsd: Number(r.cost),
-        quality: Number(r.avg_quality),
-        model:   r.dominant_model ?? 'unknown',
+        label:      r.label ?? 'unknown',
+        costUsd:    Number(r.cost),
+        quality:    Number(r.avg_quality),
+        model:      r.dominant_model ?? 'unknown',
+        hasQuality: Boolean(r.has_quality),
       }));
+    }),
+
+  contextComposition: publicProcedure
+    .input(z.object({ lookback: LookbackSchema }))
+    .query(async ({ ctx, input }) => {
+      const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const rows = await ctx.db.$queryRaw<Array<{
+        cached:           number;
+        cache_creation:   number;
+        fresh_input:      number;
+        output_tokens:    number;
+        reasoning_tokens: number;
+      }>>`
+        SELECT
+          COALESCE(SUM("cachedTokens"),                        0)::float AS cached,
+          COALESCE(SUM("cacheCreationTokens"),                 0)::float AS cache_creation,
+          COALESCE(SUM("inputTokens" - "cachedTokens"),        0)::float AS fresh_input,
+          COALESCE(SUM("outputTokens"),                        0)::float AS output_tokens,
+          COALESCE(SUM("reasoningTokens"),                     0)::float AS reasoning_tokens
+        FROM llm_events
+        WHERE ts >= ${since}
+      `;
+
+      const r = rows[0] ?? { cached: 0, cache_creation: 0, fresh_input: 0, output_tokens: 0, reasoning_tokens: 0 };
+      const total = r.cached + r.cache_creation + r.fresh_input + r.output_tokens + r.reasoning_tokens;
+
+      const seg = (val: number, label: string, color: string) => ({
+        label,
+        tokens: Math.round(val),
+        pct:    total > 0 ? (val / total) * 100 : 0,
+        color,
+      });
+
+      return {
+        totalTokens: Math.round(total),
+        segments: [
+          seg(r.cached,           'Cached Context', '#7A9E8A'),
+          seg(r.cache_creation,   'Cache Write',    '#8BA49C'),
+          seg(r.fresh_input,      'Fresh Input',    '#D97757'),
+          seg(r.output_tokens,    'Output',         '#C9966B'),
+          seg(r.reasoning_tokens, 'Reasoning',      '#A89276'),
+        ].filter(s => s.tokens > 0),
+      };
     }),
 
   baseline: publicProcedure
@@ -118,11 +165,11 @@ export const costDriversRouter = router({
       const opusSharePct = dailyCostUsd > 0
         ? (Number(opusCost._sum.costUsd ?? 0) / dailyCostUsd) * 100
         : 0;
-      const cached = Number(cacheAgg._sum.cachedTokens ?? 0);
-      const inputTok = Number(cacheAgg._sum.inputTokens ?? 0);
+      const cached    = Number(cacheAgg._sum.cachedTokens ?? 0);
+      const inputTok  = Number(cacheAgg._sum.inputTokens ?? 0);
       const cacheDepthPct = (inputTok + cached) > 0 ? (cached / (inputTok + cached)) * 100 : 0;
       const reasoning = Number(reasoningAgg._sum.reasoningTokens ?? 0);
-      const totalTok = Number(reasoningAgg._sum.inputTokens ?? 0)
+      const totalTok  = Number(reasoningAgg._sum.inputTokens ?? 0)
         + Number(reasoningAgg._sum.outputTokens ?? 0)
         + reasoning;
       const reasoningBudgetPct = totalTok > 0 ? (reasoning / totalTok) * 100 : 0;

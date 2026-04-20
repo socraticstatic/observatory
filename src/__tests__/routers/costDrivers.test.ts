@@ -121,9 +121,10 @@ describe('costDriversRouter.qualityCostByProject', () => {
     cost: 14.2,
     avg_quality: 96.0,
     dominant_model: 'claude-opus-4',
+    has_quality: true,
   };
 
-  it('maps label, costUsd, quality, model', async () => {
+  it('maps label, costUsd, quality, model, hasQuality', async () => {
     mockQueryRaw.mockResolvedValue([QC_ROW]);
     const caller = createCaller(createContext());
     const result = await caller.qualityCostByProject({ lookback: '24H' });
@@ -131,6 +132,7 @@ describe('costDriversRouter.qualityCostByProject', () => {
     expect(result[0].costUsd).toBeCloseTo(14.2);
     expect(result[0].quality).toBeCloseTo(96.0);
     expect(result[0].model).toBe('claude-opus-4');
+    expect(result[0].hasQuality).toBe(true);
   });
 
   it('returns empty array when no rows', async () => {
@@ -152,6 +154,21 @@ describe('costDriversRouter.qualityCostByProject', () => {
     const caller = createCaller(createContext());
     const result = await caller.qualityCostByProject({ lookback: '24H' });
     expect(result[0].model).toBe('unknown');
+  });
+
+  it('hasQuality is false when has_quality is falsy', async () => {
+    mockQueryRaw.mockResolvedValue([{ ...QC_ROW, has_quality: false }]);
+    const caller = createCaller(createContext());
+    const result = await caller.qualityCostByProject({ lookback: '24H' });
+    expect(result[0].hasQuality).toBe(false);
+  });
+
+  it('returns events without qualityScore when has_quality is false', async () => {
+    mockQueryRaw.mockResolvedValue([{ ...QC_ROW, avg_quality: 0, has_quality: false }]);
+    const caller = createCaller(createContext());
+    const result = await caller.qualityCostByProject({ lookback: '24H' });
+    expect(result[0].quality).toBeCloseTo(0);
+    expect(result[0].hasQuality).toBe(false);
   });
 });
 
@@ -230,5 +247,71 @@ describe('costDriversRouter.baseline', () => {
     expect(Number.isInteger(result.opusSharePct)).toBe(true);
     expect(Number.isInteger(result.cacheDepthPct)).toBe(true);
     expect(Number.isInteger(result.reasoningBudgetPct)).toBe(true);
+  });
+});
+
+// ─── contextComposition ───────────────────────────────────────────────────────
+
+describe('costDriversRouter.contextComposition', () => {
+  const CTX_ROW = {
+    cached:           800,
+    cache_creation:   200,
+    fresh_input:      400,
+    output_tokens:    340,
+    reasoning_tokens: 60,
+  };
+
+  it('returns totalTokens as sum of all token types', async () => {
+    mockQueryRaw.mockResolvedValue([CTX_ROW]);
+    const caller = createCaller(createContext());
+    const result = await caller.contextComposition({ lookback: '24H' });
+    expect(result.totalTokens).toBe(800 + 200 + 400 + 340 + 60);
+  });
+
+  it('segments have correct labels', async () => {
+    mockQueryRaw.mockResolvedValue([CTX_ROW]);
+    const caller = createCaller(createContext());
+    const result = await caller.contextComposition({ lookback: '24H' });
+    const labels = result.segments.map(s => s.label);
+    expect(labels).toContain('Cached Context');
+    expect(labels).toContain('Fresh Input');
+    expect(labels).toContain('Output');
+  });
+
+  it('pct values sum to ~100', async () => {
+    mockQueryRaw.mockResolvedValue([CTX_ROW]);
+    const caller = createCaller(createContext());
+    const result = await caller.contextComposition({ lookback: '24H' });
+    const total = result.segments.reduce((s, seg) => s + seg.pct, 0);
+    expect(total).toBeCloseTo(100, 0);
+  });
+
+  it('filters out zero-token segments', async () => {
+    mockQueryRaw.mockResolvedValue([{ ...CTX_ROW, reasoning_tokens: 0, cache_creation: 0 }]);
+    const caller = createCaller(createContext());
+    const result = await caller.contextComposition({ lookback: '24H' });
+    const labels = result.segments.map(s => s.label);
+    expect(labels).not.toContain('Reasoning');
+    expect(labels).not.toContain('Cache Write');
+  });
+
+  it('returns totalTokens 0 and empty segments when no data', async () => {
+    mockQueryRaw.mockResolvedValue([{ cached: 0, cache_creation: 0, fresh_input: 0, output_tokens: 0, reasoning_tokens: 0 }]);
+    const caller = createCaller(createContext());
+    const result = await caller.contextComposition({ lookback: '24H' });
+    expect(result.totalTokens).toBe(0);
+    expect(result.segments).toHaveLength(0);
+  });
+
+  it('each segment has label, tokens, pct, color', async () => {
+    mockQueryRaw.mockResolvedValue([CTX_ROW]);
+    const caller = createCaller(createContext());
+    const result = await caller.contextComposition({ lookback: '24H' });
+    for (const seg of result.segments) {
+      expect(typeof seg.label).toBe('string');
+      expect(typeof seg.tokens).toBe('number');
+      expect(typeof seg.pct).toBe('number');
+      expect(seg.color).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    }
   });
 });
