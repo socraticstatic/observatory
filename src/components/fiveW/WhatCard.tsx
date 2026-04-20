@@ -256,12 +256,6 @@ export function WhatCard({ lookback, onDrill }: WhatCardProps) {
     reasoning: r.reasoning,
   })) ?? [];
 
-  if (!data.length) return (
-    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
-      <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
-    </div>
-  );
-
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -273,6 +267,12 @@ export function WhatCard({ lookback, onDrill }: WhatCardProps) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  if (!data.length) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
 
   return (
     <div className="card" ref={containerRef}>
