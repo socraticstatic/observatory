@@ -14,7 +14,7 @@ const WINDOW_MS: Record<Lookback, number> = {
 
 function modelColor(model: string): string {
   if (model.includes('opus'))   return 'var(--accent)';
-  if (model.includes('sonnet')) return '#D97757';
+  if (model.includes('sonnet')) return '#C9966B';
   if (model.includes('haiku'))  return 'var(--good)';
   if (model.includes('gpt-4'))  return '#74AA9C';
   if (model.includes('gemini')) return '#A8A074';

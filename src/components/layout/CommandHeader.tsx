@@ -18,7 +18,7 @@ const LOOKBACK_KEYS = Object.keys(LOOKBACKS) as Lookback[];
 const MODEL_TOGGLES: { id: string; label: string; dot: string | null }[] = [
   { id: 'all',       label: 'ALL',    dot: null },
   { id: 'anthropic', label: 'Claude', dot: '#D97757' },
-  { id: 'google',    label: 'Gemini', dot: '#C9B08A' },
+  { id: 'google',    label: 'Gemini', dot: '#8BA89C' },
   { id: 'xai',       label: 'Grok',   dot: '#B88A8A' },
 ];
 
@@ -136,8 +136,8 @@ function Avatar() {
         width: 28,
         height: 28,
         borderRadius: '50%',
-        background: 'linear-gradient(135deg, #1E1714, #D97757)',
-        border: '1.5px solid #2A2825',
+        background: 'linear-gradient(135deg, #1E1510, #D97757)',
+        border: '1.5px solid #44545B',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -177,8 +177,8 @@ export function CommandHeader({
           className="mbtn"
           onClick={onToggleSystemLog}
           style={{
-            border: `1px solid ${systemLogOpen ? 'var(--accent)' : '#2A2825'}`,
-            color: systemLogOpen ? 'var(--accent-2)' : '#2A2825',
+            border: `1px solid ${systemLogOpen ? 'var(--accent)' : '#44545B'}`,
+            color: systemLogOpen ? 'var(--accent-2)' : '#44545B',
             marginLeft: 4,
             padding: '4px 8px',
             fontSize: 11,

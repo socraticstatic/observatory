@@ -20,19 +20,31 @@ describe('parseIngestPayload', () => {
     expect(result!.status).toBe('ok');
   });
 
-  it('parses Google payload', () => {
+  it('parses Google payload (LiteLLM-normalized)', () => {
+    // LiteLLM normalizes Gemini to OpenAI format; raw usageMetadata is not forwarded.
+    // Our callback puts thinking tokens in usage.thinking_tokens.
     const body = {
       model: 'gemini-2.5-pro-preview-05-06',
       custom_llm_provider: 'google',
-      response: {
-        usageMetadata: { promptTokenCount: 500, candidatesTokenCount: 150, thoughtsTokenCount: 200 },
-        choices: [{ finish_reason: 'stop' }],
-      },
+      usage: { input_tokens: 500, output_tokens: 150, thinking_tokens: 200 },
+      response: { choices: [{ finish_reason: 'stop' }] },
     };
     const result = parseIngestPayload(body);
     expect(result!.provider).toBe('google');
     expect(result!.inputTokens).toBe(500);
+    expect(result!.outputTokens).toBe(150);
     expect(result!.reasoningTokens).toBe(200);
+  });
+
+  it('parses Google payload without thinking tokens', () => {
+    const body = {
+      model: 'gemini-2.5-flash',
+      custom_llm_provider: 'google',
+      usage: { input_tokens: 300, output_tokens: 80 },
+      response: { choices: [{ finish_reason: 'stop' }] },
+    };
+    const result = parseIngestPayload(body);
+    expect(result!.reasoningTokens).toBe(0);
   });
 
   it('handles xAI grok bug (completion_tokens=0)', () => {

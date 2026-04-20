@@ -26,7 +26,7 @@ const INPUT_RATE: Record<string, number> = {
   'claude-sonnet':    0.000003,
   'claude-haiku':     0.0000008,
   'gemini-2.5-pro':   0.00000125,
-  'gemini-2.5-flash': 0.0000001,
+  'gemini-2.5-flash': 0.00000015,
   'grok-3':           0.000003,
   default:            0.000003,
 };
@@ -36,7 +36,7 @@ const OUTPUT_RATE: Record<string, number> = {
   'claude-sonnet':    0.000015,
   'claude-haiku':     0.000004,
   'gemini-2.5-pro':   0.0000100,
-  'gemini-2.5-flash': 0.0000004,
+  'gemini-2.5-flash': 0.0000006,
   'grok-3':           0.000015,
   default:            0.000015,
 };
@@ -90,12 +90,11 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
     // Claude 3.7+ thinking tokens
     reasoningTokens     = usage.thinking_tokens ?? 0;
   } else if (provider === 'google') {
-    // Gemini: usageMetadata - note: 2.5-pro excludes thought tokens from total
-    const meta = body.response?.usageMetadata ?? usage;
-    inputTokens     = meta.promptTokenCount ?? meta.input_tokens ?? 0;
-    outputTokens    = meta.candidatesTokenCount ?? meta.output_tokens ?? 0;
-    // Gemini 2.5 thinking tokens are separate
-    reasoningTokens = meta.thoughtsTokenCount ?? 0;
+    // LiteLLM normalizes Gemini to OpenAI format; raw usageMetadata is not forwarded.
+    // Thinking tokens land in usage.thinking_tokens (our callback) or completion_tokens_details.
+    inputTokens     = usage.input_tokens ?? 0;
+    outputTokens    = usage.output_tokens ?? 0;
+    reasoningTokens = usage.thinking_tokens ?? 0;
   } else if (provider === 'xai') {
     // Grok: usage.total_tokens but sometimes completion_tokens: 0 bug
     inputTokens  = usage.prompt_tokens ?? usage.input_tokens ?? 0;

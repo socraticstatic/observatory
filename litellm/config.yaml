@@ -5,12 +5,12 @@ model_list:
   # Anthropic — model_name must match what the seed script (and clients) send
   - model_name: claude-opus-4-7
     litellm_params:
-      model: anthropic/claude-opus-4-5-20251014
+      model: anthropic/claude-opus-4-7
       api_key: os.environ/ANTHROPIC_API_KEY
 
   - model_name: claude-sonnet-4-6
     litellm_params:
-      model: anthropic/claude-sonnet-4-5-20251014
+      model: anthropic/claude-sonnet-4-6
       api_key: os.environ/ANTHROPIC_API_KEY
 
   - model_name: claude-haiku-4-5-20251001

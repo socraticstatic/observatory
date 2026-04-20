@@ -17,10 +17,10 @@ interface Bar {
 
 const LAYERS: { key: keyof Bar; label: string; color: string }[] = [
   { key: 'cached',        label: 'Cached',      color: '#7A9E8A' },
-  { key: 'cacheCreation', label: 'Cache Write',  color: '#A89276' },
-  { key: 'input',         label: 'Input',        color: '#D97757' },
-  { key: 'output',        label: 'Output',       color: '#C9966B' },
-  { key: 'reasoning',     label: 'Reasoning',    color: '#B88A8A' },
+  { key: 'cacheCreation', label: 'Cache Write',  color: 'var(--warn)' },
+  { key: 'input',         label: 'Input',        color: '#A89276' },
+  { key: 'output',        label: 'Output',       color: '#D97757' },
+  { key: 'reasoning',     label: 'Reasoning',    color: '#C9966B' },
 ];
 
 interface LCProps {
@@ -75,7 +75,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           <g key={i}>
             <line x1={PAD_L - 4} y1={t.y} x2={PAD_L + innerW} y2={t.y}
               stroke="rgba(42,49,55,.8)" strokeWidth=".5" strokeDasharray={i === 0 ? 'none' : '3,3'} />
-            <text x={PAD_L - 7} y={t.y + 4} textAnchor="end" fill="#5E5D59" fontSize={9}
+            <text x={PAD_L - 7} y={t.y + 4} textAnchor="end" fill="#4A5358" fontSize={9}
               fontFamily="JetBrains Mono, monospace">{t.label}</text>
           </g>
         ))}
@@ -145,7 +145,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           if (i % 4 !== 0) return null;
           const x = PAD_L + i * barGroupW + barGroupW / 2;
           return (
-            <text key={i} x={x} y={H - 6} textAnchor="middle" fill="#5E5D59"
+            <text key={i} x={x} y={H - 6} textAnchor="middle" fill="#4A5358"
               fontSize={9} fontFamily="JetBrains Mono, monospace">{i + 1}</text>
           );
         })}
@@ -229,12 +229,13 @@ function Sidebar({ data, lookback }: SidebarProps) {
         })}
       </div>
 
-      <div style={{ marginTop: 'auto', padding: '10px 10px', background: 'rgba(122,158,138,.07)', border: '1px solid rgba(122,158,138,.2)', borderRadius: 'var(--r)' }}>
+      <div style={{ marginTop: 'auto', padding: '10px 10px', background: 'rgba(79,123,131,.08)', border: '1px solid rgba(79,123,131,.2)', borderRadius: 'var(--r)' }}>
         <div className="label" style={{ marginBottom: 4 }}>Cache Savings</div>
-        <div className="num" style={{ fontSize: 18, color: '#7A9E8A', fontWeight: 600 }}>
+        <div className="num" style={{ fontSize: 18, color: 'var(--accent)', fontWeight: 600 }}>
+          {/* $2.70/MTok saved: Claude input $3/MTok vs cache read $0.30/MTok */}
           ${((totals.cached * 2.70) / 1_000_000).toFixed(2)}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--steel)' }}>/ {LOOKBACKS[lookback].label.toLowerCase()} est.</div>
+        <div style={{ fontSize: 10, color: 'var(--steel)' }}>est. {LOOKBACKS[lookback].label.toLowerCase()}</div>
       </div>
     </div>
   );

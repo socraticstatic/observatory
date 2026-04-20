@@ -122,15 +122,15 @@ const EVENTS: StreamEvent[] = [
 ];
 
 const PROVIDER_COLORS: Record<string, string> = {
-  anthropic: '#C96442',
-  google:    '#C9B08A',
+  anthropic: '#D97757',
+  google:    '#8BA89C',
   xai:       '#B88A8A',
 };
 
 const TYPE_COLORS: Record<string, string> = {
   request:   'var(--steel)',
   response:  'var(--accent)',
-  cache_hit: '#4F7B83',
+  cache_hit: '#7A9E8A',
 };
 
 // Simple JSON syntax highlighter
@@ -140,13 +140,13 @@ function highlight(json: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     // Keys
-    .replace(/"([^"]+)":/g, '<span style="color:#C96442">"$1"</span>:')
+    .replace(/"([^"]+)":/g, '<span style="color:#8BA89C">"$1"</span>:')
     // String values (not keys)
-    .replace(/:\s*"([^"]*)"/g, ': <span style="color:#C9B08A">"$1"</span>')
+    .replace(/:\s*"([^"]*)"/g, ': <span style="color:#A89276">"$1"</span>')
     // Numbers
     .replace(/:\s*(-?\d+\.?\d*)/g, (_m, n) => {
       const isToken = false;
-      return `: <span style="color:#7CA893${isToken ? ';background:rgba(201,150,107,.15);border-radius:2px;padding:0 2px' : ''}">${n}</span>`;
+      return `: <span style="color:#9EA87A${isToken ? ';background:rgba(201,150,107,.15);border-radius:2px;padding:0 2px' : ''}">${n}</span>`;
     })
     // Booleans
     .replace(/:\s*(true|false)/g, ': <span style="color:#B89FC9">$1</span>');
@@ -229,7 +229,7 @@ export function SystemLogOverlay({ onClose }: Props) {
         margin: 'auto',
         width: 'min(960px, calc(100vw - 40px))',
         height: 'min(700px, calc(100vh - 80px))',
-        background: 'linear-gradient(180deg, #1E1C1A 0%, #181614 100%)',
+        background: 'linear-gradient(180deg, #1A2125 0%, #141A1E 100%)',
         border: '1px solid var(--line-2)',
         borderRadius: 6,
         boxShadow: '0 40px 80px rgba(0,0,0,.8)',
@@ -334,7 +334,7 @@ export function SystemLogOverlay({ onClose }: Props) {
                     padding: '9px 14px',
                     borderBottom: '1px solid var(--line)',
                     cursor: 'pointer',
-                    background: isSel ? 'rgba(217,119,87,.07)' : 'transparent',
+                    background: isSel ? 'rgba(111,168,179,.07)' : 'transparent',
                     boxShadow: isSel ? 'inset 2px 0 0 var(--accent)' : 'none',
                     transition: 'background .1s',
                   }}
@@ -402,9 +402,9 @@ export function SystemLogOverlay({ onClose }: Props) {
           <span className="label">Token field legend</span>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             {[
-              { label: 'Keys', color: '#C96442' },
-              { label: 'Strings', color: '#C9B08A' },
-              { label: 'Numbers', color: '#7CA893' },
+              { label: 'Keys', color: '#8BA89C' },
+              { label: 'Strings', color: '#A89276' },
+              { label: 'Numbers', color: '#9EA87A' },
               { label: 'Booleans', color: '#B89FC9' },
             ].map(({ label, color }) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -413,7 +413,7 @@ export function SystemLogOverlay({ onClose }: Props) {
               </div>
             ))}
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ padding: '0 4px', background: 'rgba(201,150,107,.18)', borderRadius: 2, fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: '#7CA893' }}>
+              <div style={{ padding: '0 4px', background: 'rgba(201,150,107,.18)', borderRadius: 2, fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: '#9EA87A' }}>
                 1840
               </div>
               <span style={{ fontSize: 9, color: 'var(--steel)' }}>Token field (amber highlight)</span>

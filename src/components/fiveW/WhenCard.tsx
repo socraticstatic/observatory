@@ -12,9 +12,9 @@ function getDayOfYear(date: Date): number {
 const DAYS = 30;
 const HOURS = 24;
 
-// Color interpolation from ink (#0E0E0D) to accent (#D97757)
+// Color interpolation from ink (#0B1014) to accent (#D97757)
 const INK  = { r: 0x0B, g: 0x10, b: 0x14 };
-const ACCT = { r: 0x6F, g: 0xA8, b: 0xB3 };
+const ACCT = { r: 0xD9, g: 0x77, b: 0x57 };
 
 function lerpColor(t: number): string {
   const r = Math.round(INK.r + (ACCT.r - INK.r) * t);
@@ -101,7 +101,7 @@ export function WhenCard({ onDrill }: WhenCardProps) {
                   x={PAD_L - 4}
                   y={y + CELL_H * 0.72}
                   textAnchor="end"
-                  fill="#5E5D59"
+                  fill="#4A5358"
                   fontSize={8.5}
                   fontFamily="JetBrains Mono, monospace"
                 >
@@ -140,7 +140,7 @@ export function WhenCard({ onDrill }: WhenCardProps) {
                 x={x}
                 y={PAD_T + DAYS * CELL_H + 14}
                 textAnchor="middle"
-                fill="#5E5D59"
+                fill="#4A5358"
                 fontSize={9}
                 fontFamily="JetBrains Mono, monospace"
               >

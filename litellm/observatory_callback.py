@@ -36,20 +36,42 @@ class ObservatoryLogger(CustomLogger):
 
     def log_success_event(self, kwargs, response_obj, start_time, end_time):
         latency = (end_time - start_time).total_seconds() if end_time and start_time else None
+
+        usage = getattr(response_obj, "usage", None)
+        usage_dict = None
+        if usage is not None:
+            # LiteLLM normalizes all providers to prompt_tokens/completion_tokens.
+            # Gemini 2.5 thinking tokens land in completion_tokens_details.reasoning_tokens.
+            details = getattr(usage, "completion_tokens_details", None)
+            thinking_tokens = (
+                getattr(details, "reasoning_tokens", None)
+                or getattr(usage, "reasoning_tokens", None)
+                or 0
+            )
+            usage_dict = {
+                "input_tokens": getattr(usage, "prompt_tokens", None) or getattr(usage, "input_tokens", 0),
+                "output_tokens": getattr(usage, "completion_tokens", None) or getattr(usage, "output_tokens", 0),
+                "thinking_tokens": thinking_tokens,
+                "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", 0),
+                "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", 0),
+            }
+
+        # In LiteLLM proxy, user-supplied metadata lands in litellm_params.metadata.
+        # Extract only plain fields — the dict also contains non-serializable objects.
+        _lp_meta = (kwargs.get("litellm_params") or {}).get("metadata") or {}
+        raw_meta = {
+            "session_id": _lp_meta.get("session_id"),
+            "surface":    _lp_meta.get("surface"),
+            "project":    _lp_meta.get("project"),
+        }
+
         payload = {
             "model": kwargs.get("model", ""),
             "custom_llm_provider": kwargs.get("custom_llm_provider", ""),
-            "usage": getattr(response_obj, "usage", None) and {
-                "input_tokens": getattr(response_obj.usage, "prompt_tokens", None)
-                    or getattr(response_obj.usage, "input_tokens", 0),
-                "output_tokens": getattr(response_obj.usage, "completion_tokens", None)
-                    or getattr(response_obj.usage, "output_tokens", 0),
-                "cache_read_input_tokens": getattr(response_obj.usage, "cache_read_input_tokens", 0),
-                "cache_creation_input_tokens": getattr(response_obj.usage, "cache_creation_input_tokens", 0),
-            },
+            "usage": usage_dict,
             "response_cost": kwargs.get("response_cost"),
             "response_time": latency,
-            "metadata": kwargs.get("metadata", {}),
+            "metadata": raw_meta,
             "response": response_obj.model_dump() if hasattr(response_obj, "model_dump") else {},
         }
         threading.Thread(target=self._post, args=(payload,), daemon=True).start()
