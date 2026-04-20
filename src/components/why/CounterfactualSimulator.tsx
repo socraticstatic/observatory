@@ -1,22 +1,37 @@
 'use client';
 
-import { useState, Fragment } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { fmtUsd } from '@/lib/fmt';
+import { trpc } from '@/lib/trpc-client';
 
-const BASE_DAILY  = 21.72;
+const FALLBACK_BASE = {
+  dailyCostUsd:       21.72,
+  opusSharePct:       42,
+  cacheDepthPct:      44,
+  reasoningBudgetPct: 38,
+};
 
-function derive(opusShare: number, cacheDepth: number, reasoningBudget: number) {
-  const opusDelta      = ((opusShare - 42) / 100) * 14.22;
-  const cacheDelta     = -((cacheDepth - 44) / 100) * 8.42;
-  const reasoningDelta = ((reasoningBudget - 38) / 100) * 6.80;
-  const deltaDaily     = opusDelta + cacheDelta + reasoningDelta;
-  const projDaily      = BASE_DAILY + deltaDaily;
+interface Base {
+  dailyCostUsd: number;
+  opusSharePct: number;
+  cacheDepthPct: number;
+  reasoningBudgetPct: number;
+}
 
-  const qualityNow  = 94.2;
-  const qualityShift = (opusShare - 42) * 0.06 - (cacheDepth - 44) * 0.02;
-  const qEffective  = qualityNow + qualityShift;
+function derive(base: Base, opusShare: number, cacheDepth: number, reasoningBudget: number) {
+  const b           = Math.max(base.dailyCostUsd, 0.01);
+  const opusDelta   = ((opusShare      - base.opusSharePct)       / 100) * b * 0.655;
+  const cacheDelta  = -((cacheDepth    - base.cacheDepthPct)      / 100) * b * 0.388;
+  const reasonDelta = ((reasoningBudget - base.reasoningBudgetPct) / 100) * b * 0.313;
+  const deltaDaily  = opusDelta + cacheDelta + reasonDelta;
+  const projDaily   = b + deltaDaily;
 
-  const effNow     = BASE_DAILY / qualityNow;
+  const baseQuality  = 94.2;
+  const qualityShift = ((opusShare - base.opusSharePct) / 100) * 6
+                     - ((cacheDepth - base.cacheDepthPct) / 100) * 2;
+  const qEffective   = baseQuality + qualityShift;
+
+  const effNow     = b / baseQuality;
   const effNew     = projDaily / Math.max(qEffective, 1);
   const effImprove = ((effNow - effNew) / effNow) * 100;
 
@@ -29,99 +44,145 @@ interface SliderProps {
   min: number;
   max: number;
   onChange: (v: number) => void;
-  unit?: string;
 }
 
-function Slider({ label, value, min, max, onChange, unit = '%' }: SliderProps) {
+function Slider({ label, value, min, max, onChange }: SliderProps) {
+  const pct = ((value - min) / (max - min)) * 100;
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 11, color: 'var(--fog)' }}>{label}</span>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--mist)' }}>{value}{unit}</span>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+        <span style={{ fontSize: 11, color: 'var(--steel)' }}>{label}</span>
+        <span className="mono" style={{ fontSize: 12, color: '#E8D5C0', fontWeight: 500 }}>{value}%</span>
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }}
-      />
+      <div style={{ position: 'relative' }}>
+        <div style={{
+          position: 'absolute', top: '50%', left: 0, right: 0,
+          transform: 'translateY(-50%)', height: 3,
+          background: 'rgba(255,255,255,.06)', borderRadius: 2,
+        }} />
+        <div style={{
+          position: 'absolute', top: '50%', left: 0,
+          transform: 'translateY(-50%)', height: 3,
+          width: `${pct}%`,
+          background: 'linear-gradient(90deg, rgba(217,119,87,.4), #D97757)',
+          borderRadius: 2,
+        }} />
+        <input
+          type="range" min={min} max={max} value={value}
+          onChange={e => onChange(Number(e.target.value))}
+          style={{
+            position: 'relative', width: '100%',
+            appearance: 'none', background: 'transparent',
+            height: 20, cursor: 'pointer',
+            accentColor: '#D97757',
+          }}
+        />
+      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-        <span className="mono" style={{ fontSize: 9, color: 'var(--graphite)' }}>{min}{unit}</span>
-        <span className="mono" style={{ fontSize: 9, color: 'var(--graphite)' }}>{max}{unit}</span>
+        <span className="mono" style={{ fontSize: 9, color: 'rgba(200,185,165,.3)' }}>{min}%</span>
+        <span className="mono" style={{ fontSize: 9, color: 'rgba(200,185,165,.3)' }}>{max}%</span>
       </div>
     </div>
   );
 }
 
 export function CounterfactualSimulator() {
-  const [opusShare,       setOpusShare]       = useState(42);
-  const [cacheDepth,      setCacheDepth]      = useState(44);
-  const [reasoningBudget, setReasoningBudget] = useState(38);
+  const { data: baselineData } = trpc.costDrivers.baseline.useQuery();
 
-  const { deltaDaily, projDaily, qualityShift, qEffective, effImprove } = derive(opusShare, cacheDepth, reasoningBudget);
+  const activeBase: Base = baselineData ?? FALLBACK_BASE;
 
+  const [opusShare,       setOpusShare]       = useState(FALLBACK_BASE.opusSharePct);
+  const [cacheDepth,      setCacheDepth]      = useState(FALLBACK_BASE.cacheDepthPct);
+  const [reasoningBudget, setReasoningBudget] = useState(FALLBACK_BASE.reasoningBudgetPct);
+  const [seeded,          setSeeded]          = useState(false);
+
+  useEffect(() => {
+    if (baselineData && !seeded) {
+      setOpusShare(baselineData.opusSharePct);
+      setCacheDepth(baselineData.cacheDepthPct);
+      setReasoningBudget(baselineData.reasoningBudgetPct);
+      setSeeded(true);
+    }
+  }, [baselineData, seeded]);
+
+  const { deltaDaily, projDaily, qualityShift, qEffective, effImprove } =
+    derive(activeBase, opusShare, cacheDepth, reasoningBudget);
+
+  const baseDaily   = activeBase.dailyCostUsd;
   const projMonthly = projDaily * 30;
   const projAnnual  = projDaily * 365;
 
   const verdict = deltaDaily < 0 && qualityShift > -1
-    ? { icon: '✓', col: 'var(--good)',  text: 'Net improvement — cost down, quality stable.' }
+    ? { col: '#7A9E8A', bg: 'rgba(122,158,138,.08)', border: 'rgba(122,158,138,.2)',  icon: '✓', text: 'Net improvement — cost down, quality stable.' }
     : deltaDaily < 0 && qualityShift <= -1
-    ? { icon: '~', col: 'var(--warn)',  text: 'Cost savings at meaningful quality cost. Review before applying.' }
-    : { icon: '✗', col: 'var(--bad)',   text: 'This configuration increases cost. Adjust sliders.' };
+    ? { col: '#C9966B', bg: 'rgba(201,150,107,.08)', border: 'rgba(201,150,107,.2)',  icon: '~', text: 'Cost savings at meaningful quality cost. Review before applying.' }
+    : { col: '#B87070', bg: 'rgba(184,112,112,.08)', border: 'rgba(184,112,112,.2)',  icon: '✗', text: 'This configuration increases cost. Adjust sliders.' };
 
   const qualityBarW = Math.min(100, Math.max(0, qEffective - 60)) / 40 * 100;
 
   return (
-    <div className="card" style={{ padding: '16px 20px' }}>
-      <div className="label" style={{ marginBottom: 14 }}>
-        Counterfactual Simulator · What if you changed your routing?
+    <div className="card" style={{ padding: '20px 24px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fog)', letterSpacing: '-.01em', lineHeight: 1.2 }}>
+          Counterfactual Simulator
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--graphite)', marginTop: 3, letterSpacing: '.08em' }}>
+          what if you changed your routing?
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
         {/* Sliders */}
         <div>
-          <Slider
-            label="Model mix: Opus share"
-            value={opusShare}
-            min={0}
-            max={100}
-            onChange={setOpusShare}
-          />
-          <Slider
-            label="Cache depth: context reuse"
-            value={cacheDepth}
-            min={0}
-            max={100}
-            onChange={setCacheDepth}
-          />
-          <Slider
-            label="Reasoning budget: thinking tokens"
-            value={reasoningBudget}
-            min={0}
-            max={100}
-            onChange={setReasoningBudget}
-          />
+          <Slider label="Model mix · Opus share"        value={opusShare}       min={0} max={100} onChange={setOpusShare} />
+          <Slider label="Cache depth · context reuse"   value={cacheDepth}      min={0} max={100} onChange={setCacheDepth} />
+          <Slider label="Reasoning budget · think tokens" value={reasoningBudget} min={0} max={100} onChange={setReasoningBudget} />
+
+          {baselineData && (
+            <button
+              onClick={() => {
+                setOpusShare(baselineData.opusSharePct);
+                setCacheDepth(baselineData.cacheDepthPct);
+                setReasoningBudget(baselineData.reasoningBudgetPct);
+              }}
+              style={{
+                marginTop: 4, padding: '4px 12px',
+                fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 600,
+                border: '1px solid rgba(217,119,87,.25)',
+                borderRadius: 'var(--r)',
+                color: '#D97757',
+                background: 'rgba(217,119,87,.06)',
+                cursor: 'pointer',
+              }}
+            >
+              Reset to actual
+            </button>
+          )}
         </div>
 
         {/* Projections */}
         <div>
-          {/* Cost grid */}
-          <div style={{ marginBottom: 14 }}>
-            <div className="label" style={{ marginBottom: 8 }}>Projected spend</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '4px 16px', alignItems: 'baseline' }}>
+          {/* Spend grid */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--graphite)', marginBottom: 10, fontWeight: 500 }}>
+              Projected spend
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '5px 14px', alignItems: 'baseline' }}>
               {[
-                { period: 'Daily',   base: BASE_DAILY,         proj: projDaily },
-                { period: 'Monthly', base: BASE_DAILY * 30,    proj: projMonthly },
-                { period: 'Annual',  base: BASE_DAILY * 365,   proj: projAnnual },
+                { period: 'Daily',   base: baseDaily,       proj: projDaily },
+                { period: 'Monthly', base: baseDaily * 30,  proj: projMonthly },
+                { period: 'Annual',  base: baseDaily * 365, proj: projAnnual },
               ].map(row => (
                 <Fragment key={row.period}>
-                  <span style={{ fontSize: 10, color: 'var(--steel)' }}>{row.period}</span>
-                  <span className="mono" style={{ fontSize: 11, color: 'var(--graphite)', textDecoration: 'line-through' }}>
+                  <span style={{ fontSize: 10, color: 'var(--graphite)' }}>{row.period}</span>
+                  <span className="mono" style={{ fontSize: 10, color: 'rgba(200,185,165,.3)', textDecoration: 'line-through' }}>
                     {fmtUsd(row.base)}
                   </span>
-                  <span className="mono" style={{ fontSize: 13, color: deltaDaily < 0 ? 'var(--good)' : 'var(--bad)', fontWeight: 600 }}>
+                  <span className="mono" style={{
+                    fontSize: 13, fontWeight: 600,
+                    color: deltaDaily < 0 ? '#7A9E8A' : '#B87070',
+                  }}>
                     {fmtUsd(row.proj)}
                   </span>
                 </Fragment>
@@ -130,53 +191,64 @@ export function CounterfactualSimulator() {
           </div>
 
           {/* Quality bar */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span className="label">Quality index</span>
-              <span className="mono" style={{ fontSize: 11, color: qualityShift >= 0 ? 'var(--good)' : 'var(--warn)' }}>
-                {qEffective.toFixed(1)} {qualityShift >= 0 ? `+${qualityShift.toFixed(1)}` : qualityShift.toFixed(1)}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+              <span style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--graphite)', fontWeight: 500 }}>
+                Quality index
+              </span>
+              <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: qualityShift >= 0 ? '#7A9E8A' : '#C9966B' }}>
+                {qEffective.toFixed(1)}{' '}
+                <span style={{ fontSize: 9, fontWeight: 400 }}>
+                  {qualityShift >= 0 ? `+${qualityShift.toFixed(1)}` : qualityShift.toFixed(1)}
+                </span>
               </span>
             </div>
-            <div style={{ height: 6, background: 'var(--line)', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${qualityBarW}%`, background: qualityShift >= 0 ? 'var(--good)' : 'var(--warn)', borderRadius: 3, transition: 'width 0.2s' }} />
+            <div style={{ height: 4, background: 'rgba(255,255,255,.06)', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', width: `${qualityBarW}%`,
+                background: qualityShift >= 0 ? '#7A9E8A' : '#C9966B',
+                borderRadius: 2, transition: 'width 0.2s ease',
+              }} />
             </div>
           </div>
 
-          {/* Efficiency metric */}
-          <div style={{ marginBottom: 14 }}>
-            <div className="label" style={{ marginBottom: 4 }}>Efficiency ($/quality-point)</div>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <div>
-                <div style={{ fontSize: 9, color: 'var(--graphite)', marginBottom: 2 }}>baseline</div>
-                <div className="num" style={{ fontSize: 13, color: 'var(--fog)' }}>{(BASE_DAILY / 94.2).toFixed(3)}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 9, color: 'var(--graphite)', marginBottom: 2 }}>projected</div>
-                <div className="num" style={{ fontSize: 13, color: effImprove > 0 ? 'var(--good)' : 'var(--bad)' }}>
-                  {(projDaily / Math.max(qEffective, 1)).toFixed(3)}
+          {/* Efficiency */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--graphite)', marginBottom: 8, fontWeight: 500 }}>
+              Efficiency ($/quality-pt)
+            </div>
+            <div style={{ display: 'flex', gap: 18 }}>
+              {[
+                { label: 'baseline',  val: (baseDaily / 94.2).toFixed(3),                       col: 'rgba(200,185,165,.5)' },
+                { label: 'projected', val: (projDaily / Math.max(qEffective, 1)).toFixed(3),     col: effImprove > 0 ? '#7A9E8A' : '#B87070' },
+                { label: 'delta',     val: `${effImprove > 0 ? '+' : ''}${effImprove.toFixed(1)}%`, col: effImprove > 0 ? '#7A9E8A' : '#B87070' },
+              ].map(m => (
+                <div key={m.label}>
+                  <div style={{ fontSize: 9, color: 'rgba(200,185,165,.35)', marginBottom: 3, letterSpacing: '.06em' }}>
+                    {m.label}
+                  </div>
+                  <div className="mono" style={{ fontSize: 13, color: m.col, fontWeight: 600 }}>
+                    {m.val}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 9, color: 'var(--graphite)', marginBottom: 2 }}>delta</div>
-                <div className="num" style={{ fontSize: 13, color: effImprove > 0 ? 'var(--good)' : 'var(--bad)' }}>
-                  {effImprove > 0 ? '+' : ''}{effImprove.toFixed(1)}%
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
           {/* Verdict */}
           <div style={{
             padding: '8px 12px',
-            background: `${verdict.col}15`,
-            border: `1px solid ${verdict.col}40`,
+            background: verdict.bg,
+            border: `1px solid ${verdict.border}`,
             borderRadius: 'var(--r)',
-            display: 'flex',
-            gap: 8,
-            alignItems: 'flex-start',
+            display: 'flex', gap: 9, alignItems: 'flex-start',
           }}>
-            <span style={{ fontSize: 14, color: verdict.col, lineHeight: 1.2, flexShrink: 0 }}>{verdict.icon}</span>
-            <span style={{ fontSize: 11, color: verdict.col, lineHeight: 1.4 }}>{verdict.text}</span>
+            <span style={{ fontSize: 13, color: verdict.col, lineHeight: 1.2, flexShrink: 0 }}>
+              {verdict.icon}
+            </span>
+            <span style={{ fontSize: 11, color: verdict.col, lineHeight: 1.5 }}>
+              {verdict.text}
+            </span>
           </div>
         </div>
       </div>
