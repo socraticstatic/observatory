@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import type { Lookback } from '@/lib/lookback';
 
@@ -45,7 +45,8 @@ export function SessionsView({ lookback }: Props) {
   );
 
   const windowMs    = WINDOW_MS[lookback];
-  const windowStart = useMemo(() => Date.now() - windowMs, [lookback]);
+  // eslint-disable-next-line react-hooks/purity
+  const windowStart = Date.now() - windowMs;
 
   const allProjects = Array.from(
     new Set((sessions ?? []).map(s => s.project).filter((p): p is string => !!p))

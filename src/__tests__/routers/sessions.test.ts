@@ -38,6 +38,7 @@ const mockDb = {
   llmEvent:   { findMany: vi.fn() },
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const caller = createCaller({ db: mockDb as any });
 
 beforeEach(() => vi.clearAllMocks());
