@@ -3,9 +3,10 @@
 Seed the Observatory dashboard with realistic LLM traffic via the LiteLLM proxy.
 
 Usage:
-    python scripts/seed_traffic.py            # full run (~40 calls)
-    python scripts/seed_traffic.py --quick    # 8 calls, one per model/surface combo
-    python scripts/seed_traffic.py --gemini   # include Gemini models
+    python scripts/seed_traffic.py             # full run (~40 calls)
+    python scripts/seed_traffic.py --quick     # 8 calls, one per model/surface combo
+    python scripts/seed_traffic.py --no-gemini # skip Gemini models
+    python scripts/seed_traffic.py --quality   # inject synthetic quality scores (0-100)
 """
 import argparse
 import random
@@ -92,30 +93,51 @@ def make_session() -> tuple[str, str, str]:
     return session_id, surface, project
 
 
-def call(client: OpenAI, model: str, messages: list, session_id: str, surface: str, project: str) -> None:
+# Quality baselines by model family (mean ± variance)
+QUALITY_PROFILE: dict[str, tuple[float, float]] = {
+    "claude-opus":      (95.0, 3.0),
+    "claude-sonnet":    (89.0, 4.0),
+    "claude-haiku":     (81.0, 5.0),
+    "gemini-2.5-pro":   (88.0, 4.0),
+    "gemini-2.5-flash": (80.0, 5.0),
+    "default":          (85.0, 5.0),
+}
+
+def quality_for(model: str) -> float:
+    for key, (mean, var) in QUALITY_PROFILE.items():
+        if key != "default" and key in model:
+            return round(max(0, min(100, random.gauss(mean, var))), 2)
+    mean, var = QUALITY_PROFILE["default"]
+    return round(max(0, min(100, random.gauss(mean, var))), 2)
+
+
+def call(client: OpenAI, model: str, messages: list, session_id: str, surface: str, project: str, with_quality: bool = False) -> None:
     try:
+        metadata: dict = {
+            "session_id": session_id,
+            "surface":    surface,
+            "project":    project,
+        }
+        if with_quality:
+            metadata["quality_score"] = quality_for(model)
+
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
             max_tokens=256,
-            extra_body={
-                "metadata": {
-                    "session_id": session_id,
-                    "surface":    surface,
-                    "project":    project,
-                }
-            },
+            extra_body={"metadata": metadata},
         )
         usage = resp.usage
+        q_str = f"  q={metadata['quality_score']:.1f}" if with_quality else ""
         print(
             f"  ok  {model:<40}  in={usage.prompt_tokens:<5} out={usage.completion_tokens:<5}"
-            f"  surface={surface}  project={project}"
+            f"  surface={surface}  project={project}{q_str}"
         )
     except Exception as e:
         print(f"  ERR {model}: {e}")
 
 
-def run_full(client: OpenAI, models: list[str]) -> None:
+def run_full(client: OpenAI, models: list[str], with_quality: bool = False) -> None:
     # Group conversations into sessions (2-4 turns each)
     conversations = CONVERSATIONS.copy()
     random.shuffle(conversations)
@@ -130,25 +152,26 @@ def run_full(client: OpenAI, models: list[str]) -> None:
         print(f"\nSession {session_id[:8]}  surface={surface}  project={project}")
         for turn in batch:
             model = random.choice(models)
-            call(client, model, turn, session_id, surface, project)
+            call(client, model, turn, session_id, surface, project, with_quality=with_quality)
             # Free-tier Gemini: 5 RPM. Keep all calls under that with a 14s gap.
             delay = 14.0 if model.startswith("gemini") else 0.5
             time.sleep(delay)
 
 
-def run_quick(client: OpenAI, models: list[str]) -> None:
+def run_quick(client: OpenAI, models: list[str], with_quality: bool = False) -> None:
     session_id, surface, project = make_session()
     print(f"\nQuick session {session_id[:8]}")
     for i, model in enumerate(models):
         msg = CONVERSATIONS[i % len(CONVERSATIONS)]
-        call(client, model, msg, session_id, surface, project)
+        call(client, model, msg, session_id, surface, project, with_quality=with_quality)
         time.sleep(0.3)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed Observatory with LLM traffic")
-    parser.add_argument("--quick",         action="store_true", help="One call per model")
-    parser.add_argument("--no-gemini",     action="store_true", help="Skip Gemini models")
+    parser.add_argument("--quick",     action="store_true", help="One call per model")
+    parser.add_argument("--no-gemini", action="store_true", help="Skip Gemini models")
+    parser.add_argument("--quality",   action="store_true", help="Inject synthetic quality scores via metadata")
     args = parser.parse_args()
 
     models = ANTHROPIC_MODELS if args.no_gemini else ANTHROPIC_MODELS + GEMINI_MODELS
@@ -157,12 +180,12 @@ def main() -> None:
 
     print(f"Proxy: {PROXY_URL}")
     print(f"Models: {', '.join(models)}")
-    print(f"Mode: {'quick' if args.quick else 'full'}")
+    print(f"Mode: {'quick' if args.quick else 'full'}{'  +quality' if args.quality else ''}")
 
     if args.quick:
-        run_quick(client, models)
+        run_quick(client, models, with_quality=args.quality)
     else:
-        run_full(client, models)
+        run_full(client, models, with_quality=args.quality)
 
     print("\nDone. Refresh the dashboard.")
 
