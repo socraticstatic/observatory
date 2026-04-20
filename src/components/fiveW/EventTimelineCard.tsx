@@ -24,7 +24,7 @@ const SEV_COLOR = {
   good: '#7CA893',
   bad:  '#B86B6B',
   warn: '#C9966B',
-  info: '#8A9297',
+  info: '#87867F',
 } as const;
 
 // SVG dimensions

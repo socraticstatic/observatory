@@ -11,7 +11,7 @@ const SURFACES = [
   { id: 'automation', label: 'Automation', share: .03, cost: 1.02,  tpm: 1320,  p50: 920,  sessions: 3, flag: 'RUNAWAY' },
 ] as const;
 
-const PALETTE = ['#6FA8B3', '#9BC4CC', '#C9B08A', '#B88A8A', '#7CA893', '#4F7B83'];
+const PALETTE = ['#D97757', '#C96442', '#C9B08A', '#B88A8A', '#7CA893', '#4F7B83'];
 
 export function AppSurfaceCard() {
   return (

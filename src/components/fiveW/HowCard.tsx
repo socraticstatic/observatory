@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { fmtMs, fmt } from '@/lib/fmt';
 
 const STEPS = [
-  { id: 1, name: 'user_turn',      model: 'claude-opus-4.5',  ms: 0,    dur: 612,  tokens: 2184, col: '#9BC4CC', type: 'input'  },
+  { id: 1, name: 'user_turn',      model: 'claude-opus-4.5',  ms: 0,    dur: 612,  tokens: 2184, col: '#C96442', type: 'input'  },
   { id: 2, name: 'tool_call',      model: 'browser.search',   ms: 640,  dur: 284,  tokens: 0,    col: '#C9966B', type: 'tool'   },
   { id: 3, name: 'tool_result',    model: 'browser.search',   ms: 940,  dur: 148,  tokens: 840,  col: '#C9966B', type: 'tool'   },
-  { id: 4, name: 'assistant_turn', model: 'claude-opus-4.5',  ms: 1100, dur: 920,  tokens: 412,  col: '#9BC4CC', type: 'output' },
+  { id: 4, name: 'assistant_turn', model: 'claude-opus-4.5',  ms: 1100, dur: 920,  tokens: 412,  col: '#C96442', type: 'output' },
   { id: 5, name: 'cache_lookup',   model: 'anthropic/cache',  ms: 2040, dur: 42,   tokens: 1840, col: '#4F7B83', type: 'cache'  },
-  { id: 6, name: 'final_response', model: 'claude-opus-4.5',  ms: 2100, dur: 284,  tokens: 318,  col: '#6FA8B3', type: 'output' },
+  { id: 6, name: 'final_response', model: 'claude-opus-4.5',  ms: 2100, dur: 284,  tokens: 318,  col: '#D97757', type: 'output' },
 ] as const;
 
 const TOTAL_MS = 2400;
@@ -66,9 +66,9 @@ export function HowCard({ drill }: Props) {
                 border: '1px solid',
                 cursor: 'pointer',
                 transition: 'all .12s',
-                borderColor: filter === f ? 'rgba(111,168,179,.5)' : 'var(--line-2)',
+                borderColor: filter === f ? 'rgba(217,119,87,.5)' : 'var(--line-2)',
                 color: filter === f ? 'var(--accent-2)' : 'var(--steel)',
-                background: filter === f ? 'rgba(111,168,179,.08)' : 'transparent',
+                background: filter === f ? 'rgba(217,119,87,.08)' : 'transparent',
               }}
             >
               {f}
@@ -140,13 +140,13 @@ export function HowCard({ drill }: Props) {
                 padding: '3px 6px',
                 borderRadius: 'var(--r)',
                 background: isSelected
-                  ? 'rgba(111,168,179,.06)'
+                  ? 'rgba(217,119,87,.06)'
                   : isDrillHighlight
                   ? 'rgba(201,150,107,.06)'
                   : 'transparent',
                 border: '1px solid',
                 borderColor: isSelected
-                  ? 'rgba(111,168,179,.2)'
+                  ? 'rgba(217,119,87,.2)'
                   : isDrillHighlight
                   ? 'rgba(201,150,107,.3)'
                   : 'transparent',

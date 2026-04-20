@@ -122,7 +122,7 @@ const EVENTS: StreamEvent[] = [
 ];
 
 const PROVIDER_COLORS: Record<string, string> = {
-  anthropic: '#9BC4CC',
+  anthropic: '#C96442',
   google:    '#C9B08A',
   xai:       '#B88A8A',
 };
@@ -140,7 +140,7 @@ function highlight(json: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     // Keys
-    .replace(/"([^"]+)":/g, '<span style="color:#9BC4CC">"$1"</span>:')
+    .replace(/"([^"]+)":/g, '<span style="color:#C96442">"$1"</span>:')
     // String values (not keys)
     .replace(/:\s*"([^"]*)"/g, ': <span style="color:#C9B08A">"$1"</span>')
     // Numbers
@@ -229,7 +229,7 @@ export function SystemLogOverlay({ onClose }: Props) {
         margin: 'auto',
         width: 'min(960px, calc(100vw - 40px))',
         height: 'min(700px, calc(100vh - 80px))',
-        background: 'linear-gradient(180deg, #1A2125 0%, #141A1E 100%)',
+        background: 'linear-gradient(180deg, #1E1C1A 0%, #181614 100%)',
         border: '1px solid var(--line-2)',
         borderRadius: 6,
         boxShadow: '0 40px 80px rgba(0,0,0,.8)',
@@ -334,7 +334,7 @@ export function SystemLogOverlay({ onClose }: Props) {
                     padding: '9px 14px',
                     borderBottom: '1px solid var(--line)',
                     cursor: 'pointer',
-                    background: isSel ? 'rgba(111,168,179,.07)' : 'transparent',
+                    background: isSel ? 'rgba(217,119,87,.07)' : 'transparent',
                     boxShadow: isSel ? 'inset 2px 0 0 var(--accent)' : 'none',
                     transition: 'background .1s',
                   }}
@@ -402,7 +402,7 @@ export function SystemLogOverlay({ onClose }: Props) {
           <span className="label">Token field legend</span>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             {[
-              { label: 'Keys', color: '#9BC4CC' },
+              { label: 'Keys', color: '#C96442' },
               { label: 'Strings', color: '#C9B08A' },
               { label: 'Numbers', color: '#7CA893' },
               { label: 'Booleans', color: '#B89FC9' },

@@ -24,7 +24,7 @@ const FALLBACK_INSIGHTS: Insight[] = [
     severity: 'bad',
     title: 'Loop detected: research_agent.weekly_digest',
     attribution: [
-      { label: 'Opus',  pct: .72, col: '#9BC4CC' },
+      { label: 'Opus',  pct: .72, col: '#C96442' },
       { label: 'Tool',  pct: .28, col: '#C9966B' },
     ],
     rec: 'Add step-count guard: exit after 8 iterations',
@@ -35,7 +35,7 @@ const FALLBACK_INSIGHTS: Insight[] = [
     severity: 'warn',
     title: 'Cache decay: hit ratio fell 38%→22% today',
     attribution: [
-      { label: 'Input',  pct: .85, col: '#6FA8B3' },
+      { label: 'Input',  pct: .85, col: '#D97757' },
       { label: 'Cached', pct: .15, col: '#4F7B83' },
     ],
     rec: 'Reanchor system prompt position before tools',
@@ -46,8 +46,8 @@ const FALLBACK_INSIGHTS: Insight[] = [
     severity: 'warn',
     title: 'Routing opportunity: Opus for low-complexity tasks',
     attribution: [
-      { label: 'Opus',   pct: .42, col: '#9BC4CC' },
-      { label: 'Sonnet', pct: .58, col: '#6FA8B3' },
+      { label: 'Opus',   pct: .42, col: '#C96442' },
+      { label: 'Sonnet', pct: .58, col: '#D97757' },
     ],
     rec: 'Route quality<88 tasks to Sonnet - saves ~$6.40/day',
     drillTarget: 'WhoCard',
@@ -68,7 +68,7 @@ const FALLBACK_INSIGHTS: Insight[] = [
 const SEV_COLOR = {
   bad:  '#B86B6B',
   warn: '#C9966B',
-  info: '#8A9297',
+  info: '#87867F',
 } as const;
 
 const SEV_BG = {
@@ -120,7 +120,7 @@ export function WhyInsightsCard() {
       id: idx + 1,
       severity: normalizeSev(r.severity),
       title: r.title,
-      attribution: [{ label: 'Cost', pct: 1, col: '#6FA8B3' }],
+      attribution: [{ label: 'Cost', pct: 1, col: '#D97757' }],
       rec: r.recommendation,
       drillTarget: 'HowCard',
     }));

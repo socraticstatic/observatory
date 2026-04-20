@@ -75,7 +75,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           <g key={i}>
             <line x1={PAD_L - 4} y1={t.y} x2={PAD_L + innerW} y2={t.y}
               stroke="rgba(42,49,55,.8)" strokeWidth=".5" strokeDasharray={i === 0 ? 'none' : '3,3'} />
-            <text x={PAD_L - 7} y={t.y + 4} textAnchor="end" fill="#4A5358" fontSize={9}
+            <text x={PAD_L - 7} y={t.y + 4} textAnchor="end" fill="#5E5D59" fontSize={9}
               fontFamily="JetBrains Mono, monospace">{t.label}</text>
           </g>
         ))}
@@ -145,7 +145,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           if (i % 4 !== 0) return null;
           const x = PAD_L + i * barGroupW + barGroupW / 2;
           return (
-            <text key={i} x={x} y={H - 6} textAnchor="middle" fill="#4A5358"
+            <text key={i} x={x} y={H - 6} textAnchor="middle" fill="#5E5D59"
               fontSize={9} fontFamily="JetBrains Mono, monospace">{i + 1}</text>
           );
         })}

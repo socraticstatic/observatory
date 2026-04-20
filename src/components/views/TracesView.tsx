@@ -23,10 +23,10 @@ const STATUS_OPTS: { id: 'ok' | 'error' | undefined; label: string }[] = [
 ];
 
 function providerDot(p: string): string {
-  if (p === 'anthropic') return '#6FA8B3';
+  if (p === 'anthropic') return '#D97757';
   if (p === 'google')    return '#C9B08A';
   if (p === 'xai')       return '#B88A8A';
-  return '#8A9297';
+  return '#87867F';
 }
 
 function fmt2(n: number): string {
@@ -157,7 +157,7 @@ export function TracesView({ lookback }: Props) {
                 gap: 8,
                 borderBottom: '1px solid var(--line)',
                 cursor: 'pointer',
-                background: expanded === row.id ? 'rgba(111,168,179,.04)' : 'transparent',
+                background: expanded === row.id ? 'rgba(217,119,87,.04)' : 'transparent',
               }}
               onClick={() => setExpanded(expanded === row.id ? null : row.id)}
             >

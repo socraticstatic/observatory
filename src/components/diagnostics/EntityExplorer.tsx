@@ -177,7 +177,7 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
                   padding: '10px 12px',
                   cursor: 'pointer',
                   borderBottom: '1px solid var(--line)',
-                  background: selProject === p.id ? 'rgba(111,168,179,.07)' : 'transparent',
+                  background: selProject === p.id ? 'rgba(217,119,87,.07)' : 'transparent',
                   boxShadow: selProject === p.id ? 'inset 2px 0 0 var(--accent)' : 'none',
                   transition: 'background 0.12s',
                 }}
@@ -205,7 +205,7 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
                   padding: '10px 12px',
                   cursor: 'pointer',
                   borderBottom: '1px solid var(--line)',
-                  background: selSession === s.id ? 'rgba(111,168,179,.07)' : 'transparent',
+                  background: selSession === s.id ? 'rgba(217,119,87,.07)' : 'transparent',
                   boxShadow: selSession === s.id ? 'inset 2px 0 0 var(--accent)' : 'none',
                   transition: 'background 0.12s',
                 }}

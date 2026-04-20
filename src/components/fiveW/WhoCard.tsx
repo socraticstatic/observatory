@@ -23,13 +23,13 @@ interface ModelRow {
 
 function modelColor(model: string): string {
   const m = model.toLowerCase();
-  if (m.includes('opus'))   return '#9BC4CC';
-  if (m.includes('sonnet')) return '#6FA8B3';
+  if (m.includes('opus'))   return '#C96442';
+  if (m.includes('sonnet')) return '#D97757';
   if (m.includes('haiku'))  return '#4F7B83';
   if (m.includes('gemini')) return '#C9B08A';
   if (m.includes('grok'))   return '#B88A8A';
   if (m.includes('llama'))  return '#7CA893';
-  return '#8A9297';
+  return '#87867F';
 }
 
 interface WhoCardProps {
@@ -120,7 +120,7 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
               <div className="num" style={{ fontSize: 18, color: 'var(--good)' }}>${simCost.toFixed(2)}</div>
               <div style={{ fontSize: 10, color: 'var(--steel)' }}>projected / {lookback}</div>
             </div>
-            <div style={{ padding: '8px 10px', background: 'rgba(111,168,179,.08)', border: '1px solid rgba(111,168,179,.2)', borderRadius: 'var(--r)' }}>
+            <div style={{ padding: '8px 10px', background: 'rgba(217,119,87,.08)', border: '1px solid rgba(217,119,87,.2)', borderRadius: 'var(--r)' }}>
               <div className="label" style={{ marginBottom: 4 }}>Savings</div>
               <div className="num" style={{ fontSize: 18, color: 'var(--accent)' }}>${savings.toFixed(2)}</div>
               <div style={{ fontSize: 10, color: 'var(--steel)' }}>per {lookback}</div>

@@ -12,7 +12,7 @@ interface ServicesRailProps {
 }
 
 const PROVIDER_META: Record<string, { label: string; col: string; initial: string }> = {
-  anthropic: { label: 'Anthropic', col: '#9BC4CC', initial: 'A' },
+  anthropic: { label: 'Anthropic', col: '#C96442', initial: 'A' },
   google:    { label: 'Google',    col: '#C9B08A', initial: 'G' },
   xai:       { label: 'xAI',       col: '#B88A8A', initial: 'X' },
   local:     { label: 'Local',     col: '#7CA893', initial: 'L' },
@@ -91,7 +91,7 @@ export function ServicesRail({ lookback, providerFilter }: ServicesRailProps) {
           }}
         >
           <div style={{
-            width: 22, height: 22, borderRadius: 4, background: '#4A5358',
+            width: 22, height: 22, borderRadius: 4, background: '#5E5D59',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 14, fontWeight: 600, color: 'var(--mist)', flexShrink: 0,
           }}>

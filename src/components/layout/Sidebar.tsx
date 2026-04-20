@@ -111,9 +111,9 @@ export function Sidebar({ view, setView, expanded, setExpanded }: Props) {
       {/* Logo */}
       <div className="rail-logo">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-          <rect x="1" y="1" width="20" height="20" rx="2" stroke="#6FA8B3" strokeWidth="1.5" fill="none" />
-          <rect x="4" y="4" width="14" height="14" rx="1.5" stroke="#9BC4CC" strokeWidth="1" fill="none" />
-          <rect x="7.5" y="7.5" width="7" height="7" rx="1" fill="#6FA8B3" opacity=".8" />
+          <rect x="1" y="1" width="20" height="20" rx="2" stroke="#D97757" strokeWidth="1.5" fill="none" />
+          <rect x="4" y="4" width="14" height="14" rx="1.5" stroke="#C96442" strokeWidth="1" fill="none" />
+          <rect x="7.5" y="7.5" width="7" height="7" rx="1" fill="#D97757" opacity=".8" />
         </svg>
         {expanded && (
           <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
