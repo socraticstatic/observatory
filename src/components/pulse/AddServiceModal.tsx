@@ -2,9 +2,25 @@
 
 import { useState } from 'react';
 
-const PROVIDERS = [
-  { id: 'google', label: 'Google Gemini', placeholder: 'AIza...' },
-  { id: 'xai',    label: 'xAI Grok',      placeholder: 'xai-...' },
+type Category = 'llm' | 'creative';
+
+interface ProviderDef {
+  id: string;
+  label: string;
+  placeholder: string;
+  category: Category;
+}
+
+const PROVIDERS: ProviderDef[] = [
+  { id: 'anthropic',  label: 'Anthropic Claude', placeholder: 'sk-ant-...',   category: 'llm' },
+  { id: 'google',     label: 'Google Gemini',     placeholder: 'AIza...',      category: 'llm' },
+  { id: 'xai',        label: 'xAI Grok',          placeholder: 'xai-...',      category: 'llm' },
+  { id: 'openai',     label: 'OpenAI',             placeholder: 'sk-...',       category: 'llm' },
+  { id: 'mistral',    label: 'Mistral',            placeholder: 'mist-...',     category: 'llm' },
+  { id: 'leonardo',   label: 'Leonardo.ai',        placeholder: 'xxxxxxxx-...', category: 'creative' },
+  { id: 'heygen',     label: 'HeyGen',             placeholder: 'NjY...',       category: 'creative' },
+  { id: 'elevenlabs', label: 'ElevenLabs',         placeholder: 'sk_...',       category: 'creative' },
+  { id: 'stability',  label: 'Stability AI',       placeholder: 'sk-...',       category: 'creative' },
 ];
 
 interface Props {
@@ -13,13 +29,23 @@ interface Props {
 }
 
 export function AddServiceModal({ onClose, onSaved }: Props) {
-  const [provider, setProvider] = useState('xai');
+  const [category, setCategory] = useState<Category>('llm');
+  const [provider, setProvider] = useState('anthropic');
   const [key, setKey] = useState('');
   const [show, setShow] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saving' | 'ok' | 'err'>('idle');
   const [errMsg, setErrMsg] = useState('');
 
-  const prov = PROVIDERS.find(p => p.id === provider)!;
+  const visibleProviders = PROVIDERS.filter(p => p.category === category);
+  const prov = PROVIDERS.find(p => p.id === provider) ?? PROVIDERS[0];
+
+  function switchCategory(c: Category) {
+    setCategory(c);
+    const first = PROVIDERS.find(p => p.category === c);
+    if (first) setProvider(first.id);
+    setKey('');
+    setStatus('idle');
+  }
 
   async function save() {
     if (!key.trim()) return;
@@ -51,8 +77,9 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
     >
       <div
         className="card"
-        style={{ width: 380, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}
+        style={{ width: 400, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}
       >
+        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--mist)' }}>
             Add Service
@@ -65,6 +92,18 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
           </button>
         </div>
 
+        {/* Category tabs */}
+        <div className="seg" style={{ alignSelf: 'flex-start' }}>
+          <button className={category === 'llm' ? 'on' : ''} onClick={() => switchCategory('llm')}>LLM</button>
+          <button className={category === 'creative' ? 'on' : ''} onClick={() => switchCategory('creative')}>Creative APIs</button>
+        </div>
+
+        {category === 'creative' && (
+          <div style={{ fontSize: 10, color: 'var(--steel)', lineHeight: 1.5, borderLeft: '2px solid var(--accent)', paddingLeft: 8 }}>
+            Creative APIs are registered and key-stored only. Cost tracking requires manual entry or future ingest integration.
+          </div>
+        )}
+
         {/* Provider select */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label className="label" style={{ fontSize: 9 }}>PROVIDER</label>
@@ -72,16 +111,12 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
             value={provider}
             onChange={e => setProvider(e.target.value)}
             style={{
-              background: 'var(--panel)',
-              border: '1px solid var(--line)',
-              borderRadius: 4,
-              color: 'var(--mist)',
-              fontSize: 12,
-              padding: '7px 10px',
-              outline: 'none',
+              background: 'var(--panel)', border: '1px solid var(--line)',
+              borderRadius: 4, color: 'var(--mist)', fontSize: 12,
+              padding: '7px 10px', outline: 'none',
             }}
           >
-            {PROVIDERS.map(p => (
+            {visibleProviders.map(p => (
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}
           </select>
@@ -98,27 +133,17 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
               placeholder={prov.placeholder}
               onKeyDown={e => { if (e.key === 'Enter') save(); }}
               style={{
-                flex: 1,
-                background: 'var(--panel)',
-                border: '1px solid var(--line)',
-                borderRadius: 4,
-                color: 'var(--mist)',
-                fontSize: 12,
-                padding: '7px 10px',
-                outline: 'none',
-                fontFamily: 'monospace',
+                flex: 1, background: 'var(--panel)', border: '1px solid var(--line)',
+                borderRadius: 4, color: 'var(--mist)', fontSize: 12,
+                padding: '7px 10px', outline: 'none', fontFamily: 'monospace',
               }}
             />
             <button
               onClick={() => setShow(s => !s)}
               style={{
-                background: 'var(--panel)',
-                border: '1px solid var(--line)',
-                borderRadius: 4,
-                color: 'var(--steel)',
-                fontSize: 10,
-                padding: '0 10px',
-                cursor: 'pointer',
+                background: 'var(--panel)', border: '1px solid var(--line)',
+                borderRadius: 4, color: 'var(--steel)', fontSize: 10,
+                padding: '0 10px', cursor: 'pointer',
               }}
             >
               {show ? 'hide' : 'show'}

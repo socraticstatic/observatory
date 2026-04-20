@@ -34,6 +34,16 @@ model LlmEvent {
   @@map("llm_events")
 }
 
+model RegisteredService {
+  id        String   @id @default(uuid())
+  provider  String   @unique
+  label     String
+  category  String   @default("llm")
+  addedAt   DateTime @default(now())
+
+  @@map("registered_services")
+}
+
 model Annotation {
   id       String   @id @default(uuid())
   ts       DateTime

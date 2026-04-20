@@ -20,8 +20,8 @@ function fmtDelta(pct: number): { text: string; color: string } {
 }
 
 export function OverallCostHero({ lookback }: Props) {
-  const { data: costData } = trpc.pulse.overallCost.useQuery({ lookback });
-  const { data: burnData } = trpc.pulse.burnRate.useQuery();
+  const { data: costData }  = trpc.pulse.overallCost.useQuery({ lookback });
+  const { data: burnData }  = trpc.pulse.burnRate.useQuery();
   const { data: chartData } = trpc.pulse.pulseChart.useQuery({ lookback });
   const { data: stripData } = trpc.pulse.statStrip.useQuery({ lookback });
 

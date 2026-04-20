@@ -94,7 +94,7 @@ export default function App() {
 
           {view === 'Pulse' && (
             <>
-              <ServicesRail lookback={lookback} providerFilter={modelFilter !== 'all' ? modelFilter : undefined} />
+              <ServicesRail lookback={lookback} providerFilter={modelFilter !== 'ALL' ? modelFilter : undefined} />
               <OverallCostHero lookback={lookback} />
               <PulseBar
                 lookback={lookback}
@@ -106,7 +106,7 @@ export default function App() {
               <StatStrip lookback={lookback} />
 
               {/* DIAGNOSTICS divider */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 24, marginBottom: -4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 24, marginBottom: 12 }}>
                 <span className="mono" style={{ fontSize: 10, letterSpacing: '.22em', color: 'var(--steel)', fontWeight: 600 }}>
                   DIAGNOSTICS — WHY
                 </span>
