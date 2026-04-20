@@ -5,6 +5,7 @@ import { insightsRouter } from '@/server/routers/insights';
 
 const createCaller = createCallerFactory(insightsRouter);
 const mockDb = { $queryRaw: vi.fn() };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const caller = createCaller({ db: mockDb as any });
 
 beforeEach(() => vi.clearAllMocks());

@@ -8,6 +8,7 @@ import { trpc } from '@/lib/trpc-client';
 type ViewMode = 'stacked' | 'grouped' | 'flow';
 
 interface Bar {
+  label: string;
   cached: number;
   cacheCreation: number;
   input: number;
@@ -15,7 +16,9 @@ interface Bar {
   reasoning: number;
 }
 
-const LAYERS: { key: keyof Bar; label: string; color: string }[] = [
+type BarMetricKey = 'cached' | 'cacheCreation' | 'input' | 'output' | 'reasoning';
+
+const LAYERS: { key: BarMetricKey; label: string; color: string }[] = [
   { key: 'cached',        label: 'Cached',      color: '#7A9E8A' },
   { key: 'cacheCreation', label: 'Cache Write',  color: 'var(--warn)' },
   { key: 'input',         label: 'Input',        color: '#A89276' },
@@ -246,7 +249,7 @@ function Sidebar({ data, lookback }: SidebarProps) {
 // -----------------------------------------------------------------------
 interface WhatCardProps {
   lookback: Lookback;
-  onDrill?: (b: any, i: number) => void;
+  onDrill?: (b: Bar, i: number) => void;
 }
 
 export function WhatCard({ lookback, onDrill }: WhatCardProps) {
@@ -256,6 +259,7 @@ export function WhatCard({ lookback, onDrill }: WhatCardProps) {
 
   const { data: rawData } = trpc.what.tokenLifecycle.useQuery({ lookback });
   const data: Bar[] = rawData?.map(r => ({
+    label:         r.label,
     cached:        r.cached,
     cacheCreation: r.cacheCreation ?? 0,
     input:         r.input,

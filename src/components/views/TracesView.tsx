@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import { fmtUsd, fmtMs } from '@/lib/fmt';
 import type { Lookback } from '@/lib/lookback';
@@ -65,14 +65,15 @@ export function TracesView({ lookback }: Props) {
     { lookback, provider, status, cursor, limit: 50 },
   );
 
+  // Pagination accumulator — intentional direct setState, not a cascade risk
   useEffect(() => {
     if (!data) return;
-    if (!cursor) {
-      setAllItems(data.items);
-    } else {
-      setAllItems(prev => [...prev, ...data.items]);
-    }
-  }, [data]);  // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!cursor) { setAllItems(data.items); }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else { setAllItems(prev => [...prev, ...data.items]); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, cursor]);
 
   function applyProvider(p: string | undefined) {
     setProvider(p);
