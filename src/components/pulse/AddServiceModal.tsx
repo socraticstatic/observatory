@@ -3,8 +3,9 @@
 import { useState } from 'react';
 
 const PROVIDERS = [
-  { id: 'google', label: 'Google Gemini', placeholder: 'AIza...' },
-  { id: 'xai',    label: 'xAI Grok',      placeholder: 'xai-...' },
+  { id: 'anthropic', label: 'Anthropic Claude', placeholder: 'sk-ant-...' },
+  { id: 'google',    label: 'Google Gemini',     placeholder: 'AIza...' },
+  { id: 'xai',       label: 'xAI Grok',          placeholder: 'xai-...' },
 ];
 
 interface Props {

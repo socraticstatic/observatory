@@ -13,6 +13,7 @@ import { entityRouter } from './entity';
 import { insightsRouter } from './insights';
 import { tracesRouter } from './traces';
 import { costDriversRouter } from './cost-drivers';
+import { sessionsRouter } from './sessions';
 
 export const appRouter = router({
   pulse:        pulseRouter,
@@ -28,6 +29,7 @@ export const appRouter = router({
   insights:     insightsRouter,
   traces:       tracesRouter,
   costDrivers:  costDriversRouter,
+  sessions:     sessionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

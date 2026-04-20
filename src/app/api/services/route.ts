@@ -5,8 +5,9 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 const PROVIDER_KEY_MAP: Record<string, string> = {
-  google: 'GEMINI_API_KEY',
-  xai:    'XAI_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+  google:    'GEMINI_API_KEY',
+  xai:       'XAI_API_KEY',
 };
 
 export async function POST(req: NextRequest) {
