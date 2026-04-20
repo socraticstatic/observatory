@@ -13,21 +13,23 @@ import { entityRouter } from './entity';
 import { insightsRouter } from './insights';
 import { tracesRouter } from './traces';
 import { sessionsRouter } from './sessions';
+import { costDriversRouter } from './costDrivers';
 
 export const appRouter = router({
-  pulse:    pulseRouter,
-  what:     whatRouter,
-  who:      whoRouter,
-  where:    whereRouter,
-  when:     whenRouter,
-  how:      howRouter,
-  content:  contentRouter,
-  surface:  surfaceRouter,
-  events:   eventsRouter,
-  entity:   entityRouter,
-  insights: insightsRouter,
-  traces:   tracesRouter,
-  sessions: sessionsRouter,
+  pulse:        pulseRouter,
+  what:         whatRouter,
+  who:          whoRouter,
+  where:        whereRouter,
+  when:         whenRouter,
+  how:          howRouter,
+  content:      contentRouter,
+  surface:      surfaceRouter,
+  events:       eventsRouter,
+  entity:       entityRouter,
+  insights:     insightsRouter,
+  traces:       tracesRouter,
+  sessions:     sessionsRouter,
+  costDrivers:  costDriversRouter,
 });
 
 export type AppRouter = typeof appRouter;
