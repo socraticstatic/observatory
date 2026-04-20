@@ -43,7 +43,7 @@ export const pulseRouter = router({
       const ystdCost  = Number(yesterday._sum.costUsd ?? 0);
       const hourOfDay = new Date().getHours() + new Date().getMinutes() / 60;
       const projected = hourOfDay > 0 ? (todayCost / hourOfDay) * 24 : 0;
-      const budget    = 200;
+      const budget    = Number(process.env.MONTHLY_BUDGET_USD ?? 200);
       return {
         todayCost,
         projected,
