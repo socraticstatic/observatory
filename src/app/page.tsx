@@ -31,8 +31,28 @@ import { SessionsView } from '@/components/views/SessionsView';
 import { RulesView } from '@/components/views/RulesView';
 import { ArchiveView } from '@/components/views/ArchiveView';
 import type { Lookback } from '@/lib/lookback';
+import { trpc } from '@/lib/trpc-client';
 
 type Density = 'comfortable' | 'compact' | 'dense';
+
+function fmtAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (diffMs < 60_000)  return `${Math.round(diffMs / 1000)}s ago`;
+  if (diffMs < 3_600_000) return `${Math.round(diffMs / 60_000)}m ago`;
+  return `${Math.round(diffMs / 3_600_000)}h ago`;
+}
+
+function IngestAge() {
+  const { data } = trpc.pulse.lastIngest.useQuery(undefined, {
+    refetchInterval: 5_000,
+  });
+  const label = data?.lastTs ? fmtAgo(data.lastTs) : '—';
+  return (
+    <span className="mono" style={{ color: 'var(--steel)' }}>
+      retention: 90d · last ingest: {label}
+    </span>
+  );
+}
 
 export default function App() {
   const [now, setNow] = useState(new Date());
@@ -122,8 +142,8 @@ export default function App() {
                 </span>
               </div>
 
-              <WhyInsightsCard />
-              <ZombieSessionsCard />
+              <WhyInsightsCard provider={providerFilter ?? undefined} />
+              <ZombieSessionsCard provider={providerFilter ?? undefined} />
               <EntityExplorer lookback={lookback} />
 
               <div id="5w-what" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,1fr)', gap: 16, marginTop: 16 }}>
@@ -173,7 +193,7 @@ export default function App() {
               {/* Footer */}
               <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--graphite)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', padding: '12px 0', borderTop: '1px solid var(--line)' }}>
                 <span>Observatory v0.1.0 · personal build</span>
-                <span className="mono" style={{ color: 'var(--steel)' }}>retention: 90d · last ingest: 00:00:03 ago</span>
+                <IngestAge />
                 <span>keys: <span className="kbd">⌥T</span> tweaks <span className="kbd">F</span> filter</span>
               </div>
             </>

@@ -67,21 +67,33 @@ const INPUT_STYLE: React.CSSProperties = {
 };
 
 export function RulesView() {
-  const [rules,    setRules]    = useState<AlertRule[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form,     setForm]     = useState<FormState>(BLANK_FORM);
 
-  // Hydrate from localStorage after mount (avoids SSR mismatch)
+  const utils      = trpc.useUtils();
+  const { data: rulesRaw = [], isLoading: rulesLoading } = trpc.rules.list.useQuery();
+  const rules = rulesRaw as AlertRule[];
+  const upsertRule = trpc.rules.upsert.useMutation({ onSuccess: () => utils.rules.list.invalidate() });
+  const removeRule = trpc.rules.remove.useMutation({ onSuccess: () => utils.rules.list.invalidate() });
+
+  // One-time localStorage migration
   useEffect(() => {
     try {
       const raw = localStorage.getItem('observatory-rules');
-      if (raw) setRules(JSON.parse(raw) as AlertRule[]);
+      if (!raw) return;
+      const stored = JSON.parse(raw) as AlertRule[];
+      if (stored.length === 0) return;
+      stored.forEach(r => {
+        upsertRule.mutate({
+          id: undefined, name: r.name, metric: r.metric,
+          lookback: r.lookback, operator: r.operator,
+          threshold: r.threshold, enabled: r.enabled,
+        });
+      });
+      localStorage.removeItem('observatory-rules');
     } catch { /* ignore corrupt storage */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem('observatory-rules', JSON.stringify(rules));
-  }, [rules]);
 
   // Always fetch all lookbacks — queries are tiny and rules can span windows
   const { data: stats1H  } = trpc.pulse.statStrip.useQuery({ lookback: '1H'  });
@@ -115,26 +127,27 @@ export function RulesView() {
   function saveRule() {
     const threshold = parseFloat(form.threshold);
     if (!form.name.trim() || isNaN(threshold)) return;
-    setRules(prev => [...prev, {
-      id:        crypto.randomUUID(),
+    upsertRule.mutate({
+      id: undefined,
       name:      form.name.trim(),
       metric:    form.metric,
       lookback:  form.lookback,
       operator:  form.operator,
       threshold,
       enabled:   true,
-      createdAt: new Date().toISOString(),
-    }]);
+    });
     setForm(BLANK_FORM);
     setShowForm(false);
   }
 
   function toggleRule(id: string) {
-    setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
+    const rule = rules.find(r => r.id === id);
+    if (!rule) return;
+    upsertRule.mutate({ ...rule, metric: rule.metric as Metric, lookback: rule.lookback as Lookback, operator: rule.operator as Operator, enabled: !rule.enabled });
   }
 
   function deleteRule(id: string) {
-    setRules(prev => prev.filter(r => r.id !== id));
+    removeRule.mutate({ id });
   }
 
   const firingCount = rules.filter(r => evaluate(r).firing).length;
@@ -252,8 +265,12 @@ export function RulesView() {
         </div>
       )}
 
-      {/* Empty state */}
-      {rules.length === 0 ? (
+      {/* Empty state / loading / table */}
+      {rulesLoading ? (
+        <div className="card" style={{ padding: '52px 32px', textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--graphite)' }}>Loading…</div>
+        </div>
+      ) : rules.length === 0 ? (
         <div className="card" style={{ padding: '52px 32px', textAlign: 'center' }}>
           <div style={{ fontSize: 12, color: 'var(--steel)', marginBottom: 6 }}>No alert rules yet</div>
           <div style={{ fontSize: 11, color: 'var(--graphite)' }}>

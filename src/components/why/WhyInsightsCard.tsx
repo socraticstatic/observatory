@@ -31,6 +31,10 @@ const SEV_BG = {
   info: 'rgba(135,134,127,.04)',
 } as const;
 
+interface Props {
+  provider?: string;
+}
+
 function AttributionBar({ bars }: { bars: Attribution[] }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -64,9 +68,11 @@ function normalizeSev(s: string): 'bad' | 'warn' | 'info' {
   return 'info';
 }
 
-export function WhyInsightsCard() {
+export function WhyInsightsCard({ provider }: Props = {}) {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const { data: insightData, isLoading } = trpc.insights.whyInsights.useQuery();
+  const { data: insightData, isLoading } = trpc.insights.whyInsights.useQuery(
+    provider ? { provider } : undefined
+  );
 
   const insights = useMemo<Insight[]>(() => {
     if (!insightData) return [];

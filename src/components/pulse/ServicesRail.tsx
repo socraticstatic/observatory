@@ -37,8 +37,9 @@ function fmtTokens(n: number): string {
 
 export function ServicesRail({ lookback, providerFilter, onSelect }: ServicesRailProps) {
   const [showModal, setShowModal] = useState(false);
-  const { data: liveData, refetch } = trpc.who.providerBreakdown.useQuery({ lookback });
-  const { data: registered }        = trpc.services.list.useQuery();
+  const utils = trpc.useUtils();
+  const { data: liveData } = trpc.who.providerBreakdown.useQuery({ lookback });
+  const { data: registered } = trpc.services.list.useQuery();
 
   const liveRows  = liveData ?? [];
   const liveSet   = new Set(liveRows.map(r => r.provider));
@@ -163,13 +164,21 @@ export function ServicesRail({ lookback, providerFilter, onSelect }: ServicesRai
             +
           </div>
           <span className="label" style={{ color: 'var(--graphite)', fontSize: 9 }}>Add service</span>
+          {(registered ?? []).length > 0 && (
+            <span className="mono" style={{ fontSize: 9, color: 'var(--steel)' }}>
+              {(registered ?? []).length} registered
+            </span>
+          )}
         </div>
       </div>
 
       {showModal && (
         <AddServiceModal
           onClose={() => setShowModal(false)}
-          onSaved={() => { refetch(); }}
+          onSaved={() => {
+            utils.who.providerBreakdown.invalidate();
+            utils.services.list.invalidate();
+          }}
         />
       )}
     </>

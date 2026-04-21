@@ -1,20 +1,25 @@
+import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
+
+const providerInput = z.object({ provider: z.string().optional() }).optional();
 
 export const insightsRouter = router({
   whyInsights: publicProcedure
-    .query(async ({ ctx }) => {
+    .input(providerInput)
+    .query(async ({ ctx, input }) => {
       const since7d = new Date(Date.now() - 7 * 86_400_000);
       const since1d = new Date(Date.now() - 86_400_000);
+      const pfSql = input?.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
 
-      // Cache decay detector
       const [cacheToday, cache7d] = await Promise.all([
         ctx.db.$queryRaw<Array<{ hit_ratio: unknown }>>`
           SELECT AVG("cachedTokens"::float / NULLIF("inputTokens" + "cachedTokens", 0)) * 100 AS hit_ratio
-          FROM llm_events WHERE ts >= ${since1d}
+          FROM llm_events WHERE ts >= ${since1d} ${pfSql}
         `,
         ctx.db.$queryRaw<Array<{ hit_ratio: unknown }>>`
           SELECT AVG("cachedTokens"::float / NULLIF("inputTokens" + "cachedTokens", 0)) * 100 AS hit_ratio
-          FROM llm_events WHERE ts >= ${since7d} AND ts < ${since1d}
+          FROM llm_events WHERE ts >= ${since7d} AND ts < ${since1d} ${pfSql}
         `,
       ]);
 
@@ -22,11 +27,10 @@ export const insightsRouter = router({
       const weekHit  = Number(cache7d[0]?.hit_ratio ?? 0);
       const cacheDecay = weekHit > 0 && todayHit < weekHit * 0.6;
 
-      // Routing opportunity: opus sessions with avg quality < 92
       const routingRows = await ctx.db.$queryRaw<Array<{ project: string; avg_quality: unknown; cost: unknown }>>`
         SELECT project, AVG("qualityScore")::float AS avg_quality, SUM("costUsd")::float AS cost
         FROM llm_events
-        WHERE ts >= ${since7d} AND model LIKE '%opus%'
+        WHERE ts >= ${since7d} AND model LIKE '%opus%' ${pfSql}
         GROUP BY project
         HAVING AVG("qualityScore") < 92
         ORDER BY cost DESC
@@ -56,8 +60,11 @@ export const insightsRouter = router({
     }),
 
   zombieSessions: publicProcedure
-    .query(async ({ ctx }) => {
+    .input(providerInput)
+    .query(async ({ ctx, input }) => {
       const since24h = new Date(Date.now() - 24 * 3_600_000);
+      const pfSql = input?.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
+
       const rows = await ctx.db.$queryRaw<Array<{
         session_id: string; project: string; surface: string;
         steps: bigint; cost: unknown; last_ts: Date;
@@ -73,7 +80,7 @@ export const insightsRouter = router({
           (ARRAY_AGG("inputTokens" ORDER BY ts ASC))[1] AS first_input,
           (ARRAY_AGG("inputTokens" ORDER BY ts DESC))[1] AS last_input
         FROM llm_events
-        WHERE ts >= ${since24h} AND "sessionId" IS NOT NULL
+        WHERE ts >= ${since24h} AND "sessionId" IS NOT NULL ${pfSql}
         GROUP BY "sessionId", project, surface
         HAVING COUNT(*) >= 2
         ORDER BY cost DESC
