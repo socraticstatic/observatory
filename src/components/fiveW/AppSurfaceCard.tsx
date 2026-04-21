@@ -14,10 +14,11 @@ const LOOKBACK_MINUTES: Record<Lookback, number> = {
 
 interface Props {
   lookback?: Lookback;
+  provider?: string;
 }
 
-export function AppSurfaceCard({ lookback = '24H' }: Props) {
-  const { data: raw } = trpc.surface.appSurface.useQuery({ lookback });
+export function AppSurfaceCard({ lookback = '24H', provider }: Props) {
+  const { data: raw } = trpc.surface.appSurface.useQuery({ lookback, provider });
 
   if (!raw || raw.length === 0) {
     return (

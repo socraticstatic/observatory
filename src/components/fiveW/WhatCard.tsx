@@ -18,12 +18,12 @@ interface Bar {
 
 type BarMetricKey = 'cached' | 'cacheCreation' | 'input' | 'output' | 'reasoning';
 
-const LAYERS: { key: BarMetricKey; label: string; color: string }[] = [
-  { key: 'cached',        label: 'Cached',      color: '#7CA893' },
-  { key: 'cacheCreation', label: 'Cache Write',  color: 'var(--warn)' },
-  { key: 'input',         label: 'Input',        color: '#A89276' },
-  { key: 'output',        label: 'Output',       color: '#6FA8B3' },
-  { key: 'reasoning',     label: 'Reasoning',    color: '#C9966B' },
+const LAYERS: { key: BarMetricKey; label: string; color: string; gradEnd: string }[] = [
+  { key: 'cached',        label: 'Cached',      color: '#4F7B83', gradEnd: '#2F5157' },
+  { key: 'cacheCreation', label: 'Cache Write',  color: '#3A6068', gradEnd: '#2A4A50' },
+  { key: 'input',         label: 'Input',        color: '#6FA8B3', gradEnd: '#4F7B83' },
+  { key: 'output',        label: 'Output',       color: '#9BC4CC', gradEnd: '#6FA8B3' },
+  { key: 'reasoning',     label: 'Reasoning',    color: '#C9966B', gradEnd: '#8A6547' },
 ];
 
 interface LCProps {
@@ -61,8 +61,8 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
         <defs>
           {LAYERS.map(l => (
             <linearGradient key={l.key} id={`wc-grad-${l.key}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={l.color} stopOpacity=".9" />
-              <stop offset="100%" stopColor={l.color + 'CC'} stopOpacity=".75" />
+              <stop offset="0%"   stopColor={l.color}   stopOpacity=".95" />
+              <stop offset="100%" stopColor={l.gradEnd} stopOpacity=".8" />
             </linearGradient>
           ))}
           <pattern id="wc-grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -70,8 +70,14 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           </pattern>
         </defs>
 
-        {/* Grid */}
-        <rect x={PAD_L} y={PAD_T} width={innerW} height={innerH} fill="url(#wc-grid)" />
+        {/* Horizontal grid lines only */}
+        {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
+          <line key={i}
+            x1={PAD_L} x2={PAD_L + innerW}
+            y1={PAD_T + innerH * (1 - p)} y2={PAD_T + innerH * (1 - p)}
+            stroke="rgba(138,146,151,.08)" strokeWidth=".8"
+          />
+        ))}
 
         {/* Y axis ticks */}
         {yTicks.map((t, i) => (
@@ -144,12 +150,12 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
         })}
 
         {/* X axis labels every 4th bar */}
-        {data.map((_, i) => {
+        {data.map((bar, i) => {
           if (i % 4 !== 0) return null;
           const x = PAD_L + i * barGroupW + barGroupW / 2;
           return (
-            <text key={i} x={x} y={H - 6} textAnchor="middle" fill="#4A5358"
-              fontSize={9} fontFamily="JetBrains Mono, monospace">{i + 1}</text>
+            <text key={i} x={x} y={H - 6} textAnchor="middle" fill="var(--steel)"
+              fontSize={9} fontFamily="JetBrains Mono, monospace">{bar.label}</text>
           );
         })}
       </svg>
@@ -213,19 +219,33 @@ function Sidebar({ data, lookback }: SidebarProps) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {LAYERS.map(l => {
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {([
+          { key: 'reasoning' as BarMetricKey, label: 'Reasoning', color: '#C9966B' },
+          { key: 'output'    as BarMetricKey, label: 'Output',    color: '#9BC4CC' },
+          { key: 'input'     as BarMetricKey, label: 'Input',     color: '#6FA8B3' },
+          { key: 'cached'    as BarMetricKey, label: 'Cached',    color: '#4F7B83' },
+        ]).map(l => {
           const val = totals[l.key];
-          const pct = grand ? ((val / grand) * 100).toFixed(0) : '0';
-          const barW = grand ? (val / grand) * 100 : 0;
+          const pct = grand > 0 ? val / grand : 0;
+          const isReasoningHigh = l.key === 'reasoning' && pct > 0.18;
           return (
             <div key={l.key}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ fontSize: 10, color: 'var(--fog)' }}>{l.label}</span>
-                <span className="num" style={{ fontSize: 10, color: 'var(--steel)' }}>{pct}%</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--fog)', marginBottom: 3 }}>
+                <span>
+                  <span style={{ display: 'inline-block', width: 8, height: 8, background: l.color, marginRight: 6, verticalAlign: 'middle' }} />
+                  {l.label}
+                  {isReasoningHigh && (
+                    <span style={{ color: '#C9966B', marginLeft: 6, fontSize: 9, letterSpacing: '.1em' }}>↑ OPUS</span>
+                  )}
+                </span>
+                <span className="num">{fmt(val)}</span>
               </div>
-              <div style={{ height: 3, background: 'var(--line)', borderRadius: 2 }}>
-                <div style={{ height: '100%', width: `${barW}%`, background: l.color, borderRadius: 2 }} />
+              <div style={{ height: 3, background: 'var(--ink)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ width: `${pct * 100}%`, height: '100%', background: l.color }} />
+              </div>
+              <div className="num" style={{ fontSize: 10, color: 'var(--steel)', marginTop: 2 }}>
+                {(pct * 100).toFixed(1)}%
               </div>
             </div>
           );
@@ -249,23 +269,37 @@ function Sidebar({ data, lookback }: SidebarProps) {
 // -----------------------------------------------------------------------
 interface WhatCardProps {
   lookback: Lookback;
+  provider?: string;
   onDrill?: (b: Bar, i: number) => void;
 }
 
-export function WhatCard({ lookback, onDrill }: WhatCardProps) {
+function formatBucketLabel(isoStr: string, lookback: Lookback, index: number, total: number): string {
+  const d = new Date(isoStr);
+  if (lookback === '1H') {
+    const minsAgo = total - 1 - index;
+    return minsAgo === 0 ? 'now' : `-${minsAgo}m`;
+  }
+  if (lookback === '24H') {
+    return `${String(d.getUTCHours()).padStart(2, '0')}:00`;
+  }
+  const daysAgo = total - 1 - index;
+  return daysAgo === 0 ? 'today' : `D-${String(daysAgo).padStart(2, '0')}`;
+}
+
+export function WhatCard({ lookback, provider, onDrill }: WhatCardProps) {
   const [mode, setMode] = useState<ViewMode>('stacked');
   const [width, setWidth] = useState(600);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { data: rawData } = trpc.what.tokenLifecycle.useQuery({ lookback });
-  const data: Bar[] = rawData?.map(r => ({
-    label:         r.label,
+  const { data: rawData } = trpc.what.tokenLifecycle.useQuery({ lookback, provider });
+  const data: Bar[] = (rawData ?? []).map((r, i, arr) => ({
+    label:         formatBucketLabel(r.label, lookback, i, arr.length),
     cached:        r.cached,
     cacheCreation: r.cacheCreation ?? 0,
     input:         r.input,
     output:        r.output,
     reasoning:     r.reasoning,
-  })) ?? [];
+  }));
 
   useEffect(() => {
     const el = containerRef.current;
@@ -288,8 +322,17 @@ export function WhatCard({ lookback, onDrill }: WhatCardProps) {
   return (
     <div className="card" ref={containerRef}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
-        <span className="label">WHAT &middot; Token Lifecycle</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--line)' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="label">WHAT</span>
+            <span style={{ width: 14, height: 1, background: 'var(--line-2)' }} />
+            <span style={{ fontSize: 13, fontWeight: 500, letterSpacing: '.02em' }}>Token Lifecycle</span>
+          </div>
+          <div className="label" style={{ marginTop: 4, color: 'var(--graphite)' }}>
+            Input · Output · Reasoning · Cached · {LOOKBACKS[lookback].label.toLowerCase()} rolling · click bar to drill →
+          </div>
+        </div>
         <div className="seg">
           {(['stacked', 'grouped', 'flow'] as ViewMode[]).map(m => (
             <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>

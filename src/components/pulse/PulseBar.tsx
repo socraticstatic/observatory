@@ -11,6 +11,7 @@ interface Props {
   onDrillSpike?: (s: Spike) => void;
   lookback: Lookback;
   setLookback: (l: Lookback) => void;
+  provider?: string;
 }
 
 const LOOKBACK_KEYS: Lookback[] = ['1H', '24H', '30D'];
@@ -47,14 +48,21 @@ function toAreaPath(data: number[], w: number, h: number): string {
   return `${linePath} L ${w},${h} L 0,${h} Z`;
 }
 
-export function PulseBar({ onDrillSpike, lookback, setLookback }: Props) {
-  const { data: chartData } = trpc.pulse.pulseChart.useQuery({ lookback });
-  const { data: statData }  = trpc.pulse.statStrip.useQuery({ lookback });
+export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Props) {
+  const { data: chartData } = trpc.pulse.pulseChart.useQuery({ lookback, provider });
+  const { data: statData }  = trpc.pulse.statStrip.useQuery({ lookback, provider });
 
   const tpmHist: number[] = chartData?.map(r => r.tokens) ?? [];
   const latHist: number[] = chartData?.map(r => r.latP95) ?? [];
   const tpmNow  = tpmHist[tpmHist.length - 1] ?? 0;
   const latNow  = statData?.avgLatencyMs ?? 0;
+
+  const tpmDeltaPct = statData && statData.prevTotalCalls > 0
+    ? ((statData.totalCalls - statData.prevTotalCalls) / statData.prevTotalCalls) * 100
+    : null;
+  const latDeltaMs = statData && statData.prevAvgLatencyMs > 0
+    ? Math.round(statData.avgLatencyMs - statData.prevAvgLatencyMs)
+    : null;
 
   // Auto-detect spikes: buckets where latP95 > 2× median
   const sortedLat = [...latHist].sort((a, b) => a - b);
@@ -113,8 +121,8 @@ export function PulseBar({ onDrillSpike, lookback, setLookback }: Props) {
           <div className="num" style={{ fontSize: 34, fontWeight: 600, lineHeight: 1, color: 'var(--mist)' }}>
             {fmt(tpmNow)}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--good)', marginTop: 4, marginBottom: 14 }}>
-            +4.2%
+          <div style={{ fontSize: 11, color: tpmDeltaPct == null ? 'var(--steel)' : tpmDeltaPct >= 0 ? 'var(--good)' : 'var(--warn)', marginTop: 4, marginBottom: 14 }}>
+            {tpmDeltaPct == null ? '—' : `${tpmDeltaPct >= 0 ? '+' : ''}${tpmDeltaPct.toFixed(1)}%`}
           </div>
           <div style={{ display: 'flex', gap: 16 }}>
             {[
@@ -220,13 +228,13 @@ export function PulseBar({ onDrillSpike, lookback, setLookback }: Props) {
           <div className="num" style={{ fontSize: 34, fontWeight: 600, lineHeight: 1, color: 'var(--mist)' }}>
             {fmtMs(latNow)}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--warn)', marginTop: 4, marginBottom: 14 }}>
-            +38ms
+          <div style={{ fontSize: 11, color: latDeltaMs == null ? 'var(--steel)' : latDeltaMs > 0 ? 'var(--warn)' : 'var(--good)', marginTop: 4, marginBottom: 14 }}>
+            {latDeltaMs == null ? '—' : `${latDeltaMs >= 0 ? '+' : ''}${latDeltaMs}ms`}
           </div>
           <div style={{ display: 'flex', gap: 16 }}>
             {[
-              { label: 'p50',      val: '412ms' },
-              { label: 'p99',      val: '2.14s' },
+              { label: 'p50',      val: statData?.p50LatMs ? fmtMs(statData.p50LatMs) : '—' },
+              { label: 'p99',      val: statData?.p99LatMs ? fmtMs(statData.p99LatMs) : '—' },
               { label: 'Spikes/h', val: String(spikes.length) },
             ].map(s => (
               <div key={s.label}>

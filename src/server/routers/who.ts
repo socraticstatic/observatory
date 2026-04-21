@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 
@@ -37,9 +38,10 @@ export const whoRouter = router({
     }),
 
   modelAttribution: publicProcedure
-    .input(z.object({ lookback: LookbackSchema }))
+    .input(z.object({ lookback: LookbackSchema, provider: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const rows = await ctx.db.$queryRaw<Array<{
         model: string; provider: string; calls: bigint; cost: unknown;
         avg_lat: unknown; p95_lat: unknown; error_rate: unknown;
@@ -53,7 +55,7 @@ export const whoRouter = router({
           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs") AS p95_lat,
           (COUNT(*) FILTER (WHERE status = 'error'))::float / COUNT(*) * 100 AS error_rate
         FROM llm_events
-        WHERE ts >= ${since}
+        WHERE ts >= ${since} ${pfSql}
         GROUP BY model, provider
         ORDER BY cost DESC
       `;

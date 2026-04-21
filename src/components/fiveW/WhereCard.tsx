@@ -1,107 +1,80 @@
 'use client';
 
 import { useState } from 'react';
+import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 import { trpc } from '@/lib/trpc-client';
 import type { Lookback } from '@/lib/lookback';
 
-type Status = 'ok' | 'warn' | 'bad';
+const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
-interface Region {
-  id: string;
-  city: string;
-  x: number;
-  y: number;
-  lat: number;
-  vol: number;
-  status: Status;
-}
-
-// Static coordinate lookup for known AWS region IDs
-const REGION_META: Record<string, { city: string; x: number; y: number }> = {
-  'us-east-1':      { city: 'Virginia',   x: 28, y: 38 },
-  'us-east-2':      { city: 'Ohio',       x: 26, y: 36 },
-  'us-west-1':      { city: 'California', x: 12, y: 40 },
-  'us-west-2':      { city: 'Oregon',     x: 14, y: 34 },
-  'eu-west-1':      { city: 'Dublin',     x: 48, y: 30 },
-  'eu-west-2':      { city: 'London',     x: 49, y: 28 },
-  'eu-west-3':      { city: 'Paris',      x: 50, y: 31 },
-  'eu-central-1':   { city: 'Frankfurt',  x: 51, y: 33 },
-  'eu-north-1':     { city: 'Stockholm',  x: 52, y: 24 },
-  'ap-south-1':     { city: 'Mumbai',     x: 68, y: 48 },
-  'ap-southeast-1': { city: 'Singapore',  x: 78, y: 58 },
-  'ap-southeast-2': { city: 'Sydney',     x: 84, y: 74 },
-  'ap-northeast-1': { city: 'Tokyo',      x: 85, y: 40 },
-  'ap-northeast-2': { city: 'Seoul',      x: 83, y: 38 },
-  'ap-east-1':      { city: 'Hong Kong',  x: 80, y: 44 },
-  'sa-east-1':      { city: 'São Paulo',  x: 34, y: 68 },
-  'ca-central-1':   { city: 'Montreal',   x: 25, y: 30 },
-  'me-south-1':     { city: 'Bahrain',    x: 61, y: 44 },
-  'af-south-1':     { city: 'Cape Town',  x: 52, y: 78 },
+// Real lat/lng for AWS regions
+const REGION_META: Record<string, { city: string; lat: number; lng: number }> = {
+  'us-east-1':      { city: 'Virginia',     lat:  38.13, lng:  -78.45 },
+  'us-east-2':      { city: 'Ohio',         lat:  40.00, lng:  -83.00 },
+  'us-west-1':      { city: 'N. California',lat:  37.78, lng: -122.41 },
+  'us-west-2':      { city: 'Oregon',       lat:  45.52, lng: -122.68 },
+  'ca-central-1':   { city: 'Montreal',     lat:  45.42, lng:  -75.70 },
+  'ca-west-1':      { city: 'Calgary',      lat:  51.05, lng: -114.07 },
+  'eu-west-1':      { city: 'Ireland',      lat:  53.35, lng:   -6.26 },
+  'eu-west-2':      { city: 'London',       lat:  51.51, lng:   -0.12 },
+  'eu-west-3':      { city: 'Paris',        lat:  48.86, lng:    2.35 },
+  'eu-central-1':   { city: 'Frankfurt',    lat:  50.11, lng:    8.68 },
+  'eu-central-2':   { city: 'Zurich',       lat:  47.38, lng:    8.54 },
+  'eu-north-1':     { city: 'Stockholm',    lat:  59.33, lng:   18.07 },
+  'eu-south-1':     { city: 'Milan',        lat:  45.46, lng:    9.19 },
+  'eu-south-2':     { city: 'Spain',        lat:  40.42, lng:   -3.70 },
+  'il-central-1':   { city: 'Tel Aviv',     lat:  31.77, lng:   35.22 },
+  'me-south-1':     { city: 'Bahrain',      lat:  26.23, lng:   50.59 },
+  'me-central-1':   { city: 'Dubai',        lat:  25.20, lng:   55.27 },
+  'af-south-1':     { city: 'Cape Town',    lat: -33.93, lng:   18.42 },
+  'ap-south-1':     { city: 'Mumbai',       lat:  19.08, lng:   72.88 },
+  'ap-south-2':     { city: 'Hyderabad',    lat:  17.39, lng:   78.49 },
+  'ap-southeast-1': { city: 'Singapore',    lat:   1.35, lng:  103.82 },
+  'ap-southeast-2': { city: 'Sydney',       lat: -33.87, lng:  151.21 },
+  'ap-southeast-3': { city: 'Jakarta',      lat:  -6.21, lng:  106.85 },
+  'ap-southeast-4': { city: 'Melbourne',    lat: -37.81, lng:  144.96 },
+  'ap-northeast-1': { city: 'Tokyo',        lat:  35.68, lng:  139.69 },
+  'ap-northeast-2': { city: 'Seoul',        lat:  37.56, lng:  126.98 },
+  'ap-northeast-3': { city: 'Osaka',        lat:  34.69, lng:  135.50 },
+  'ap-east-1':      { city: 'Hong Kong',    lat:  22.28, lng:  114.17 },
+  'sa-east-1':      { city: 'São Paulo',    lat: -23.55, lng:  -46.63 },
 };
 
+type Status = 'ok' | 'warn' | 'bad';
+const STATUS_COL: Record<Status, string> = { ok: '#7CA893', warn: '#C9966B', bad: '#B86B6B' };
+
 function latencyToStatus(ms: number): Status {
-  if (ms < 200) return 'ok';
-  if (ms < 400) return 'warn';
+  if (ms < 300) return 'ok';
+  if (ms < 600) return 'warn';
   return 'bad';
 }
 
-const STATUS_COL: Record<Status, string> = {
-  ok:   '#7CA893',
-  warn: '#C9966B',
-  bad:  '#B86B6B',
-};
-
-const VB_W = 820;
-const VB_H = 340;
-
-const px = (pct: number) => (pct / 100) * VB_W;
-const py = (pct: number) => (pct / 100) * VB_H;
-
-const HUB_X = VB_W * 0.5;
-const HUB_Y = VB_H * 0.44;
-
-const LAND_PATHS = [
-  'M 120 80 Q 140 60 180 65 Q 210 55 240 70 Q 270 60 300 72 Q 320 78 330 95 Q 340 110 325 125 Q 300 135 270 130 Q 245 138 220 132 Q 200 140 180 135 Q 155 132 135 120 Q 115 105 120 80 Z',
-  'M 370 75 Q 420 60 470 70 Q 510 65 555 78 Q 590 82 620 95 Q 640 110 615 130 Q 580 140 540 135 Q 500 142 465 135 Q 420 138 385 125 Q 360 110 370 75 Z',
-  'M 400 160 Q 440 150 480 160 Q 510 155 540 170 Q 555 185 535 205 Q 500 218 465 210 Q 430 215 405 200 Q 385 180 400 160 Z',
-  'M 610 140 Q 660 130 710 145 Q 740 150 755 170 Q 745 195 710 205 Q 670 210 635 198 Q 605 180 610 140 Z',
-  'M 200 200 Q 230 190 265 200 Q 290 195 310 215 Q 320 240 300 260 Q 270 275 240 268 Q 210 260 195 235 Q 190 215 200 200 Z',
-  'M 720 230 Q 760 220 790 235 Q 800 255 785 275 Q 755 285 730 275 Q 715 255 720 230 Z',
-];
-
-function arcPath(x1: number, y1: number, x2: number, y2: number): string {
-  const mx = (x1 + x2) / 2;
-  const my = (y1 + y2) / 2 - 30;
-  return `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`;
+interface RegionRow {
+  region: string;
+  calls: number;
+  cost: number;
+  avgLatMs: number;
 }
+
+interface TooltipState { x: number; y: number; region: string; city: string; status: Status; lat: number; vol: number }
 
 interface Props {
   lookback?: Lookback;
+  provider?: string;
 }
 
-export function WhereCard({ lookback = '24H' }: Props) {
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; r: Region } | null>(null);
+export function WhereCard({ lookback = '24H', provider }: Props) {
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const { data: raw } = trpc.where.regional.useQuery({ lookback, provider });
 
-  const { data: raw } = trpc.where.regional.useQuery({ lookback });
-
-  const regions: Region[] = (() => {
+  const rows: (RegionRow & { meta: { city: string; lat: number; lng: number }; vol: number; status: Status })[] = (() => {
     if (!raw || raw.length === 0) return [];
     const totalCalls = raw.reduce((s, r) => s + r.calls, 0) || 1;
-    let unknownIdx = 0;
-    // Fallback x/y positions for regions not in lookup (spread around edges)
-    const FALLBACKS = [
-      { x: 60, y: 55 }, { x: 35, y: 55 }, { x: 70, y: 65 },
-      { x: 20, y: 55 }, { x: 75, y: 30 }, { x: 40, y: 75 },
-    ];
     return raw.map(r => {
-      const meta = REGION_META[r.region];
-      const pos = meta ?? FALLBACKS[unknownIdx++ % FALLBACKS.length];
+      const meta = REGION_META[r.region] ?? { city: r.region, lat: 0, lng: 0 };
       return {
-        id: r.region,
-        city: meta?.city ?? r.region,
-        x: pos.x,
-        y: pos.y,
-        lat: r.avgLatMs,
+        ...r,
+        meta,
         vol: Math.round((r.calls / totalCalls) * 100),
         status: latencyToStatus(r.avgLatMs),
       };
@@ -122,100 +95,87 @@ export function WhereCard({ lookback = '24H' }: Props) {
         </div>
       </div>
 
-      <div style={{ padding: '8px 0', position: 'relative' }}>
-        <svg viewBox={`0 0 ${VB_W} ${VB_H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-          <defs>
-            {regions.map(r => (
-              <radialGradient key={r.id} id={`glow-${r.id}`} cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor={STATUS_COL[r.status]} stopOpacity=".55" />
-                <stop offset="100%" stopColor={STATUS_COL[r.status]} stopOpacity="0" />
-              </radialGradient>
-            ))}
-            <radialGradient id="hub-glow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="var(--accent)" stopOpacity=".45" />
-              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-            </radialGradient>
-          </defs>
+      <div style={{ position: 'relative' }}>
+        <ComposableMap
+          projection="geoMercator"
+          projectionConfig={{ scale: 120, center: [15, 20] }}
+          style={{ width: '100%', height: 'auto' }}
+        >
+          <ZoomableGroup>
+            <Geographies geography={GEO_URL}>
+              {({ geographies }) =>
+                geographies.map(geo => (
+                  <Geography
+                    key={geo.rsmKey}
+                    geography={geo}
+                    fill="rgba(138,146,151,.10)"
+                    stroke="rgba(200,206,209,.18)"
+                    strokeWidth={0.4}
+                    style={{
+                      default: { outline: 'none' },
+                      hover:   { outline: 'none' },
+                      pressed: { outline: 'none' },
+                    }}
+                  />
+                ))
+              }
+            </Geographies>
 
-          {LAND_PATHS.map((d, i) => (
-            <path key={i} d={d} fill="rgba(138,146,151,.09)" stroke="rgba(200,206,209,.25)" strokeWidth=".8" />
-          ))}
+            {rows.map(r => {
+              const nodeR = 4 + r.vol * 0.35;
+              return (
+                <Marker
+                  key={r.region}
+                  coordinates={[r.meta.lng, r.meta.lat]}
+                  onMouseMove={e => setTooltip({ x: e.clientX, y: e.clientY, region: r.region, city: r.meta.city, status: r.status, lat: r.avgLatMs, vol: r.vol })}
+                  onMouseLeave={() => setTooltip(null)}
+                >
+                  {/* glow */}
+                  <circle r={nodeR * 2.6} fill={STATUS_COL[r.status]} opacity={0.12} />
+                  {/* dot */}
+                  <circle
+                    r={nodeR}
+                    fill={STATUS_COL[r.status]}
+                    opacity={0.85}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  {/* ring */}
+                  <circle r={nodeR} fill="none" stroke={STATUS_COL[r.status]} strokeWidth={0.8} opacity={0.5} />
+                  {r.vol >= 12 && (
+                    <text
+                      textAnchor="middle"
+                      y={nodeR + 10}
+                      style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 7, fill: 'var(--fog)', pointerEvents: 'none' }}
+                    >
+                      {r.meta.city}
+                    </text>
+                  )}
+                </Marker>
+              );
+            })}
+          </ZoomableGroup>
+        </ComposableMap>
 
-          {regions.map(r => {
-            const rx = px(r.x);
-            const ry = py(r.y);
-            return (
-              <path
-                key={`arc-${r.id}`}
-                d={arcPath(HUB_X, HUB_Y, rx, ry)}
-                fill="none"
-                stroke={STATUS_COL[r.status]}
-                strokeWidth=".8"
-                strokeDasharray="4,4"
-                opacity=".5"
-              />
-            );
-          })}
-
-          {[24, 14, 6].map((radius, i) => (
-            <circle
-              key={i}
-              cx={HUB_X}
-              cy={HUB_Y}
-              r={radius}
-              fill={i === 2 ? 'var(--accent)' : 'none'}
-              stroke="var(--accent)"
-              strokeWidth={i === 2 ? 0 : .8}
-              opacity={i === 0 ? .15 : i === 1 ? .3 : .9}
-            />
-          ))}
-          <circle cx={HUB_X} cy={HUB_Y} r={36} fill="url(#hub-glow)" />
-          <text x={HUB_X} y={HUB_Y + 44} textAnchor="middle" fill="var(--accent)"
-            fontSize={9} fontFamily="JetBrains Mono, monospace" letterSpacing=".12em">HUB</text>
-
-          {regions.length === 0 && (
-            <text x={HUB_X} y={HUB_Y + 70} textAnchor="middle" fill="var(--steel)"
-              fontSize={10} fontFamily="JetBrains Mono, monospace">No regional data</text>
-          )}
-
-          {regions.map(r => {
-            const rx = px(r.x);
-            const ry = py(r.y);
-            const nodeR = 4 + r.vol * 0.4;
-            const glowR = nodeR * 2.8;
-            return (
-              <g
-                key={r.id}
-                style={{ cursor: 'pointer' }}
-                onMouseMove={e => setTooltip({ x: e.clientX, y: e.clientY, r })}
-                onMouseLeave={() => setTooltip(null)}
-              >
-                <circle cx={rx} cy={ry} r={glowR} fill={`url(#glow-${r.id})`} />
-                <circle cx={rx} cy={ry} r={nodeR} fill={STATUS_COL[r.status]} opacity=".85" />
-                <circle cx={rx} cy={ry} r={nodeR} fill="none" stroke={STATUS_COL[r.status]} strokeWidth=".8" opacity=".5" />
-                <text x={rx} y={ry + nodeR + 10} textAnchor="middle"
-                  fill="var(--fog)" fontSize={8.5} fontFamily="JetBrains Mono, monospace">
-                  {r.city}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+        {rows.length === 0 && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 11, color: 'var(--steel)' }}>No regional data</span>
+          </div>
+        )}
 
         {tooltip && (
-          <div className="tt" style={{ left: tooltip.x + 12, top: tooltip.y - 80 }}>
+          <div className="tt" style={{ position: 'fixed', left: tooltip.x + 12, top: tooltip.y - 80, zIndex: 9999 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COL[tooltip.r.status], display: 'inline-block' }} />
-              <span style={{ fontWeight: 600, fontSize: 12 }}>{tooltip.r.city}</span>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COL[tooltip.status], display: 'inline-block' }} />
+              <span style={{ fontWeight: 600, fontSize: 12 }}>{tooltip.city}</span>
             </div>
-            <div style={{ fontSize: 10, color: 'var(--steel)', marginBottom: 4 }}>{tooltip.r.id}</div>
+            <div style={{ fontSize: 10, color: 'var(--steel)', marginBottom: 4 }}>{tooltip.region}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 3 }}>
               <span style={{ color: 'var(--fog)', fontSize: 11 }}>Avg latency</span>
-              <span className="num" style={{ fontSize: 11 }}>{tooltip.r.lat}ms</span>
+              <span className="num" style={{ fontSize: 11 }}>{tooltip.lat}ms</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
               <span style={{ color: 'var(--fog)', fontSize: 11 }}>Traffic share</span>
-              <span className="num" style={{ fontSize: 11 }}>{tooltip.r.vol}%</span>
+              <span className="num" style={{ fontSize: 11 }}>{tooltip.vol}%</span>
             </div>
           </div>
         )}

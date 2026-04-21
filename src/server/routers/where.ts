@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 
@@ -10,9 +11,10 @@ function msSince(interval: string): number {
 
 export const whereRouter = router({
   regional: publicProcedure
-    .input(z.object({ lookback: LookbackSchema }))
+    .input(z.object({ lookback: LookbackSchema, provider: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const rows = await ctx.db.$queryRaw<Array<{ region: string; calls: bigint; cost: unknown; avg_lat: unknown }>>`
         SELECT
           COALESCE(region, 'unknown') AS region,
@@ -20,7 +22,7 @@ export const whereRouter = router({
           SUM("costUsd")::float AS cost,
           AVG("latencyMs")::float AS avg_lat
         FROM llm_events
-        WHERE ts >= ${since}
+        WHERE ts >= ${since} ${pfSql}
         GROUP BY region
         ORDER BY cost DESC
       `;

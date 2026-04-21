@@ -1,8 +1,9 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 
-const lookbackInput = z.object({ lookback: LookbackSchema });
+const lookbackInput = z.object({ lookback: LookbackSchema, provider: z.string().optional() });
 
 function msSince(interval: string): number {
   if (interval === '1 hour')   return 3_600_000;
@@ -15,14 +16,24 @@ export const pulseRouter = router({
     .input(lookbackInput)
     .query(async ({ ctx, input }) => {
       const interval = lookbackToInterval(input.lookback);
-      const since = new Date(Date.now() - msSince(interval));
-      const agg = await ctx.db.llmEvent.aggregate({
-        where: { ts: { gte: since }, status: 'ok' },
-        _sum: { costUsd: true, inputTokens: true, outputTokens: true, cachedTokens: true, reasoningTokens: true },
-        _count: { id: true },
-      });
+      const ms = msSince(interval);
+      const since     = new Date(Date.now() - ms);
+      const prevSince = new Date(Date.now() - 2 * ms);
+      const pf = input.provider ? { provider: input.provider } : {};
+      const [agg, prevAgg] = await Promise.all([
+        ctx.db.llmEvent.aggregate({
+          where: { ts: { gte: since }, status: 'ok', ...pf },
+          _sum: { costUsd: true, inputTokens: true, outputTokens: true, cachedTokens: true, reasoningTokens: true },
+          _count: { id: true },
+        }),
+        ctx.db.llmEvent.aggregate({
+          where: { ts: { gte: prevSince, lt: since }, status: 'ok', ...pf },
+          _sum: { costUsd: true },
+        }),
+      ]);
       return {
         totalCostUsd:         Number(agg._sum.costUsd ?? 0),
+        priorCostUsd:         Number(prevAgg._sum.costUsd ?? 0),
         totalInputTokens:     Number(agg._sum.inputTokens ?? 0),
         totalOutputTokens:    Number(agg._sum.outputTokens ?? 0),
         totalCachedTokens:    Number(agg._sum.cachedTokens ?? 0),
@@ -63,20 +74,30 @@ export const pulseRouter = router({
       // Also query the prior period for delta
       const ms = msSince(interval);
       const prevSince = new Date(Date.now() - 2 * ms);
-      const [agg, errors, sessions, prevAgg] = await Promise.all([
+      const pf = input.provider ? { provider: input.provider } : {};
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
+      const [agg, errors, sessions, prevAgg, latPct] = await Promise.all([
         ctx.db.llmEvent.aggregate({
-          where: { ts: { gte: since } },
+          where: { ts: { gte: since }, ...pf },
           _count: { id: true },
           _sum: { cachedTokens: true, inputTokens: true, outputTokens: true },
           _avg: { latencyMs: true, qualityScore: true },
         }),
-        ctx.db.llmEvent.count({ where: { ts: { gte: since }, status: 'error' } }),
-        ctx.db.llmEvent.findMany({ where: { ts: { gte: since } }, distinct: ['sessionId'], select: { sessionId: true } }),
+        ctx.db.llmEvent.count({ where: { ts: { gte: since }, status: 'error', ...pf } }),
+        ctx.db.llmEvent.findMany({ where: { ts: { gte: since }, ...pf }, distinct: ['sessionId'], select: { sessionId: true } }),
         ctx.db.llmEvent.aggregate({
-          where: { ts: { gte: prevSince, lt: since } },
+          where: { ts: { gte: prevSince, lt: since }, ...pf },
           _count: { id: true },
           _sum: { cachedTokens: true, inputTokens: true },
+          _avg: { latencyMs: true },
         }),
+        ctx.db.$queryRaw<Array<{ p50: unknown; p99: unknown }>>`
+          SELECT
+            PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY "latencyMs") AS p50,
+            PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY "latencyMs") AS p99
+          FROM llm_events
+          WHERE ts >= ${since} AND status = 'ok' ${pfSql}
+        `,
       ]);
       const total = Number(agg._count.id ?? 0);
       const prevTotal = Number(prevAgg._count.id ?? 0);
@@ -85,18 +106,21 @@ export const pulseRouter = router({
       const totalOutput = Number(agg._sum.outputTokens ?? 0);
       const prevCached  = Number(prevAgg._sum.cachedTokens ?? 0);
       const prevInput   = Number(prevAgg._sum.inputTokens ?? 0);
+      const avgLat      = Number(agg._avg.latencyMs ?? 0);
+      const prevAvgLat  = Number(prevAgg._avg.latencyMs ?? 0);
       return {
         totalCalls:       total,
         prevTotalCalls:   prevTotal,
         cacheHitPct:      totalInput > 0 ? (totalCached / (totalInput + totalCached)) * 100 : 0,
         prevCacheHitPct:  prevInput > 0 ? (prevCached / (prevInput + prevCached)) * 100 : 0,
-        avgLatencyMs:     Number(agg._avg.latencyMs ?? 0),
+        avgLatencyMs:     avgLat,
+        prevAvgLatencyMs: prevAvgLat,
+        p50LatMs:         Math.round(Number(latPct[0]?.p50 ?? 0)),
+        p99LatMs:         Math.round(Number(latPct[0]?.p99 ?? 0)),
         avgQuality:       Number(agg._avg.qualityScore ?? 0),
         errorRatePct:     total > 0 ? (errors / total) * 100 : 0,
         activeSessions:   sessions.length,
-        // Token efficiency: output tokens per input token (higher = more verbose responses)
         efficiency:       totalInput > 0 ? totalOutput / totalInput : 0,
-        // Total tokens for context window utilization estimate
         totalInputTokens: totalInput,
         totalOutputTokens: totalOutput,
         totalCachedTokens: totalCached,
@@ -133,6 +157,7 @@ export const pulseRouter = router({
       const interval = lookbackToInterval(input.lookback);
       const since = new Date(Date.now() - msSince(interval));
       const trunc = input.lookback === '1H' ? 'minute' : input.lookback === '24H' ? 'hour' : 'day';
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const rows = await ctx.db.$queryRaw<Array<{ bucket: Date; tokens: bigint; cost: unknown; lat_p95: unknown }>>`
         SELECT
           date_trunc(${trunc}, ts) AS bucket,
@@ -140,7 +165,7 @@ export const pulseRouter = router({
           SUM("costUsd")::float AS cost,
           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs") AS lat_p95
         FROM llm_events
-        WHERE ts >= ${since} AND status = 'ok'
+        WHERE ts >= ${since} AND status = 'ok' ${pfSql}
         GROUP BY bucket
         ORDER BY bucket ASC
       `;

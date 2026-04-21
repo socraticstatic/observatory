@@ -33,10 +33,10 @@ function UsefulBar({ pct }: { pct: number }) {
   );
 }
 
-interface Props { lookback: Lookback }
+interface Props { lookback: Lookback; provider?: string }
 
-export function ContentTypeCard({ lookback }: Props) {
-  const { data = [] } = trpc.content.contentTypes.useQuery({ lookback });
+export function ContentTypeCard({ lookback, provider }: Props) {
+  const { data = [] } = trpc.content.contentTypes.useQuery({ lookback, provider });
 
   const rows = useMemo(() => {
     const totalCost = data.reduce((s, r) => s + r.costUsd, 0) || 1;

@@ -9,7 +9,8 @@ import type { RegisteredService } from '@prisma/client';
 
 interface ServicesRailProps {
   lookback: Lookback;
-  providerFilter?: string;
+  providerFilter?: string | null;
+  onSelect?: (provider: string | null) => void;
 }
 
 const PROVIDER_META: Record<string, { label: string; col: string; initial: string; category: 'llm' | 'creative' }> = {
@@ -34,7 +35,7 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
-export function ServicesRail({ lookback, providerFilter }: ServicesRailProps) {
+export function ServicesRail({ lookback, providerFilter, onSelect }: ServicesRailProps) {
   const [showModal, setShowModal] = useState(false);
   const { data: liveData, refetch } = trpc.who.providerBreakdown.useQuery({ lookback });
   const { data: registered }        = trpc.services.list.useQuery();
@@ -46,42 +47,61 @@ export function ServicesRail({ lookback, providerFilter }: ServicesRailProps) {
   // Creative services that have been registered but have no live events yet
   const registeredOnly = (registered ?? [] as RegisteredService[]).filter((s: RegisteredService) => !liveSet.has(s.provider));
 
-  const allRows = providerFilter
-    ? liveRows.filter(r => r.provider === providerFilter)
-    : liveRows;
-
+  const allRows = liveRows; // always show all cards; selection highlights one
   const showRegisteredOnly = !providerFilter;
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'row', gap: 12, marginBottom: 16, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'row', gap: 8, marginBottom: 16, overflowX: 'auto' }}>
+        {/* All selector */}
+        <div
+          onClick={() => onSelect?.(null)}
+          style={{
+            flex: '0 0 auto', minWidth: 52, padding: '10px 12px',
+            border: `1px solid ${!providerFilter ? 'var(--accent)' : 'var(--line-2)'}`,
+            borderRadius: 'var(--r)',
+            background: !providerFilter ? 'rgba(111,168,179,.1)' : 'rgba(0,0,0,.15)',
+            cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+            transition: 'all 160ms',
+          }}
+        >
+          <span style={{ fontSize: 10, fontWeight: 600, color: !providerFilter ? 'var(--accent)' : 'var(--steel)', letterSpacing: '.08em' }}>ALL</span>
+          <span className="mono" style={{ fontSize: 9, color: 'var(--graphite)' }}>{allRows.length}</span>
+        </div>
+
         {allRows.map((row) => {
           const meta = PROVIDER_META[row.provider] ?? PROVIDER_META.unknown;
           const sharePct = total > 0 ? Math.round((row.costUsd / total) * 100) : 0;
+          const isSelected = providerFilter === row.provider;
           return (
             <div
               key={row.provider}
-              className="card"
-              style={{ width: 180, flexShrink: 0, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}
+              onClick={() => onSelect?.(isSelected ? null : row.provider)}
+              style={{
+                flex: '0 0 auto', minWidth: 156, padding: '10px 12px',
+                border: `1px solid ${isSelected ? meta.col : 'var(--line-2)'}`,
+                borderRadius: 'var(--r)',
+                background: isSelected ? `${meta.col}10` : 'rgba(0,0,0,.15)',
+                cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 5,
+                transition: 'all 160ms',
+              }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{
-                  width: 22, height: 22, borderRadius: 4, background: meta.col,
+                  width: 20, height: 20, borderRadius: 3, background: meta.col,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 700, color: 'var(--ink)', flexShrink: 0,
+                  fontSize: 10, fontWeight: 700, color: 'var(--ink)', flexShrink: 0,
                 }}>
                   {meta.initial}
                 </div>
                 <span className="dot live" />
               </div>
               <span className="label" style={{ fontSize: 9 }}>{meta.label}</span>
-              <div className="mono" style={{ fontSize: 18, fontWeight: 600, color: 'var(--mist)', lineHeight: 1 }}>
+              <div className="mono" style={{ fontSize: 16, fontWeight: 600, color: 'var(--mist)', lineHeight: 1 }}>
                 {fmtUsd(row.costUsd)}
               </div>
-              <div style={{ fontSize: 10, color: 'var(--steel)' }}>
-                {fmtTokens(row.tokens)} tok
-              </div>
-              <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: 10, color: 'var(--steel)' }}>{fmtTokens(row.tokens)} tok</div>
+              <div style={{ marginTop: 2 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                   <span style={{ fontSize: 9, color: 'var(--graphite)', letterSpacing: '.06em', textTransform: 'uppercase' }}>share</span>
                   <span className="mono" style={{ fontSize: 9, color: 'var(--steel)' }}>{sharePct}%</span>

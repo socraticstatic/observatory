@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 
@@ -10,9 +11,10 @@ function msSince(interval: string): number {
 
 export const surfaceRouter = router({
   appSurface: publicProcedure
-    .input(z.object({ lookback: LookbackSchema }))
+    .input(z.object({ lookback: LookbackSchema, provider: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const rows = await ctx.db.$queryRaw<Array<{
         surface: string; calls: bigint; cost: unknown;
         avg_lat: unknown; p50_lat: unknown; sessions: bigint;
@@ -23,9 +25,9 @@ export const surfaceRouter = router({
           SUM("costUsd")::float AS cost,
           AVG("latencyMs")::float AS avg_lat,
           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY "latencyMs") AS p50_lat,
-          COUNT(DISTINCT session_id) AS sessions
+          COUNT(DISTINCT "sessionId") AS sessions
         FROM llm_events
-        WHERE ts >= ${since}
+        WHERE ts >= ${since} ${pfSql}
         GROUP BY surface
         ORDER BY cost DESC
       `;

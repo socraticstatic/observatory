@@ -22,6 +22,7 @@ import { HowCard } from '@/components/fiveW/HowCard';
 import { ContextCompositionCard } from '@/components/why/ContextCompositionCard';
 import { QualityCostScatter } from '@/components/why/QualityCostScatter';
 import { CounterfactualSimulator } from '@/components/why/CounterfactualSimulator';
+import { SecurityTerminal } from '@/components/views/SecurityTerminal';
 import { SystemLogOverlay } from '@/components/shared/SystemLogOverlay';
 import { TweaksPanel } from '@/components/shared/TweaksPanel';
 import { TracesView } from '@/components/views/TracesView';
@@ -39,6 +40,7 @@ export default function App() {
   const [lookback, setLookback] = useState<Lookback>('24H');
   const [modelFilter, setModelFilter] = useState('ALL');
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [providerFilter, setProviderFilter] = useState<string | null>(null);
   const [railExpanded, setRailExpanded] = useState(false);
   const [systemLogOpen, setSystemLogOpen] = useState(false);
   const [tweaksOpen, setTweaksOpen] = useState(false);
@@ -94,16 +96,21 @@ export default function App() {
 
           {view === 'Pulse' && (
             <>
-              <ServicesRail lookback={lookback} providerFilter={modelFilter !== 'ALL' ? modelFilter : undefined} />
-              <OverallCostHero lookback={lookback} />
+              <ServicesRail
+                lookback={lookback}
+                providerFilter={providerFilter}
+                onSelect={setProviderFilter}
+              />
+              <OverallCostHero lookback={lookback} provider={providerFilter ?? undefined} />
               <PulseBar
                 lookback={lookback}
                 setLookback={setLookback}
+                provider={providerFilter ?? undefined}
                 onDrillSpike={(s) => drillTo('spike', 'pulse spike', 4)}
               />
 
               <BurnRateRail lookback={lookback} />
-              <StatStrip lookback={lookback} />
+              <StatStrip lookback={lookback} provider={providerFilter ?? undefined} />
 
               {/* DIAGNOSTICS divider */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 24, marginBottom: 12 }}>
@@ -121,30 +128,30 @@ export default function App() {
               <EntityExplorer lookback={lookback} />
 
               <div id="5w-what" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,1fr)', gap: 16, marginTop: 16 }}>
-                <WhatCard lookback={lookback} onDrill={(b, i) => drillTo('bar', `WHAT · ${b.label}`, 3)} />
+                <WhatCard lookback={lookback} provider={providerFilter ?? undefined} onDrill={(b, i) => drillTo('bar', `WHAT · ${b.label}`, 3)} />
                 <div id="5w-who">
                   <WhoCard
                     selected={selectedModel}
                     setSelected={setSelectedModel}
                     lookback={lookback}
-                    providerFilter={modelFilter !== 'all' ? modelFilter : undefined}
+                    providerFilter={providerFilter ?? undefined}
                     onDrill={(m) => drillTo('model', `WHO · ${m.name}`, 1)}
                   />
                 </div>
               </div>
 
               <div style={{ marginTop: 16 }}>
-                <ContentTypeCard lookback={lookback} />
+                <ContentTypeCard lookback={lookback} provider={providerFilter ?? undefined} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)', gap: 16, marginTop: 16 }}>
-                <div id="5w-where"><WhereCard lookback={lookback} /></div>
-                <AppSurfaceCard lookback={lookback} />
+                <div id="5w-where"><WhereCard lookback={lookback} provider={providerFilter ?? undefined} /></div>
+                <AppSurfaceCard lookback={lookback} provider={providerFilter ?? undefined} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)', gap: 16, marginTop: 16 }}>
                 <div id="5w-when">
-                  <WhenCard onDrill={(c) => drillTo('heatmap', `WHEN · D-${String(30 - c.d).padStart(2, '0')} ${String(c.h).padStart(2, '0')}:00`, 2)} />
+                  <WhenCard provider={providerFilter ?? undefined} onDrill={(c) => drillTo('heatmap', `WHEN · D-${String(30 - c.d).padStart(2, '0')} ${String(c.h).padStart(2, '0')}:00`, 2)} />
                 </div>
                 <EventTimelineCard />
               </div>
@@ -161,6 +168,8 @@ export default function App() {
               <div style={{ marginTop: 16 }}>
                 <CounterfactualSimulator />
               </div>
+
+              <SecurityTerminal />
 
               {/* Footer */}
               <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--graphite)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', padding: '12px 0', borderTop: '1px solid var(--line)' }}>

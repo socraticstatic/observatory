@@ -44,25 +44,23 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
   const [simOn, setSimOn] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('tpm');
 
-  const { data: modelData } = trpc.who.modelAttribution.useQuery({ lookback });
+  const { data: modelData } = trpc.who.modelAttribution.useQuery({ lookback, provider: providerFilter });
 
   const models: ModelRow[] = useMemo(() => {
-    const base = !modelData || modelData.length === 0
-      ? []
-      : modelData.map(m => ({
-          id: m.model,
-          name: m.model,
-          vendor: m.provider,
-          share: m.share / 100,
-          tpm: m.calls,
-          p50: m.avgLatMs,
-          p95: m.p95LatMs,
-          cost: m.cost,
-          err: m.errorRatePct,
-          col: modelColor(m.model),
-        }));
-    return providerFilter ? base.filter(m => m.vendor === providerFilter) : base;
-  }, [modelData, providerFilter]);
+    if (!modelData || modelData.length === 0) return [];
+    return modelData.map(m => ({
+      id: m.model,
+      name: m.model,
+      vendor: m.provider,
+      share: m.share / 100,
+      tpm: m.calls,
+      p50: m.avgLatMs,
+      p95: m.p95LatMs,
+      cost: m.cost,
+      err: m.errorRatePct,
+      col: modelColor(m.model),
+    }));
+  }, [modelData]);
 
   const sorted = useMemo(() => {
     return [...models].sort((a, b) => {

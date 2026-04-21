@@ -1,149 +1,141 @@
 'use client';
 
-import { fmtUsd, fmtMs } from '@/lib/fmt';
+import { useMemo } from 'react';
+import { fmtUsd } from '@/lib/fmt';
 import { LOOKBACKS, type Lookback } from '@/lib/lookback';
-import { Sparkline } from '@/components/shared/Sparkline';
 import { trpc } from '@/lib/trpc-client';
 
-interface Props {
-  lookback: Lookback;
+function modelColor(model: string): string {
+  const m = model.toLowerCase();
+  if (m.includes('opus'))   return '#9BC4CC';
+  if (m.includes('sonnet')) return '#6FA8B3';
+  if (m.includes('haiku'))  return '#4F7B83';
+  if (m.includes('gemini')) return '#C9B08A';
+  if (m.includes('grok'))   return '#B88A8A';
+  if (m.includes('llama'))  return '#8A9297';
+  return '#4A5358';
 }
 
-// Savings per cached read token (Claude Sonnet pricing: ~$2.70/M savings vs input)
-const CACHE_SAVINGS_PER_M = 2.70;
+interface Props { lookback: Lookback; provider?: string }
 
-function fmtDelta(pct: number): { text: string; color: string } {
-  if (Math.abs(pct) < 0.5) return { text: '±0%', color: 'var(--steel)' };
-  const sign = pct > 0 ? '+' : '';
-  const color = pct > 0 ? 'var(--warn)' : 'var(--good)';
-  return { text: `${sign}${pct.toFixed(1)}%`, color };
-}
+export function OverallCostHero({ lookback, provider }: Props) {
+  const { data: costData }  = trpc.pulse.overallCost.useQuery({ lookback, provider });
+  const { data: chartData } = trpc.pulse.pulseChart.useQuery({ lookback, provider });
+  const { data: modelData } = trpc.who.modelAttribution.useQuery({ lookback, provider });
 
-export function OverallCostHero({ lookback }: Props) {
-  const { data: costData }  = trpc.pulse.overallCost.useQuery({ lookback });
-  const { data: burnData }  = trpc.pulse.burnRate.useQuery();
-  const { data: chartData } = trpc.pulse.pulseChart.useQuery({ lookback });
-  const { data: stripData } = trpc.pulse.statStrip.useQuery({ lookback });
+  const total = costData?.totalCostUsd ?? 0;
+  const prior = costData?.priorCostUsd ?? 0;
+  const deltaPct = prior > 0 ? (total - prior) / prior * 100 : null;
+  const dCol = deltaPct == null
+    ? 'var(--steel)'
+    : deltaPct > 15 ? '#B86B6B'
+    : deltaPct > 0  ? '#C9966B'
+    : '#7CA893';
 
-  const total   = costData?.totalCostUsd ?? 0;
-  const sparkData = chartData?.map(r => r.cost) ?? [];
+  const costSeries = chartData?.map(r => r.cost) ?? [];
+  const maxCost = Math.max(...costSeries, 0.001);
 
-  // Day-over-day trend — only meaningful for 24H; show nothing for other windows
-  const delta = lookback === '24H' && burnData ? fmtDelta(burnData.deltaVsYesterday) : null;
+  const mix = useMemo(() => {
+    if (!modelData || modelData.length === 0) return [];
+    const totalShare = modelData.reduce((s, m) => s + m.share, 0) || 100;
+    return modelData.map(m => ({
+      k: m.model,
+      v: m.share / totalShare,
+      c: modelColor(m.model),
+    }));
+  }, [modelData]);
 
-  const pace   = burnData ? `$${burnData.todayCost.toFixed(2)} today` : '—';
-  const proj   = burnData ? `$${(burnData.projected * 30).toFixed(0)}/mo` : '—';
-  const runway = burnData ? `${burnData.runway.toFixed(1)} days` : '—';
-
-  // Cache savings from real token data
-  const cacheSavings = costData
-    ? (costData.totalCachedTokens * CACHE_SAVINGS_PER_M) / 1_000_000
-    : null;
-
-  const errorPct = stripData?.errorRatePct ?? null;
-  const latency  = stripData?.avgLatencyMs ?? null;
+  const { label } = LOOKBACKS[lookback];
 
   return (
-    <div
-      className="card"
-      style={{ marginBottom: 12, padding: 0, overflow: 'hidden' }}
-    >
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 160px 1fr',
-        }}
-      >
-        {/* Left — total cost */}
-        <div style={{ padding: '18px 20px', borderRight: '1px solid var(--line)' }}>
-          <div className="label" style={{ marginBottom: 8 }}>
-            {LOOKBACKS[lookback].label} spend
-          </div>
+    <div className="card" style={{ marginTop: 16, padding: '18px 22px', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.3fr) minmax(0,1.2fr)', gap: 24, alignItems: 'center' }}>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
-            <span
-              className="mono"
-              style={{ fontSize: 34, fontWeight: 700, color: 'var(--mist)', lineHeight: 1 }}
-            >
-              {fmtUsd(total)}
+      {/* Col 1: cost number + delta */}
+      <div>
+        <div className="label" style={{ color: 'var(--graphite)' }}>OVERALL COST · {label.toUpperCase()}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 4 }}>
+          <span className="num" style={{ fontSize: 44, fontWeight: 600, letterSpacing: '-.02em', color: 'var(--mist)' }}>
+            {fmtUsd(total)}
+          </span>
+          {deltaPct != null && (
+            <span className="mono" style={{ fontSize: 12, color: dCol }}>
+              {deltaPct >= 0 ? '▲' : '▼'} {Math.abs(Math.round(deltaPct))}%
             </span>
-            {delta && (
-              <span
-                className="mono"
-                style={{ fontSize: 12, color: delta.color, fontWeight: 500 }}
-                title="vs. yesterday"
-              >
-                {delta.text}
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 10, color: 'var(--steel)' }}>Today pace</span>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--fog)' }}>{pace}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 10, color: 'var(--steel)' }}>Monthly proj</span>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--fog)' }}>{proj}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 10, color: 'var(--steel)' }}>Runway</span>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--accent)' }}>{runway}</span>
-            </div>
-          </div>
+          )}
         </div>
-
-        {/* Center — sparkline */}
-        <div
-          style={{
-            padding: '18px 16px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            borderRight: '1px solid var(--line)',
-          }}
-        >
-          <div className="label" style={{ fontSize: 9 }}>{LOOKBACKS[lookback].label} activity</div>
-          <Sparkline data={sparkData} color="var(--accent)" h={48} w={120} area />
+        <div className="mono" style={{ fontSize: 11, color: 'var(--steel)', marginTop: 4 }}>
+          vs {fmtUsd(prior)} prior {label.replace('last ', '')}
         </div>
+      </div>
 
-        {/* Right — real metrics */}
-        <div
-          style={{
-            padding: '18px 20px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            gap: 12,
-          }}
-        >
-          <div>
-            <div className="label" style={{ marginBottom: 3 }}>Cache savings</div>
-            <div className="mono" style={{ fontSize: 15, color: 'var(--good)', fontWeight: 600 }}>
-              {cacheSavings != null
-                ? <>{fmtUsd(cacheSavings)}<span style={{ fontSize: 10, color: 'var(--steel)', fontWeight: 400 }}> est.</span></>
-                : <span style={{ color: 'var(--graphite)' }}>—</span>
-              }
-            </div>
-          </div>
-
-          <div>
-            <div className="label" style={{ marginBottom: 3 }}>Error rate</div>
-            <div className="mono" style={{ fontSize: 15, fontWeight: 600, color: errorPct != null && errorPct > 1 ? 'var(--warn)' : 'var(--good)' }}>
-              {errorPct != null ? `${errorPct.toFixed(1)}%` : '—'}
-            </div>
-          </div>
-
-          <div>
-            <div className="label" style={{ marginBottom: 3 }}>Avg latency</div>
-            <div className="mono" style={{ fontSize: 15, color: 'var(--fog)', fontWeight: 600 }}>
-              {latency != null && latency > 0 ? fmtMs(latency) : '—'}
-            </div>
-          </div>
+      {/* Col 2: spend curve SVG */}
+      <div>
+        <div className="label" style={{ color: 'var(--graphite)', marginBottom: 6 }}>
+          SPEND CURVE · {label.toUpperCase()}
         </div>
+        <svg width="100%" height="64" viewBox="0 0 400 64" preserveAspectRatio="none" style={{ display: 'block' }}>
+          <defs>
+            <linearGradient id="heroGrad" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stopColor="#6FA8B3" stopOpacity=".5" />
+              <stop offset="1" stopColor="#6FA8B3" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {costSeries.length > 1 && (
+            <>
+              <path
+                d={`M 0 64 ${costSeries.map((v, i) =>
+                  `L ${(i / (costSeries.length - 1)) * 400} ${64 - (v / maxCost) * 58}`
+                ).join(' ')} L 400 64 Z`}
+                fill="url(#heroGrad)"
+              />
+              <path
+                d={costSeries.map((v, i) =>
+                  `${i === 0 ? 'M' : 'L'} ${(i / (costSeries.length - 1)) * 400} ${64 - (v / maxCost) * 58}`
+                ).join(' ')}
+                stroke="#9BC4CC" strokeWidth="1.4" fill="none"
+              />
+              <circle
+                cx={400}
+                cy={64 - (costSeries[costSeries.length - 1] / maxCost) * 58}
+                r={2.5}
+                fill="#C9966B"
+              />
+            </>
+          )}
+        </svg>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--steel)', marginTop: 2 }}>
+          <span>start</span>
+          <span>now</span>
+        </div>
+      </div>
+
+      {/* Col 3: model mix bar */}
+      <div>
+        <div className="label" style={{ color: 'var(--graphite)', marginBottom: 6 }}>MIX BY MODEL</div>
+        {mix.length > 0 ? (
+          <>
+            <div style={{ display: 'flex', height: 12, borderRadius: 3, overflow: 'hidden', border: '1px solid var(--line-2)' }}>
+              {mix.map(m => (
+                <div
+                  key={m.k}
+                  title={`${m.k} ${Math.round(m.v * 100)}%`}
+                  style={{ width: `${m.v * 100}%`, background: m.c }}
+                />
+              ))}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>
+              {mix.map(m => (
+                <span key={m.k} style={{ color: 'var(--fog)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 6, height: 6, background: m.c, borderRadius: 1, flexShrink: 0 }} />
+                  {m.k.split(' ')[1] ?? m.k}
+                  <span style={{ color: 'var(--steel)' }}>{Math.round(m.v * 100)}%</span>
+                </span>
+              ))}
+            </div>
+          </>
+        ) : (
+          <span style={{ fontSize: 11, color: 'var(--steel)' }}>—</span>
+        )}
       </div>
     </div>
   );

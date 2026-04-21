@@ -83,10 +83,11 @@ function LoadingStrip() {
 
 interface Props {
   lookback?: Lookback;
+  provider?: string;
 }
 
-export function StatStrip({ lookback = '24H' }: Props) {
-  const { data }      = trpc.pulse.statStrip.useQuery({ lookback });
+export function StatStrip({ lookback = '24H', provider }: Props) {
+  const { data }      = trpc.pulse.statStrip.useQuery({ lookback, provider });
   const { data: trend } = trpc.pulse.cacheHitTrend.useQuery();
 
   if (!data) return <LoadingStrip />;
