@@ -192,7 +192,7 @@ export default function App() {
 
               {/* Footer */}
               <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--graphite)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', padding: '12px 0', borderTop: '1px solid var(--line)' }}>
-                <span>Observatory v0.1.0 · personal build</span>
+                <span>Observatory v0.3.1 · personal build</span>
                 <IngestAge />
                 <span>keys: <span className="kbd">⌥T</span> tweaks <span className="kbd">F</span> filter</span>
               </div>
