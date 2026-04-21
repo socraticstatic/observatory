@@ -26,10 +26,11 @@ const MODEL_TOGGLES: { id: string; label: string; dot: string | null }[] = [
 
 function LiveBar() {
   const [heights, setHeights] = useState<number[]>(
-    () => Array.from({ length: 14 }, () => 4 + Math.random() * 14)
+    () => Array.from({ length: 14 }, () => 4)
   );
 
   useEffect(() => {
+    setHeights(Array.from({ length: 14 }, () => 4 + Math.random() * 14));
     const id = setInterval(() => {
       setHeights(Array.from({ length: 14 }, () => 4 + Math.random() * 14));
     }, 240);
