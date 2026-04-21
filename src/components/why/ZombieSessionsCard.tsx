@@ -29,12 +29,6 @@ const TYPE_COL: Record<ZombieType, string> = { loop: '#B86B6B', bloat: '#C9966B'
 
 const FILTERS = ['ALL', 'Loop', 'Bloat', 'Abandoned', 'Runaway'] as const;
 
-const FALLBACK_ZOMBIES: ZombieEntry[] = [
-  { id: 'sess_9f4ab12c', name: 'research · weekly_market_digest', type: 'loop', sev: 'high', model: 'Opus 4.5', startedMin: 9 * 60 + 42, idleMin: 8 * 60 + 11, stepCount: 47, expectedSteps: 5, costSoFar: 14.82, tokRate: 1840, lastHuman: '9h 42m ago', lastTool: 'browser.fetch', reason: 'Agent has iterated 47× without human input. Tool loop detected: browser.fetch → summarize → browser.fetch on sibling URLs. Step budget exceeded 9×.', spark: [4, 6, 8, 12, 14, 13, 15, 16, 18, 17, 19, 22, 20, 24, 22, 26, 24, 28, 26, 30, 28, 32, 30, 34, 32, 36] },
-  { id: 'sess_2e81fa0d', name: 'chat · trip planning (Japan)', type: 'bloat', sev: 'high', model: 'Opus 4.5', startedMin: 14 * 24 * 60 + 120, idleMin: 42, stepCount: 218, expectedSteps: null, costSoFar: 42.18, tokRate: 28400, lastHuman: '42m ago', lastTool: null, reason: 'Conversation is 218 turns deep. Each new message sends 184k tokens of context. Per-turn cost grew from $0.04 → $0.61. Classic runaway chat.', spark: [2, 3, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 32, 38, 44, 50, 56, 62, 68, 72, 78, 82, 88] },
-  { id: 'sess_c4d70e3a', name: 'automation · cron.inbox_triage', type: 'abandoned', sev: 'med', model: 'Haiku', startedMin: 2 * 24 * 60 + 180, idleMin: 2 * 24 * 60 + 180, stepCount: 1420, expectedSteps: null, costSoFar: 6.24, tokRate: 320, lastHuman: '2d 3h ago', lastTool: 'mail.read', reason: 'Cron job still running after you closed the laptop 2 days ago. Small per-call cost but 1,420 calls and counting. No kill-switch configured.', spark: [1, 1, 2, 1, 2, 2, 1, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2] },
-  { id: 'sess_7b19af45', name: 'code · refactor pricing_engine', type: 'runaway', sev: 'med', model: 'Opus 4.5', startedMin: 3 * 60 + 14, idleMin: 22, stepCount: 18, expectedSteps: 12, costSoFar: 8.42, tokRate: 0, lastHuman: '22m ago', lastTool: 'code.interpret', reason: 'Tool call `code.interpret` has retried 6× on a timeout. Each retry re-streams prior reasoning. Currently paused — resume will burn ~$1.20 more.', spark: [3, 4, 5, 6, 7, 6, 7, 8, 9, 8, 9, 10, 11, 10, 11, 12, 11, 12, 13, 12, 13, 14, 15, 14, 15, 16] },
-];
 
 function fmtDur(min: number): string {
   if (min < 60) return `${min}m`;
@@ -55,7 +49,7 @@ export function ZombieSessionsCard({ provider }: Props = {}) {
   );
 
   const zombies: ZombieEntry[] = useMemo(() => {
-    if (!zombieData || zombieData.length === 0) return FALLBACK_ZOMBIES;
+    if (!zombieData || zombieData.length === 0) return [];
     return zombieData.map(z => ({
       id: z.sessionId,
       name: z.sessionId.slice(0, 24),
@@ -76,7 +70,7 @@ export function ZombieSessionsCard({ provider }: Props = {}) {
   }, [zombieData]);
 
   const rows = filter === 'ALL' ? zombies : zombies.filter(z => z.type === filter.toLowerCase());
-  const z = rows[Math.min(sel, rows.length - 1)] ?? zombies[0] ?? FALLBACK_ZOMBIES[0];
+  const z = rows[Math.min(sel, rows.length - 1)] ?? zombies[0] ?? null;
   const totalBleed = zombies.reduce((a, zz) => a + zz.tokRate, 0);
   const totalCost = zombies.reduce((a, zz) => a + zz.costSoFar, 0);
 
@@ -173,6 +167,11 @@ export function ZombieSessionsCard({ provider }: Props = {}) {
 
         {/* RIGHT: drill panel */}
         <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {!z ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 120, color: 'var(--steel)', fontSize: 11 }}>
+              Select a session to inspect
+            </div>
+          ) : (<>
           {/* Type + severity */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -243,6 +242,7 @@ export function ZombieSessionsCard({ provider }: Props = {}) {
             <button className="mbtn">Archive</button>
             <button className="mbtn">Add step-budget</button>
           </div>
+          </>)}
         </div>
       </div>
     </div>
