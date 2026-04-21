@@ -176,4 +176,13 @@ export const pulseRouter = router({
         latP95: Math.round(Number(r.lat_p95) ?? 0),
       }));
     }),
+
+  lastIngest: publicProcedure
+    .query(async ({ ctx }) => {
+      const rows = await ctx.db.$queryRaw<Array<{ last_ts: Date | null }>>`
+        SELECT MAX(ts) AS last_ts FROM llm_events
+      `;
+      const raw = rows[0]?.last_ts ?? null;
+      return { lastTs: raw ? raw.toISOString() : null };
+    }),
 });
