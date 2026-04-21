@@ -80,7 +80,7 @@ export const pulseRouter = router({
         ctx.db.llmEvent.aggregate({
           where: { ts: { gte: since }, ...pf },
           _count: { id: true },
-          _sum: { cachedTokens: true, inputTokens: true, outputTokens: true },
+          _sum: { cachedTokens: true, inputTokens: true, outputTokens: true, reasoningTokens: true },
           _avg: { latencyMs: true, qualityScore: true },
         }),
         ctx.db.llmEvent.count({ where: { ts: { gte: since }, status: 'error', ...pf } }),
@@ -101,11 +101,12 @@ export const pulseRouter = router({
       ]);
       const total = Number(agg._count.id ?? 0);
       const prevTotal = Number(prevAgg._count.id ?? 0);
-      const totalCached = Number(agg._sum.cachedTokens ?? 0);
-      const totalInput  = Number(agg._sum.inputTokens ?? 0);
-      const totalOutput = Number(agg._sum.outputTokens ?? 0);
-      const prevCached  = Number(prevAgg._sum.cachedTokens ?? 0);
-      const prevInput   = Number(prevAgg._sum.inputTokens ?? 0);
+      const totalCached    = Number(agg._sum.cachedTokens ?? 0);
+      const totalInput     = Number(agg._sum.inputTokens ?? 0);
+      const totalOutput    = Number(agg._sum.outputTokens ?? 0);
+      const totalReasoning = Number(agg._sum.reasoningTokens ?? 0);
+      const prevCached     = Number(prevAgg._sum.cachedTokens ?? 0);
+      const prevInput      = Number(prevAgg._sum.inputTokens ?? 0);
       const avgLat      = Number(agg._avg.latencyMs ?? 0);
       const prevAvgLat  = Number(prevAgg._avg.latencyMs ?? 0);
       return {
@@ -121,6 +122,9 @@ export const pulseRouter = router({
         errorRatePct:     total > 0 ? (errors / total) * 100 : 0,
         activeSessions:   sessions.length,
         efficiency:       totalInput > 0 ? totalOutput / totalInput : 0,
+        reasoningRatio:   (totalInput + totalOutput) > 0
+          ? totalReasoning / (totalInput + totalOutput + totalReasoning)
+          : 0,
         totalInputTokens: totalInput,
         totalOutputTokens: totalOutput,
         totalCachedTokens: totalCached,
