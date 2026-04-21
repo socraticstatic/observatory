@@ -1,49 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import { fmtMs, fmt } from '@/lib/fmt';
+import { fmtMs } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 
-// Color by content type
-const TYPE_COL: Record<string, string> = {
-  user_turn:      '#A89276',
-  assistant_turn: '#6FA8B3',
-  tool_call:      '#C9966B',
-  tool_result:    '#C9966B',
-  cache_read:     '#7CA893',
-  cache_write:    '#7CA893',
-  llm_call:       '#A89276',
-  unknown:        '#7A7068',
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  user_turn:      'INPUT',
-  assistant_turn: 'OUTPUT',
-  tool_call:      'TOOL',
-  tool_result:    'TOOL',
-  cache_read:     'CACHE',
-  cache_write:    'CACHE',
-  llm_call:       'LLM',
-  unknown:        '?',
-};
-
-function typeCategory(contentType: string): 'input' | 'output' | 'tool' | 'cache' {
-  if (contentType === 'user_turn' || contentType === 'llm_call') return 'input';
-  if (contentType === 'assistant_turn') return 'output';
-  if (contentType.startsWith('tool')) return 'tool';
-  if (contentType.startsWith('cache')) return 'cache';
-  return 'input';
+function colorFor(contentType: string): string {
+  if (contentType === 'assistant_turn') return '#6FA8B3';  // reason
+  if (contentType.startsWith('tool'))   return '#C9966B';  // tool
+  return '#8A9297';                                         // IO
 }
 
-type FilterType = 'all' | 'input' | 'output' | 'tool' | 'cache';
+type ViewMode = 'Timeline' | 'Tree' | 'Raw';
 
 interface Props {
   drill?: { type: string; source: string; stepHint?: number; at?: number } | null;
 }
 
 export function HowCard({ drill }: Props) {
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [view, setView] = useState<ViewMode>('Timeline');
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
+  const [hover, setHover] = useState<{ step: { id: string; step: number; contentType: string; msOffset: number; latencyMs: number; inputTokens: number; outputTokens: number; model?: string | null }; x: number; y: number } | null>(null);
 
   const { data } = trpc.how.latestTrace.useQuery();
 
@@ -51,12 +27,6 @@ export function HowCard({ drill }: Props) {
   const totalMs = events.length > 0
     ? events[events.length - 1].msOffset + events[events.length - 1].latencyMs
     : 2400;
-
-  const visibleSteps = events.filter(e =>
-    filter === 'all' || typeCategory(e.contentType) === filter
-  );
-
-  const filters: FilterType[] = ['all', 'input', 'output', 'tool', 'cache'];
 
   if (!data) {
     return (
@@ -75,203 +45,174 @@ export function HowCard({ drill }: Props) {
   }
 
   return (
-    <div className="card">
+    <div className="card" style={{ position: 'relative' }}>
       {/* Header */}
-      <div style={{
-        padding: '14px 18px 12px',
-        borderBottom: '1px solid var(--line)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        flexWrap: 'wrap',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flex: 1, minWidth: 0 }}>
-          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--mist)' }}>HOW</span>
-          <span style={{ fontSize: 10, color: 'var(--steel)', letterSpacing: '.08em' }}>Agent Trace Waterfall</span>
-          {data.sessionId && (
-            <span style={{ fontSize: 9, color: 'var(--graphite)', fontFamily: "'JetBrains Mono', monospace" }}>
-              {data.sessionId.slice(0, 8)}…
-            </span>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {filters.map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              style={{
-                padding: '3px 9px',
-                borderRadius: 'var(--r)',
-                fontSize: 9,
-                fontWeight: 600,
-                letterSpacing: '.12em',
-                textTransform: 'uppercase',
-                border: '1px solid',
-                cursor: 'pointer',
-                transition: 'all .12s',
-                borderColor: filter === f ? 'rgba(111,168,179,.5)' : 'var(--line-2)',
-                color: filter === f ? 'var(--accent-2)' : 'var(--steel)',
-                background: filter === f ? 'rgba(111,168,179,.08)' : 'transparent',
-              }}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Timeline axis */}
-      <div style={{ padding: '12px 18px 4px' }}>
-        <div style={{ position: 'relative', height: 14, marginLeft: 200, marginRight: 120 }}>
-          {[0, .25, .5, .75, 1].map(t => {
-            const ms = Math.round(t * totalMs);
-            return (
-              <div
-                key={t}
-                style={{
-                  position: 'absolute',
-                  left: `${t * 100}%`,
-                  transform: 'translateX(-50%)',
-                  fontSize: 8,
-                  color: 'var(--graphite)',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {fmtMs(ms)}
-              </div>
-            );
-          })}
-          {[0, .25, .5, .75, 1].map(t => (
-            <div
-              key={`tick-${t}`}
-              style={{
-                position: 'absolute',
-                left: `${t * 100}%`,
-                top: 8,
-                width: 1,
-                height: 4,
-                background: 'var(--line-2)',
-              }}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Waterfall rows */}
-      <div style={{ padding: '4px 18px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {visibleSteps.map((step) => {
-          const leftPct = totalMs > 0 ? (step.msOffset / totalMs) * 100 : 0;
-          const widthPct = totalMs > 0 ? (step.latencyMs / totalMs) * 100 : 1;
-          const isDrillHighlight = drill?.stepHint === step.step;
-          const isSelected = selectedStep === step.step;
-          const col = TYPE_COL[step.contentType] ?? TYPE_COL.unknown;
-          const label = TYPE_LABELS[step.contentType] ?? step.contentType.toUpperCase();
-          const tokens = step.inputTokens + step.outputTokens;
-
-          return (
-            <div
-              key={step.id}
-              onClick={() => setSelectedStep(isSelected ? null : step.step)}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '200px 1fr 120px',
-                alignItems: 'center',
-                gap: 8,
-                cursor: 'pointer',
-                padding: '3px 6px',
-                borderRadius: 'var(--r)',
-                background: isSelected
-                  ? 'rgba(111,168,179,.06)'
-                  : isDrillHighlight
-                  ? 'rgba(201,150,107,.06)'
-                  : 'transparent',
-                border: '1px solid',
-                borderColor: isSelected
-                  ? 'rgba(111,168,179,.2)'
-                  : isDrillHighlight
-                  ? 'rgba(201,150,107,.3)'
-                  : 'transparent',
-                transition: 'all .12s',
-              }}
-            >
-              <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--mist)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {step.contentType}
-                </div>
-                <div style={{ fontSize: 9, color: 'var(--graphite)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {step.model}
-                </div>
-              </div>
-
-              <div style={{ position: 'relative', height: 28, background: 'rgba(255,255,255,.025)', borderRadius: 3, overflow: 'hidden' }}>
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: `${leftPct}%`,
-                    width: `${Math.max(widthPct, 0.5)}%`,
-                    top: 0,
-                    bottom: 0,
-                    background: col,
-                    opacity: isSelected ? 0.85 : isDrillHighlight ? 0.9 : 0.6,
-                    borderRadius: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    paddingLeft: 4,
-                    transition: 'opacity .12s',
-                  }}
-                >
-                  {widthPct > 8 && (
-                    <span style={{
-                      fontSize: 8,
-                      fontWeight: 600,
-                      letterSpacing: '.1em',
-                      color: 'rgba(0,0,0,.7)',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {label}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                {tokens > 0 && (
-                  <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>{fmt(tokens)} tok</span>
-                )}
-                <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>{fmtMs(step.latencyMs)}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Summary bar */}
-      <div style={{
-        padding: '9px 18px',
-        borderTop: '1px solid var(--line)',
-        display: 'flex',
-        gap: 20,
-        flexWrap: 'wrap',
-      }}>
-        <div style={{ fontSize: 10, color: 'var(--steel)' }}>
-          Total: <span className="mono" style={{ color: 'var(--fog)' }}>{fmtMs(totalMs)}</span>
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--steel)' }}>
-          Steps: <span className="mono" style={{ color: 'var(--fog)' }}>{events.length}</span>
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--steel)' }}>
-          Tokens in: <span className="mono" style={{ color: 'var(--fog)' }}>{fmt(events.reduce((a, e) => a + e.inputTokens, 0))}</span>
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--steel)' }}>
-          Tokens out: <span className="mono" style={{ color: 'var(--fog)' }}>{fmt(events.reduce((a, e) => a + e.outputTokens, 0))}</span>
-        </div>
-        {drill && (
-          <div style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--warn)' }}>
-            Drill: {drill.source}
+      <div style={{padding:'14px 18px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid var(--line)'}}>
+        <div>
+          <div style={{display:'flex', alignItems:'center', gap:10}}>
+            <span className="label">HOW</span>
+            <span style={{width:14, height:1, background:'var(--line-2)'}}/>
+            <span style={{fontSize:13, fontWeight:500}}>Agent Trace</span>
+            {drill && (
+              <span className="chip" style={{borderColor:'var(--accent)', color:'var(--accent-2)'}}>&#9677; drilled from {drill.source}</span>
+            )}
           </div>
-        )}
+          <div className="label" style={{marginTop:4, color:'var(--graphite)'}}>
+            {data?.sessionId?.slice(0,8) && `trace · ${data.sessionId.slice(0,8)}… · `}{fmtMs(totalMs)} · {events.length} steps
+          </div>
+        </div>
+        <div style={{display:'flex', gap:10, alignItems:'center'}}>
+          {/* Legend */}
+          <div style={{display:'flex', gap:12, fontSize:10, color:'var(--steel)', letterSpacing:'.1em', textTransform:'uppercase'}}>
+            <span style={{display:'flex', alignItems:'center', gap:5}}>
+              <span style={{width:10, height:3, background:'#6FA8B3', display:'inline-block'}}/>Reason
+            </span>
+            <span style={{display:'flex', alignItems:'center', gap:5}}>
+              <span style={{width:10, height:3, background:'#C9966B', display:'inline-block'}}/>Tool
+            </span>
+            <span style={{display:'flex', alignItems:'center', gap:5}}>
+              <span style={{width:10, height:3, background:'#8A9297', display:'inline-block'}}/>IO
+            </span>
+          </div>
+          {/* View toggle */}
+          <div className="seg">
+            {(['Timeline','Tree','Raw'] as ViewMode[]).map(v => (
+              <button key={v} className={view===v?'on':''} onClick={()=>setView(v)}>{v}</button>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Timeline view */}
+      {view === 'Timeline' && (
+        <div style={{display:'grid', gridTemplateColumns:'minmax(0,1fr) 240px'}}>
+          {/* LEFT: timeline */}
+          <div style={{padding:'10px 14px', borderRight:'1px solid var(--line)'}}>
+            {/* axis */}
+            <div style={{display:'flex', justifyContent:'space-between', fontFamily:'JetBrains Mono', fontSize:9, color:'var(--steel)', marginLeft:180, marginBottom:4}}>
+              <span>0</span><span>500</span><span>1000</span><span>1500</span>
+              <span>{fmtMs(totalMs)}</span>
+            </div>
+            {/* waterfall rows */}
+            {events.map(step => {
+              const leftPct = totalMs > 0 ? (step.msOffset / totalMs) * 100 : 0;
+              const widthPct = totalMs > 0 ? Math.max(0.5, (step.latencyMs / totalMs) * 100) : 0.5;
+              const isSelected = selectedStep === step.step;
+              const isDrillHighlight = drill?.stepHint === step.step;
+              const col = colorFor(step.contentType);
+              return (
+                <div key={step.id}
+                  onClick={() => setSelectedStep(isSelected ? null : step.step)}
+                  onMouseEnter={e => setHover({step, x: e.clientX, y: e.clientY})}
+                  onMouseMove={e => setHover({step, x: e.clientX, y: e.clientY})}
+                  onMouseLeave={() => setHover(null)}
+                  style={{display:'flex', alignItems:'center', height:22, position:'relative', cursor:'pointer',
+                    background: isSelected ? 'rgba(111,168,179,.06)' : isDrillHighlight ? 'rgba(201,150,107,.06)' : 'transparent'}}>
+                  {/* label column (180px) */}
+                  <div style={{width:180, display:'flex', alignItems:'center', gap:6, paddingLeft: 8, fontSize:11,
+                    color: isSelected ? 'var(--mist)' : 'var(--fog)', fontFamily:'JetBrains Mono', overflow:'hidden', whiteSpace:'nowrap'}}>
+                    <span style={{color:'var(--graphite)', fontSize:9, width:16, display:'inline-block', flexShrink:0}}>
+                      {String(step.step).padStart(2,'0')}
+                    </span>
+                    <span style={{overflow:'hidden', textOverflow:'ellipsis'}}>{step.contentType}</span>
+                  </div>
+                  {/* bar column */}
+                  <div style={{position:'relative', flex:1, height:22}}>
+                    {[.25,.5,.75].map((p,i) => (
+                      <div key={i} style={{position:'absolute', left:(p*100)+'%', top:0, bottom:0, width:1, background:'rgba(138,146,151,.07)'}}/>
+                    ))}
+                    <div style={{
+                      position:'absolute', left:`${leftPct}%`, width:`${widthPct}%`,
+                      top:6, height:10,
+                      background:`linear-gradient(180deg, ${col}, ${col}AA)`,
+                      border:'1px solid rgba(233,236,236,.15)', borderRadius:2,
+                      boxShadow: isSelected ? `0 0 0 1px ${col}` : 'inset 0 1px 0 rgba(255,255,255,.1)',
+                    }}/>
+                    <div style={{
+                      position:'absolute', left:`calc(${leftPct + widthPct}% + 6px)`, top:4,
+                      fontFamily:'JetBrains Mono', fontSize:10, color:'var(--steel)', whiteSpace:'nowrap'
+                    }}>{fmtMs(step.latencyMs)}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {/* RIGHT: step inspector */}
+          <div style={{padding:14}}>
+            {selectedStep !== null && (() => {
+              const step = events.find(e => e.step === selectedStep);
+              if (!step) return null;
+              const col = colorFor(step.contentType);
+              return (
+                <>
+                  <div className="label">Step detail</div>
+                  <div style={{fontSize:12, fontFamily:'JetBrains Mono', color:'var(--mist)', marginTop:4}}>{step.contentType}</div>
+                  <div style={{borderTop:'1px solid var(--line)', marginTop:8, paddingTop:8, display:'flex', flexDirection:'column', gap:6}}>
+                    {([
+                      ['Kind',     step.contentType],
+                      ['Start',    `+${step.msOffset}ms`],
+                      ['Duration', fmtMs(step.latencyMs)],
+                      ['Tokens',   `${step.inputTokens} in · ${step.outputTokens} out`],
+                      ['Cost',     `$${((step.inputTokens * 3 + step.outputTokens * 15) / 1e6).toFixed(4)}`],
+                    ] as [string, string][]).map(([k, v]) => (
+                      <div key={k} style={{display:'flex', justifyContent:'space-between', fontSize:11}}>
+                        <span style={{color:'var(--steel)', letterSpacing:'.06em', textTransform:'uppercase', fontSize:10}}>{k}</span>
+                        <span className="num" style={{color:'var(--mist)'}}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{marginTop:10, display:'flex', gap:8}}>
+                    <button className="mbtn" onClick={() => {
+                      const idx = events.findIndex(e => e.step === selectedStep);
+                      const prevIdx = Math.max(0, idx - 1);
+                      setSelectedStep(idx === 0 ? null : events[prevIdx]?.step ?? null);
+                    }}>&#9666; Prev</button>
+                    <button className="mbtn primary" style={{color: col}}>Open span &#9654;</button>
+                  </div>
+                </>
+              );
+            })()}
+            {selectedStep === null && (
+              <div style={{color:'var(--graphite)', fontSize:11, marginTop:8}}>Click a row to inspect</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tree view */}
+      {view === 'Tree' && (
+        <div style={{padding:'18px 20px', color:'var(--graphite)', fontSize:11}}>
+          <div style={{fontFamily:'JetBrains Mono', fontSize:10, lineHeight:2}}>
+            {events.map((e, i) => (
+              <div key={e.id} style={{paddingLeft: 8, color: colorFor(e.contentType)}}>
+                {i === 0 ? '\u250C' : i === events.length-1 ? '\u2514' : '\u251C'} {String(e.step).padStart(2,'0')} {e.contentType} · {fmtMs(e.latencyMs)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Raw view */}
+      {view === 'Raw' && (
+        <div style={{padding:'14px 18px', fontFamily:'JetBrains Mono', fontSize:10, color:'var(--fog)', lineHeight:1.7, overflowX:'auto'}}>
+          {events.map(e => (
+            <div key={e.id} style={{borderBottom:'1px solid rgba(42,49,55,.5)', padding:'4px 0'}}>
+              <span style={{color:'var(--graphite)', marginRight:12}}>+{e.msOffset}ms</span>
+              <span style={{color: colorFor(e.contentType), marginRight:8}}>[{e.contentType}]</span>
+              <span>in:{e.inputTokens} out:{e.outputTokens} dur:{fmtMs(e.latencyMs)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Hover tooltip */}
+      {hover && (
+        <div className="tt" style={{left: hover.x + 14, top: hover.y + 8}}>
+          <div className="label" style={{marginBottom:4}}>{hover.step.contentType}</div>
+          <div style={{display:'flex', justifyContent:'space-between'}}><span>Start</span><span className="num">+{hover.step.msOffset}ms</span></div>
+          <div style={{display:'flex', justifyContent:'space-between'}}><span>Duration</span><span className="num">{fmtMs(hover.step.latencyMs)}</span></div>
+        </div>
+      )}
     </div>
   );
 }
