@@ -252,13 +252,12 @@ function Sidebar({ data, lookback }: SidebarProps) {
         })}
       </div>
 
-      <div style={{ marginTop: 'auto', padding: '10px 10px', background: 'rgba(79,123,131,.08)', border: '1px solid rgba(79,123,131,.2)', borderRadius: 'var(--r)' }}>
-        <div className="label" style={{ marginBottom: 4 }}>Cache Savings</div>
-        <div className="num" style={{ fontSize: 18, color: 'var(--accent)', fontWeight: 600 }}>
+      <div style={{ marginTop: 'auto', padding: '10px', border: '1px solid var(--line)', borderRadius: 'var(--r)', background: 'rgba(111,168,179,.04)' }}>
+        <div className="label" style={{ color: 'var(--accent-2)' }}>Cache Savings</div>
+        <div className="num" style={{ fontSize: 16, color: 'var(--mist)', marginTop: 2 }}>
           {/* $2.70/MTok saved: Claude input $3/MTok vs cache read $0.30/MTok */}
-          ${((totals.cached * 2.70) / 1_000_000).toFixed(2)}
+          ${((totals.cached * 2.70) / 1_000_000).toFixed(2)} <span style={{ fontSize: 10, color: 'var(--steel)' }}>/ {LOOKBACKS[lookback].label.toLowerCase()}</span>
         </div>
-        <div style={{ fontSize: 10, color: 'var(--steel)' }}>est. {LOOKBACKS[lookback].label.toLowerCase()}</div>
       </div>
     </div>
   );
