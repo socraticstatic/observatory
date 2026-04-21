@@ -41,6 +41,20 @@ interface Props {
   lookback?: Lookback;
 }
 
+function projectEmoji(name: string): string {
+  const n = (name ?? '').toLowerCase();
+  if (n.includes('research') || n.includes('market')) return '📊';
+  if (n.includes('price') || n.includes('pricing') || n.includes('engine')) return '⚙️';
+  if (n.includes('trip') || n.includes('travel') || n.includes('japan')) return '✈️';
+  if (n.includes('inbox') || n.includes('email') || n.includes('mail') || n.includes('triage')) return '✉️';
+  if (n.includes('write') || n.includes('writing') || n.includes('blog') || n.includes('essay')) return '✍️';
+  if (n.includes('code') || n.includes('refactor') || n.includes('debug') || n.includes('fix')) return '💻';
+  if (n.includes('test') || n.includes('spec')) return '🧪';
+  if (n.includes('data') || n.includes('analysis') || n.includes('analyt')) return '📈';
+  if (n.includes('deploy') || n.includes('infra') || n.includes('devops')) return '🚀';
+  return '◈';
+}
+
 export function EntityExplorer({ lookback = '24H' }: Props) {
   const [selProject, setSelProject] = useState<string | null>(null);
   const [selSession, setSelSession] = useState<string | null>(null);
@@ -139,7 +153,7 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
                   transition: 'background 0.12s',
                 }}
               >
-                <div style={{ fontSize: 12, color: 'var(--mist)', marginBottom: 4 }}>{p.id}</div>
+                <div style={{ fontSize: 12, color: 'var(--mist)', marginBottom: 4 }}>{projectEmoji(p.id)} {p.id}</div>
                 <div style={{ display: 'flex', gap: 12 }}>
                   <span className="mono" style={{ fontSize: 10, color: 'var(--warn)' }}>{fmtUsd(p.cost)}</span>
                   <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>{p.sessions} sess</span>
@@ -152,7 +166,7 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
 
         {/* Column 2: Sessions */}
         <div style={COL}>
-          <ColHeader label={selProject ? `Sessions — ${selProject}` : 'Sessions'} />
+          <ColHeader label={selProject ? `Sessions — ${projectEmoji(selProject)} ${selProject}` : 'Sessions'} />
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {selProject ? sessions.map(s => (
               <div
@@ -181,7 +195,7 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
 
         {/* Column 3: Turns */}
         <div style={COL_LAST}>
-          <ColHeader label={selSession ? `Turns — ${selSession}` : 'Turns'} />
+          <ColHeader label={selSession ? `Turns — ${selSession.slice(0, 16)}` : 'Turns'} />
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {selSession ? turns.map((t) => (
               <div key={t.id} style={{
