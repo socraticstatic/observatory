@@ -56,3 +56,16 @@ model Annotation {
   @@index([ts(sort: Desc)])
   @@map("annotations")
 }
+
+model AlertRule {
+  id        String   @id @default(uuid())
+  name      String
+  metric    String
+  lookback  String
+  operator  String
+  threshold Decimal  @db.Decimal(12, 4)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("alert_rules")
+}
