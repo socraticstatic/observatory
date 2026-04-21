@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
   --mist:     #E9ECEC;
@@ -19,6 +19,15 @@
   --good:     #7CA893;
   --r:        4px;
   --r-card:   4px;
+
+  /* data-viz palette — reference these in inline styles instead of bare hex */
+  --dv-teal:   #6FA8B3;
+  --dv-sage:   #8BA89C;
+  --dv-rust:   #B88A8A;
+  --dv-olive:  #7CA893;
+  --dv-stone:  #A89276;
+  --dv-amber:  #C9966B;
+  --dv-dim:    #7A7068;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,7 +35,7 @@
 html, body {
   background: var(--ink-2);
   color: var(--mist);
-  font-family: 'Space Grotesk', system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: '__nextjs-Geist', 'Geist', 'Geist Sans', system-ui, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
@@ -115,9 +124,9 @@ tbody tr.selected td { background: rgba(111,168,179,.07); box-shadow: inset 2px 
 
 .rail { grid-row: 1 / span 2; background: var(--ink); border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
 .rail-logo { display: flex; align-items: center; gap: 10px; padding: 14px; border-bottom: 1px solid var(--line); color: var(--mist); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; font-size: 11px; }
-.rail-item { display: flex; align-items: center; gap: 14px; padding: 11px 14px; color: var(--steel); font-size: 12px; letter-spacing: .04em; cursor: pointer; position: relative; transition: color 160ms ease-out, background 160ms ease-out, border-color 160ms ease-out; border-left: 2px solid transparent; white-space: nowrap; }
-.rail-item:hover { color: var(--mist); background: rgba(111,168,179,.05); border-left-color: rgba(111,168,179,.4); }
-.rail-item.on { color: var(--mist); background: linear-gradient(90deg, rgba(111,168,179,.1), transparent); border-left-color: var(--accent); }
+.rail-item { display: flex; align-items: center; gap: 14px; padding: 11px 14px; color: var(--steel); font-size: 12px; letter-spacing: .04em; cursor: pointer; position: relative; transition: color 160ms ease-out, background 160ms ease-out; white-space: nowrap; }
+.rail-item:hover { color: var(--mist); background: rgba(111,168,179,.05); }
+.rail-item.on { color: var(--mist); background: linear-gradient(90deg, rgba(111,168,179,.12), rgba(111,168,179,.03)); }
 .rail-item svg { flex-shrink: 0; transition: stroke 160ms ease-out; }
 .rail-sep { height: 1px; background: var(--line); margin: 10px 14px; }
 .rail-toggle { margin-top: auto; border-top: 1px solid var(--line); }
@@ -153,3 +162,16 @@ tbody tr.selected td { background: rgba(111,168,179,.07); box-shadow: inset 2px 
 .tweaks label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--fog); margin: 8px 0; gap: 10px; }
 .tweaks input[type=range] { accent-color: var(--accent); flex: 1; }
 .tweaks select { background: var(--ink-2); color: var(--mist); border: 1px solid var(--line-2); border-radius: var(--r); padding: 3px 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+/* ticker pause */
+.ticker-paused .ticker-track { animation-play-state: paused; }
+
+/* responsive — collapse rail on narrow viewports */
+@media (max-width: 768px) {
+  .shell { grid-template-columns: 0 minmax(0, 1fr); }
+  .shell.expanded { grid-template-columns: 0 minmax(0, 1fr); }
+  .rail { display: none; }
+  .cmd-header { grid-template-columns: 1fr; height: auto; }
+  .cmd-cell + .cmd-cell { border-left: none; border-top: 1px solid var(--line); }
+  .page { padding: 0 12px 24px; }
+}
