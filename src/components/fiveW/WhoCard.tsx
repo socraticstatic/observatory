@@ -91,79 +91,93 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
   return (
     <div className="card">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="label">WHO &middot; Model Attribution</span>
-          <span className="chip">{models.length} active</span>
+      <div style={{padding:'14px 18px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid var(--line)'}}>
+        <div>
+          <div style={{display:'flex', alignItems:'center', gap:10}}>
+            <span className="label">WHO</span>
+            <span style={{width:14, height:1, background:'var(--line-2)'}}/>
+            <span style={{fontSize:13, fontWeight:500}}>Model Attribution</span>
+          </div>
+          <div className="label" style={{marginTop:4, color:'var(--graphite)'}}>
+            {models.length} active · {lookback} window
+          </div>
         </div>
-        <button className={`mbtn${simOn ? ' primary' : ''}`} onClick={() => setSimOn(s => !s)}>
-          &#8651; Simulate Switch
-        </button>
+        <div style={{display:'flex', gap:8, alignItems:'center'}}>
+          <button className={`mbtn${simOn?' primary':''}`} onClick={() => setSimOn(s => !s)}>
+            {simOn ? '● SIM ACTIVE' : '⇌ Simulate Switch'}
+          </button>
+          <span className="chip"><span className="dot" style={{background:'var(--accent)'}}/>{models.length} active</span>
+        </div>
       </div>
 
       {/* Simulation panel */}
       {simOn && (
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--line)', background: 'rgba(79,123,131,.05)' }}>
-          <div style={{ fontSize: 10, color: 'var(--steel)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 10 }}>
-            Opus 4.5 &rarr; Sonnet 4.5 swap simulation
+        <div style={{borderBottom:'1px solid var(--line)', padding:'14px 18px', background:'linear-gradient(180deg, rgba(124,168,147,.08), rgba(124,168,147,.02))'}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
+            <div style={{display:'flex', alignItems:'center', gap:8}}>
+              <span className="label" style={{color:'var(--good)'}}>What-if</span>
+              <span style={{fontSize:12, color:'var(--mist)'}}>Route {opusModel?.name ?? 'Opus'} → {flashModel?.name ?? 'Sonnet'}</span>
+            </div>
+            <button className="mbtn" onClick={() => setSimOn(false)} style={{padding:'3px 8px'}}>✕</button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <div style={{ padding: '8px 10px', background: 'rgba(184,106,106,.08)', border: '1px solid rgba(184,106,106,.2)', borderRadius: 'var(--r)' }}>
-              <div className="label" style={{ marginBottom: 4 }}>Opus Cost</div>
-              <div className="num" style={{ fontSize: 18, color: 'var(--bad)' }}>${opusCost.toFixed(2)}</div>
-              <div style={{ fontSize: 10, color: 'var(--steel)' }}>current / {lookback}</div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10}}>
+            <div style={{padding:10, border:'1px solid var(--line)', borderRadius:'var(--r)', background:'rgba(0,0,0,.2)'}}>
+              <div className="label" style={{fontSize:9}}>Current ({opusModel?.name ?? 'Opus'})</div>
+              <div className="num" style={{fontSize:18, color:'var(--fog)', marginTop:2}}>${opusCost.toFixed(2)}</div>
+              <div className="label" style={{fontSize:9, color:'var(--graphite)', marginTop:2}}>p50 {opusModel?.p50 ?? 0}ms</div>
             </div>
-            <div style={{ padding: '8px 10px', background: 'rgba(124,168,147,.08)', border: '1px solid rgba(124,168,147,.2)', borderRadius: 'var(--r)' }}>
-              <div className="label" style={{ marginBottom: 4 }}>Flash Sim</div>
-              <div className="num" style={{ fontSize: 18, color: 'var(--good)' }}>${simCost.toFixed(2)}</div>
-              <div style={{ fontSize: 10, color: 'var(--steel)' }}>projected / {lookback}</div>
+            <div style={{padding:10, border:'1px solid rgba(124,168,147,.4)', borderRadius:'var(--r)', background:'rgba(124,168,147,.08)'}}>
+              <div className="label" style={{fontSize:9, color:'var(--good)'}}>Simulated ({flashModel?.name ?? 'Sonnet'})</div>
+              <div className="num" style={{fontSize:18, color:'var(--mist)', marginTop:2}}>${simCost.toFixed(2)}</div>
+              <div className="label" style={{fontSize:9, color:'var(--graphite)', marginTop:2}}>p50 {flashModel?.p50 ?? 0}ms · quality est.</div>
             </div>
-            <div style={{ padding: '8px 10px', background: 'rgba(111,168,179,.08)', border: '1px solid rgba(111,168,179,.2)', borderRadius: 'var(--r)' }}>
-              <div className="label" style={{ marginBottom: 4 }}>Savings</div>
-              <div className="num" style={{ fontSize: 18, color: 'var(--accent)' }}>${savings.toFixed(2)}</div>
-              <div style={{ fontSize: 10, color: 'var(--steel)' }}>per {lookback}</div>
+            <div style={{padding:10, border:'1px solid rgba(155,196,204,.4)', borderRadius:'var(--r)', background:'rgba(111,168,179,.08)'}}>
+              <div className="label" style={{fontSize:9, color:'var(--accent-2)'}}>Savings</div>
+              <div className="num" style={{fontSize:18, color:'var(--accent-2)', marginTop:2}}>${savings.toFixed(2)}</div>
+              <div className="label" style={{fontSize:9, color:'var(--graphite)', marginTop:2}}>
+                −{opusCost > 0 ? ((savings/opusCost)*100).toFixed(1) : '0.0'}% of Opus spend
+              </div>
             </div>
           </div>
           {/* Comparative bar */}
-          <div style={{ height: 6, background: 'var(--line)', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${opusCost > 0 ? (simCost / opusCost) * 100 : 0}%`, background: 'linear-gradient(90deg, var(--good), var(--accent))', borderRadius: 3 }} />
+          <div style={{marginTop:10}}>
+            <div style={{position:'relative', height:18, border:'1px solid var(--line-2)', borderRadius:2, background:'var(--ink)', overflow:'hidden'}}>
+              <div style={{position:'absolute', left:0, top:0, bottom:0, width:'100%', background:'linear-gradient(90deg,#9BC4CC,#6FA8B3)', opacity:.45}}/>
+              <div style={{position:'absolute', left:0, top:0, bottom:0, width:(opusCost>0?(simCost/opusCost*100):0)+'%', background:'linear-gradient(90deg,#7CA893,#5E8B78)'}}/>
+              <div style={{position:'absolute', right:6, top:2, fontFamily:'JetBrains Mono', fontSize:10, color:'var(--mist)'}}>
+                {opusModel?.name ?? 'Opus'} baseline
+              </div>
+              <div style={{position:'absolute', left:6, top:2, fontFamily:'JetBrains Mono', fontSize:10, color:'var(--mist)'}}>
+                {flashModel?.name ?? 'Sonnet'}
+              </div>
+            </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-            <span style={{ fontSize: 9, color: 'var(--steel)' }}>0</span>
-            <span style={{ fontSize: 9, color: 'var(--steel)' }}>Simulated {opusCost > 0 ? ((simCost / opusCost) * 100).toFixed(0) : 0}% of current</span>
-            <span style={{ fontSize: 9, color: 'var(--steel)' }}>${opusCost.toFixed(2)}</span>
+          <div className="label" style={{marginTop:8, color:'var(--graphite)', fontSize:9, lineHeight:1.5}}>
+            Estimate uses output-token pricing × workload over {lookback}. Quality delta is an estimate only.
           </div>
         </div>
       )}
 
       {/* Share bar */}
-      <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
-        <div className="label" style={{ marginBottom: 6 }}>Traffic share</div>
-        <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', gap: 1 }}>
-          {models.map(m => (
-            <div
-              key={m.id}
+      <div style={{padding:'14px 18px 6px', borderBottom:'1px solid var(--line)'}}>
+        <div className="label" style={{marginBottom:6}}>Share of volume</div>
+        <div style={{display:'flex', height:12, borderRadius:2, overflow:'hidden', border:'1px solid var(--line-2)'}}>
+          {sorted.map(m => (
+            <div key={m.id}
+              onClick={() => setSelected(selected === m.id ? null : m.id)}
               title={m.name}
               style={{
-                flex: m.share,
-                background: m.col,
-                opacity: selected && selected !== m.id ? 0.35 : 0.85,
+                width: (m.tpm / totalTPM * 100) + '%',
+                background: `linear-gradient(180deg, ${m.col}, ${m.col}CC)`,
+                borderRight: '1px solid rgba(0,0,0,.4)',
+                opacity: selected && selected !== m.id ? .35 : 1,
                 cursor: 'pointer',
-                transition: 'opacity .15s',
-              }}
-              onClick={() => setSelected(selected === m.id ? null : m.id)}
-            />
+                transition: 'opacity .15s'
+              }}/>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-          {models.map(m => (
-            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', opacity: selected && selected !== m.id ? .4 : 1 }}
-              onClick={() => setSelected(selected === m.id ? null : m.id)}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: m.col, display: 'inline-block' }} />
-              <span style={{ fontSize: 10, color: 'var(--fog)' }}>{m.name.split(' ')[1] ?? m.name}</span>
-              <span className="num" style={{ fontSize: 10, color: 'var(--steel)' }}>{(m.share * 100).toFixed(0)}%</span>
-            </div>
-          ))}
+        <div style={{display:'flex', justifyContent:'space-between', marginTop:6, fontFamily:'JetBrains Mono', fontSize:9, color:'var(--steel)'}}>
+          <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
         </div>
       </div>
 
@@ -211,19 +225,15 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
                   <td className="num">{fmt(m.tpm)}</td>
                   <td className="num">{fmtMs(m.p50)}</td>
                   <td className="num">{fmtMs(m.p95)}</td>
-                  <td>
+                  <td className="num" style={{color:'var(--mist)'}}>
                     {simOn && isOpus ? (
-                      <div>
-                        <span className="num" style={{ textDecoration: 'line-through', color: 'var(--steel)', fontSize: 11 }}>
-                          ${scaledCost.toFixed(2)}
-                        </span>{' '}
-                        <span className="num" style={{ color: 'var(--good)', fontSize: 11 }}>
-                          ${simCost.toFixed(2)}
+                      <span>
+                        <span style={{color:'var(--graphite)', textDecoration:'line-through', marginRight:6}}>
+                          ${m.cost.toFixed(2)}
                         </span>
-                      </div>
-                    ) : (
-                      <span className="num">{scaledCost > 0 ? `$${scaledCost.toFixed(2)}` : <span style={{ color: 'var(--steel)' }}>free</span>}</span>
-                    )}
+                        <span style={{color:'var(--good)'}}>${simCost.toFixed(2)}</span>
+                      </span>
+                    ) : `$${m.cost.toFixed(2)}`}
                   </td>
                   <td>
                     <Sparkline data={trend} color={m.col} h={28} w={80} />
