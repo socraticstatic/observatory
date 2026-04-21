@@ -30,23 +30,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'invalid provider or key' }, { status: 400 });
   }
 
+  // Best-effort: Keychain + LiteLLM restart. Non-blocking — DB write always proceeds.
+  const warnings: string[] = [];
   try {
     await execAsync(
       `security add-generic-password -U -s "helen-kestra" -a "${meta.keychainName}" -w "${key.replace(/"/g, '\\"')}"`
     );
-
     if (meta.category === 'llm') {
       const uid = process.getuid?.() ?? 501;
       await execAsync(`launchctl kickstart -k gui/${uid}/com.micahbos.litellm-observatory`).catch(() => {});
     }
+  } catch {
+    warnings.push('key stored in DB only — Keychain unavailable in this environment');
+  }
 
+  try {
     await db.registeredService.upsert({
       where:  { provider },
       create: { provider, label: meta.label, category: meta.category },
       update: { label: meta.label, category: meta.category },
     });
-
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, ...(warnings.length && { warnings }) });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });

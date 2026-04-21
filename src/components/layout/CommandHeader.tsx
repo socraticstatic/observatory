@@ -7,8 +7,8 @@ interface Props {
   now: Date;
   lookback: Lookback;
   setLookback: (l: Lookback) => void;
-  modelFilter: string;
-  setModelFilter: (m: string) => void;
+  providerFilter: string | null;
+  setProviderFilter: (p: string | null) => void;
   onToggleSystemLog: () => void;
   systemLogOpen: boolean;
 }
@@ -158,8 +158,8 @@ export function CommandHeader({
   now,
   lookback,
   setLookback,
-  modelFilter,
-  setModelFilter,
+  providerFilter,
+  setProviderFilter,
   onToggleSystemLog,
   systemLogOpen,
 }: Props) {
@@ -205,8 +205,8 @@ export function CommandHeader({
           {MODEL_TOGGLES.map(({ id, label, dot }) => (
             <button
               key={id}
-              className={modelFilter === id ? 'on' : ''}
-              onClick={() => setModelFilter(id)}
+              className={(id === 'ALL' ? providerFilter === null : providerFilter === id) ? 'on' : ''}
+              onClick={() => setProviderFilter(id === 'ALL' ? null : id)}
             >
               {dot && (
                 <span
