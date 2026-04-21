@@ -36,6 +36,10 @@ const SEV_COLOR = {
 
 type Severity = 'bad' | 'warn' | 'info';
 
+interface Props {
+  provider?: string;
+}
+
 function ActionButton({ severity, action, onClick }: { severity: Severity; action: 'Kill' | 'Review'; onClick: () => void }) {
   const isKill = action === 'Kill';
   return (
@@ -69,10 +73,12 @@ function ActionButton({ severity, action, onClick }: { severity: Severity; actio
   );
 }
 
-export function ZombieSessionsCard() {
+export function ZombieSessionsCard({ provider }: Props = {}) {
   const [killed, setKilled] = useState<Set<string>>(new Set());
   const [reviewed, setReviewed] = useState<Set<string>>(new Set());
-  const { data: zombieData } = trpc.insights.zombieSessions.useQuery();
+  const { data: zombieData } = trpc.insights.zombieSessions.useQuery(
+    provider ? { provider } : undefined
+  );
 
   const ZOMBIES = useMemo<readonly Zombie[]>(() => {
     if (!zombieData || zombieData.length === 0) return [];

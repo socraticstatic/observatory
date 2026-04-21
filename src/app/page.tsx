@@ -142,8 +142,8 @@ export default function App() {
                 </span>
               </div>
 
-              <WhyInsightsCard />
-              <ZombieSessionsCard />
+              <WhyInsightsCard provider={providerFilter ?? undefined} />
+              <ZombieSessionsCard provider={providerFilter ?? undefined} />
               <EntityExplorer lookback={lookback} />
 
               <div id="5w-what" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,1fr)', gap: 16, marginTop: 16 }}>
