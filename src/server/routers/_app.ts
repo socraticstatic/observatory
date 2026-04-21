@@ -16,6 +16,7 @@ import { sessionsRouter } from './sessions';
 import { costDriversRouter } from './costDrivers';
 import { servicesRouter } from './services';
 import { archiveRouter } from './archive';
+import { rulesRouter } from './rules';
 
 export const appRouter = router({
   pulse:        pulseRouter,
@@ -34,6 +35,7 @@ export const appRouter = router({
   costDrivers:  costDriversRouter,
   services:     servicesRouter,
   archive:      archiveRouter,
+  rules:        rulesRouter,
 });
 
 export type AppRouter = typeof appRouter;
