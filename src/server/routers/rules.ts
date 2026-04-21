@@ -50,8 +50,8 @@ export const rulesRouter = router({
         enabled:   input.enabled,
       };
 
-      const row = existing
-        ? await ctx.db.alertRule.update({ where: { id: input.id! }, data })
+      const row = existing && input.id
+        ? await ctx.db.alertRule.update({ where: { id: input.id }, data })
         : await ctx.db.alertRule.create({ data });
 
       return normalize(row);
