@@ -29,13 +29,25 @@ interface Props {
   onSaved: () => void;
 }
 
+type BillingPlan = 'api' | 'subscription';
+
+const DEFAULT_BUDGETS: Record<string, number> = {
+  anthropic: 200,
+  openai:    20,
+  google:    20,
+  xai:       20,
+  mistral:   20,
+};
+
 export function AddServiceModal({ onClose, onSaved }: Props) {
-  const [category, setCategory] = useState<Category>('llm');
-  const [provider, setProvider] = useState('anthropic');
-  const [key, setKey] = useState('');
-  const [show, setShow] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'saving' | 'ok' | 'err'>('idle');
-  const [errMsg, setErrMsg] = useState('');
+  const [category,     setCategory]     = useState<Category>('llm');
+  const [provider,     setProvider]     = useState('anthropic');
+  const [key,          setKey]          = useState('');
+  const [show,         setShow]         = useState(false);
+  const [billingPlan,  setBillingPlan]  = useState<BillingPlan>('subscription');
+  const [monthlyBudget,setMonthlyBudget]= useState<string>('200');
+  const [status,       setStatus]       = useState<'idle' | 'saving' | 'ok' | 'err'>('idle');
+  const [errMsg,       setErrMsg]       = useState('');
 
   const registerMutation = trpc.services.register.useMutation({
     onSuccess: () => {
@@ -54,9 +66,17 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
   function switchCategory(c: Category) {
     setCategory(c);
     const first = PROVIDERS.find(p => p.category === c);
-    if (first) setProvider(first.id);
+    if (first) {
+      setProvider(first.id);
+      setMonthlyBudget(String(DEFAULT_BUDGETS[first.id] ?? 0));
+    }
     setKey('');
     setStatus('idle');
+  }
+
+  function switchProvider(p: string) {
+    setProvider(p);
+    setMonthlyBudget(String(DEFAULT_BUDGETS[p] ?? 20));
   }
 
   function save() {
@@ -66,6 +86,8 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
       provider,
       label: prov.label,
       category,
+      billingPlan,
+      monthlyBudgetUsd: billingPlan === 'subscription' ? (parseFloat(monthlyBudget) || 0) : 0,
     });
   }
 
@@ -126,7 +148,7 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
           <label className="label" style={{ fontSize: 9 }}>Provider</label>
           <select
             value={provider}
-            onChange={e => setProvider(e.target.value)}
+            onChange={e => switchProvider(e.target.value)}
             style={{
               background: 'var(--ink-2)',
               border: '1px solid var(--line-2)',
@@ -177,6 +199,57 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
             </button>
           </div>
         </div>
+
+        {/* Billing plan — LLM only */}
+        {category === 'llm' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label className="label" style={{ fontSize: 9 }}>Billing plan</label>
+            <div className="seg" style={{ alignSelf: 'flex-start' }}>
+              <button className={billingPlan === 'subscription' ? 'on' : ''} onClick={() => setBillingPlan('subscription')}>
+                Subscription
+              </button>
+              <button className={billingPlan === 'api' ? 'on' : ''} onClick={() => setBillingPlan('api')}>
+                API (pay-per-token)
+              </button>
+            </div>
+            {billingPlan === 'subscription' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <span className="label" style={{ fontSize: 9, whiteSpace: 'nowrap' }}>Monthly cost</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 11, color: 'var(--steel)' }}>$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={monthlyBudget}
+                    onChange={e => setMonthlyBudget(e.target.value)}
+                    style={{
+                      width: 80,
+                      background: 'var(--ink-2)',
+                      border: '1px solid var(--line-2)',
+                      borderRadius: 'var(--r)',
+                      color: 'var(--mist)',
+                      fontSize: 11,
+                      padding: '5px 8px',
+                      outline: 'none',
+                      fontFamily: "'JetBrains Mono', monospace",
+                    }}
+                  />
+                  <span style={{ fontSize: 10, color: 'var(--graphite)' }}>/mo</span>
+                </div>
+              </div>
+            )}
+            {billingPlan === 'subscription' && (
+              <div style={{
+                fontSize: 10, color: 'var(--steel)', lineHeight: 1.6,
+                borderLeft: '2px solid var(--accent-2)', paddingLeft: 10,
+                fontFamily: "'JetBrains Mono', monospace", marginTop: 2,
+              }}>
+                Cost displays will show your subscription allocation, not per-token estimates.
+              </div>
+            )}
+          </div>
+        )}
 
         {status === 'err' && (
           <span style={{ fontSize: 10, color: 'var(--bad)', fontFamily: "'JetBrains Mono', monospace" }}>{errMsg}</span>

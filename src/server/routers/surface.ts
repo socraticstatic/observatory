@@ -6,6 +6,8 @@ import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
   if (interval === '24 hours') return 86_400_000;
+  if (interval === '90 days')  return 90 * 86_400_000;
+  if (interval === '365 days') return 365 * 86_400_000;
   return 30 * 86_400_000;
 }
 
@@ -35,12 +37,11 @@ export const surfaceRouter = router({
         sdk:     'SDK / API',
         cli:     'Claude Code (CLI)',
         desktop: 'Desktop',
-        unknown: 'Unknown',
       };
       const totalCost = rows.reduce((s, r) => s + Number(r.cost), 0);
       return rows.map(r => ({
         id: r.surface,
-        label: SURFACE_LABELS[r.surface] ?? r.surface.charAt(0).toUpperCase() + r.surface.slice(1),
+        label: SURFACE_LABELS[r.surface] ?? r.surface,
         calls: Number(r.calls),
         costUsd: Number(r.cost),
         sharePct: totalCost > 0 ? (Number(r.cost) / totalCost) * 100 : 0,

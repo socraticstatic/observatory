@@ -1,10 +1,13 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
   if (interval === '24 hours') return 86_400_000;
+  if (interval === '90 days')  return 90 * 86_400_000;
+  if (interval === '365 days') return 365 * 86_400_000;
   return 30 * 86_400_000;
 }
 
@@ -37,51 +40,52 @@ const DIM_SQL = (col: string) => col; // label for TS — SQL written inline per
 
 export const costDriversRouter = router({
   sixDimension: publicProcedure
-    .input(z.object({ lookback: LookbackSchema }))
+    .input(z.object({ lookback: LookbackSchema, provider: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const [byProvider, byModel, bySurface, byProject, byContentType, byRegion] = await Promise.all([
         ctx.db.$queryRaw<DetailRow[]>`
           SELECT provider AS label, SUM("costUsd")::float AS cost,
             COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
             AVG("latencyMs")::float AS avg_lat_ms,
             PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
-          FROM llm_events WHERE ts >= ${since}
+          FROM llm_events WHERE ts >= ${since} ${pfSql}
           GROUP BY provider ORDER BY cost DESC LIMIT 8`,
         ctx.db.$queryRaw<DetailRow[]>`
           SELECT model AS label, SUM("costUsd")::float AS cost,
             COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
             AVG("latencyMs")::float AS avg_lat_ms,
             PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
-          FROM llm_events WHERE ts >= ${since}
+          FROM llm_events WHERE ts >= ${since} ${pfSql}
           GROUP BY model ORDER BY cost DESC LIMIT 8`,
         ctx.db.$queryRaw<DetailRow[]>`
           SELECT surface AS label, SUM("costUsd")::float AS cost,
             COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
             AVG("latencyMs")::float AS avg_lat_ms,
             PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
-          FROM llm_events WHERE ts >= ${since}
+          FROM llm_events WHERE ts >= ${since} ${pfSql}
           GROUP BY surface ORDER BY cost DESC LIMIT 8`,
         ctx.db.$queryRaw<DetailRow[]>`
           SELECT project AS label, SUM("costUsd")::float AS cost,
             COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
             AVG("latencyMs")::float AS avg_lat_ms,
             PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
-          FROM llm_events WHERE ts >= ${since}
+          FROM llm_events WHERE ts >= ${since} ${pfSql}
           GROUP BY project ORDER BY cost DESC LIMIT 8`,
         ctx.db.$queryRaw<DetailRow[]>`
           SELECT "contentType" AS label, SUM("costUsd")::float AS cost,
             COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
             AVG("latencyMs")::float AS avg_lat_ms,
             PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
-          FROM llm_events WHERE ts >= ${since}
+          FROM llm_events WHERE ts >= ${since} ${pfSql}
           GROUP BY "contentType" ORDER BY cost DESC LIMIT 8`,
         ctx.db.$queryRaw<DetailRow[]>`
           SELECT region AS label, SUM("costUsd")::float AS cost,
             COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
             AVG("latencyMs")::float AS avg_lat_ms,
             PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
-          FROM llm_events WHERE ts >= ${since}
+          FROM llm_events WHERE ts >= ${since} ${pfSql}
           GROUP BY region ORDER BY cost DESC LIMIT 8`,
       ]);
       void DIM_SQL; // suppress unused warning
@@ -96,9 +100,10 @@ export const costDriversRouter = router({
     }),
 
   qualityCostByProject: publicProcedure
-    .input(z.object({ lookback: LookbackSchema }))
+    .input(z.object({ lookback: LookbackSchema, provider: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const rows = await ctx.db.$queryRaw<Array<{
         label: string | null;
         cost: unknown;
@@ -113,7 +118,7 @@ export const costDriversRouter = router({
           MODE() WITHIN GROUP (ORDER BY model)  AS dominant_model,
           (COUNT("qualityScore") > 0)            AS has_quality
         FROM llm_events
-        WHERE ts >= ${since}
+        WHERE ts >= ${since} ${pfSql}
         GROUP BY COALESCE(project, surface, 'unknown')
         ORDER BY cost DESC
         LIMIT 20
@@ -128,9 +133,10 @@ export const costDriversRouter = router({
     }),
 
   contextComposition: publicProcedure
-    .input(z.object({ lookback: LookbackSchema }))
+    .input(z.object({ lookback: LookbackSchema, provider: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const rows = await ctx.db.$queryRaw<Array<{
         cached:           number;
         cache_creation:   number;
@@ -141,11 +147,11 @@ export const costDriversRouter = router({
         SELECT
           COALESCE(SUM("cachedTokens"),                        0)::float AS cached,
           COALESCE(SUM("cacheCreationTokens"),                 0)::float AS cache_creation,
-          COALESCE(SUM("inputTokens" - "cachedTokens"),        0)::float AS fresh_input,
+          COALESCE(SUM("inputTokens"),                         0)::float AS fresh_input,
           COALESCE(SUM("outputTokens"),                        0)::float AS output_tokens,
           COALESCE(SUM("reasoningTokens"),                     0)::float AS reasoning_tokens
         FROM llm_events
-        WHERE ts >= ${since}
+        WHERE ts >= ${since} ${pfSql}
       `;
 
       const r = rows[0] ?? { cached: 0, cache_creation: 0, fresh_input: 0, output_tokens: 0, reasoning_tokens: 0 };
@@ -171,30 +177,49 @@ export const costDriversRouter = router({
     }),
 
   baseline: publicProcedure
-    .query(async ({ ctx }) => {
+    .input(z.object({ lookback: LookbackSchema.optional(), provider: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      // Always use last 24H for baseline so projections represent a true daily rate.
+      // Using a longer lookback would inflate `dailyCostUsd` by the period length.
       const since24h = new Date(Date.now() - 86_400_000);
-      const [totals, opusCost, cacheAgg, reasoningAgg] = await Promise.all([
+      const pfFilter = input?.provider ? { provider: input.provider } : {};
+      const pfSql = input?.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
+
+      const [totals, opusCost, cacheAgg, reasoningAgg, cacheReadRows] = await Promise.all([
         ctx.db.llmEvent.aggregate({
-          where: { ts: { gte: since24h } },
+          where: { ts: { gte: since24h }, ...pfFilter },
           _sum: { costUsd: true },
         }),
         ctx.db.llmEvent.aggregate({
-          where: { ts: { gte: since24h }, model: { contains: 'opus' } },
+          where: { ts: { gte: since24h }, model: { contains: 'opus' }, ...pfFilter },
           _sum: { costUsd: true },
         }),
         ctx.db.llmEvent.aggregate({
-          where: { ts: { gte: since24h } },
+          where: { ts: { gte: since24h }, ...pfFilter },
           _sum: { cachedTokens: true, inputTokens: true },
         }),
         ctx.db.llmEvent.aggregate({
-          where: { ts: { gte: since24h } },
+          where: { ts: { gte: since24h }, ...pfFilter },
           _sum: { reasoningTokens: true, inputTokens: true, outputTokens: true },
         }),
+        ctx.db.$queryRaw<[{ cache_read_cost: number }]>`
+          SELECT COALESCE(SUM(
+            CASE WHEN model ILIKE '%opus%'
+              THEN "cachedTokens"::numeric * 0.0000015
+              ELSE "cachedTokens"::numeric * 0.0000003
+            END
+          ), 0)::float AS cache_read_cost
+          FROM llm_events
+          WHERE ts >= ${since24h} ${pfSql}
+        `,
       ]);
 
-      const dailyCostUsd = Number(totals._sum.costUsd ?? 0);
+      const rawCost       = Number(totals._sum.costUsd ?? 0);
+      const cacheReadCost = Number(cacheReadRows[0]?.cache_read_cost ?? 0);
+      // Use inference-only cost as the baseline so cache reads don't inflate projections
+      const dailyCostUsd  = Math.max(rawCost - cacheReadCost, 0);
       const opusSharePct = dailyCostUsd > 0
-        ? (Number(opusCost._sum.costUsd ?? 0) / dailyCostUsd) * 100
+        ? (Number(opusCost._sum.costUsd ?? 0) / rawCost) * 100
         : 0;
       const cached    = Number(cacheAgg._sum.cachedTokens ?? 0);
       const inputTok  = Number(cacheAgg._sum.inputTokens ?? 0);

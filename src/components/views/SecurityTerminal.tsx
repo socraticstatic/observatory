@@ -43,7 +43,7 @@ function RiskGauge({ score }: { score: number }) {
       <path d={`M ${a.x} ${a.y} A ${R} ${R} 0 ${deg - START > 180 ? 1 : 0} 1 ${n.x} ${n.y}`}
         stroke="url(#gaugeArc)" strokeWidth="10" fill="none" strokeLinecap="butt" />
       {ticks.map((t, i) => (
-        <line suppressHydrationWarning key={i} x1={t.p1.x} y1={t.p1.y} x2={t.p2.x} y2={t.p2.y}
+        <line suppressHydrationWarning key={`tick-${i}`} x1={t.p1.x} y1={t.p1.y} x2={t.p2.x} y2={t.p2.y}
           stroke={t.major ? 'rgba(233,236,236,.35)' : 'rgba(138,146,151,.2)'}
           strokeWidth={t.major ? 1 : 0.6} />
       ))}
@@ -67,7 +67,7 @@ function SensitivityBar({ buckets }: { buckets: { sev: number }[] }) {
         const w = 300 / buckets.length - 0.6;
         const h = Math.max(2, sev * 44);
         const c = sev < 0.35 ? '#7CA893' : sev < 0.7 ? '#C9966B' : '#B86B6B';
-        return <rect suppressHydrationWarning key={i} x={x} y={48 - h - 2} width={w} height={h} fill={c} opacity={0.55 + sev * 0.4} />;
+        return <rect suppressHydrationWarning key={`bucket-${i}`} x={x} y={48 - h - 2} width={w} height={h} fill={c} opacity={0.55 + sev * 0.4} />;
       })}
     </svg>
   );
@@ -78,7 +78,7 @@ export function SecurityTerminal() {
   const [cursor, setCursor] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const { data, isLoading } = trpc.insights.sessionAnomalies.useQuery(undefined, {
+  const { data, isLoading, isError } = trpc.insights.sessionAnomalies.useQuery(undefined, {
     refetchInterval: 15_000,
   });
 
@@ -119,7 +119,7 @@ export function SecurityTerminal() {
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12, background: 'linear-gradient(180deg,#10161A,#0C1115)' }}>
         <div style={{ display: 'flex', gap: 6 }}>
           {[0, 1, 2].map(i => (
-            <span key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: '#3a4249', border: '1px solid #4A5358', display: 'inline-block' }} />
+            <span key={`dot-${i}`} style={{ width: 10, height: 10, borderRadius: '50%', background: '#3a4249', border: '1px solid #4A5358', display: 'inline-block' }} />
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -156,7 +156,14 @@ export function SecurityTerminal() {
             </div>
           )}
 
-          {!isLoading && events.length === 0 && (
+          {isError && (
+            <div style={{ padding: '40px 16px', textAlign: 'center', fontSize: 11 }}>
+              <span style={{ color: '#B86B6B', fontWeight: 600 }}>[ERROR]</span>
+              <span style={{ color: 'var(--graphite)', marginLeft: 8 }}>Failed to load session anomalies. Check DB connection.</span>
+            </div>
+          )}
+
+          {!isLoading && !isError && events.length === 0 && (
             <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--graphite)', fontSize: 11 }}>
               No session events in the last hour.
             </div>

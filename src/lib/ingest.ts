@@ -1,5 +1,8 @@
 // src/lib/ingest.ts
 
+import { createHash } from 'crypto';
+import { calcCost } from './pricing';
+
 export interface NormalizedEvent {
   provider: string;
   model: string;
@@ -17,57 +20,15 @@ export interface NormalizedEvent {
   status: string;
   contentType?: string;
   qualityScore?: string;
+  eventHash?: string;
   rawPayload: unknown;
 }
 
-// Rate table USD per token
-const INPUT_RATE: Record<string, number> = {
-  'claude-opus':      0.000015,
-  'claude-sonnet':    0.000003,
-  'claude-haiku':     0.0000008,
-  'gemini-2.5-pro':   0.00000125,
-  'gemini-2.5-flash': 0.00000015,
-  'grok-3':           0.000003,
-  default:            0.000003,
-};
-
-const OUTPUT_RATE: Record<string, number> = {
-  'claude-opus':      0.000075,
-  'claude-sonnet':    0.000015,
-  'claude-haiku':     0.000004,
-  'gemini-2.5-pro':   0.0000100,
-  'gemini-2.5-flash': 0.0000006,
-  'grok-3':           0.000015,
-  default:            0.000015,
-};
-
-// Cache write is 1.25× input rate; cache read is 0.1× input rate
-const CACHE_WRITE_MULTIPLIER = 1.25;
-const CACHE_READ_MULTIPLIER  = 0.10;
-
-function getRate(model: string, table: Record<string, number>): number {
-  for (const key of Object.keys(table)) {
-    if (key !== 'default' && model.includes(key)) return table[key]!;
-  }
-  return table.default!;
-}
-
-function calcCost(
-  model: string,
-  input: number,
-  output: number,
-  reasoning: number,
-  cacheWrite = 0,
-  cacheRead  = 0,
-): string {
-  const ir = getRate(model, INPUT_RATE);
-  const or = getRate(model, OUTPUT_RATE);
-  const cost =
-    input     * ir +
-    cacheWrite * ir * CACHE_WRITE_MULTIPLIER +
-    cacheRead  * ir * CACHE_READ_MULTIPLIER  +
-    (output + reasoning) * or;
-  return cost.toFixed(6);
+function computeEventHash(model: string, ts: Date, inputTokens: number, outputTokens: number, cachedTokens: number, cacheCreationTokens: number): string {
+  const tsSecond = Math.floor(ts.getTime() / 1000);
+  return createHash('sha256')
+    .update(`${model}:${tsSecond}:${inputTokens}:${outputTokens}:${cachedTokens}:${cacheCreationTokens}`)
+    .digest('hex');
 }
 
 const CREATIVE_PROVIDERS = new Set(['elevenlabs', 'heygen', 'leonardo', 'stability']);
@@ -157,8 +118,11 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
   // Prefer LiteLLM's own cost field over our rate-table estimate
   const litellmCost = body.response_cost ?? body.cost;
   const costUsd = litellmCost != null
-    ? Number(litellmCost).toFixed(6)
-    : calcCost(model, inputTokens, outputTokens, reasoningTokens, cacheCreationTokens, cachedTokens);
+    ? Number(litellmCost).toFixed(8)
+    : calcCost({ model, inputTokens, outputTokens, reasoningTokens, cachedTokens, cacheCreationTokens });
+
+  const ts = new Date();
+  const eventHash = computeEventHash(model, ts, inputTokens, outputTokens, cachedTokens, cacheCreationTokens);
 
   return {
     provider,
@@ -176,6 +140,7 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
     status,
     contentType,
     qualityScore,
+    eventHash,
     rawPayload: body,
   };
 }

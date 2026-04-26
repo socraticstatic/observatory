@@ -26,6 +26,7 @@ model LlmEvent {
   contentType          String?
   qualityScore         Decimal? @db.Decimal(4, 2)
   rawPayload           Json
+  eventHash            String?  @unique @map("event_hash")
 
   @@index([ts(sort: Desc)])
   @@index([provider, ts(sort: Desc)])
@@ -35,11 +36,13 @@ model LlmEvent {
 }
 
 model RegisteredService {
-  id        String   @id @default(uuid())
-  provider  String   @unique
-  label     String
-  category  String   @default("llm")
-  addedAt   DateTime @default(now())
+  id               String   @id @default(uuid())
+  provider         String   @unique
+  label            String
+  category         String   @default("llm")
+  billingPlan      String   @default("api")   @map("billing_plan")
+  monthlyBudgetUsd Float    @default(0)        @map("monthly_budget_usd")
+  addedAt          DateTime @default(now())
 
   @@map("registered_services")
 }

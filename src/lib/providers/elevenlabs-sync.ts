@@ -3,9 +3,9 @@
 // Rate: ~$0.00033 / 1000 chars (standard API, conservative estimate).
 
 import { db } from '@/server/db';
+import { getPricing } from '@/lib/pricing';
 
 const BASE = 'https://api.elevenlabs.io/v1';
-const CHAR_RATE = 0.00000033; // $0.33 / 1,000,000 chars
 
 interface HistoryItem {
   history_item_id: string;
@@ -46,9 +46,9 @@ export async function syncElevenLabs(): Promise<{ inserted: number; skipped: num
     for (const item of items) {
       const ts = new Date(item.date_unix * 1000);
       const chars = Math.max(0, item.character_count_change_to - item.character_count_change_from);
-      const costUsd = (chars * CHAR_RATE).toFixed(6);
-      const voiceName = item.dialogue?.[0]?.voice_name ?? null;
       const model = item.model_id ?? 'elevenlabs';
+      const charRate = getPricing(model).inputPerToken;
+      const costUsd = (chars * charRate).toFixed(8);
 
       // Dedup: skip if we already have this history_item_id
       const existing = await db.llmEvent.findFirst({

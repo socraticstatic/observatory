@@ -1,7 +1,7 @@
 'use client';
 
 import { trpc } from '@/lib/trpc-client';
-import type { Lookback } from '@/lib/lookback';
+import { LOOKBACKS, type Lookback } from '@/lib/lookback';
 
 const CX = 80, CY = 80, R_OUTER = 66, R_INNER = 43;
 
@@ -48,8 +48,8 @@ function fmtTok(n: number) {
   return String(n);
 }
 
-export function ContextCompositionCard({ lookback }: { lookback: Lookback }) {
-  const { data } = trpc.costDrivers.contextComposition.useQuery({ lookback });
+export function ContextCompositionCard({ lookback, provider }: { lookback: Lookback; provider?: string }) {
+  const { data } = trpc.costDrivers.contextComposition.useQuery({ lookback, provider });
 
   const isEmpty  = !data || data.totalTokens === 0;
   const segments = data?.segments ?? [];
@@ -69,7 +69,7 @@ export function ContextCompositionCard({ lookback }: { lookback: Lookback }) {
             Context Composition
           </div>
           <div style={{ fontSize: 10, color: 'var(--graphite)', marginTop: 3, letterSpacing: '.08em' }}>
-            what fills the context window · 24h
+            what fills the context window · {LOOKBACKS[lookback].label}
           </div>
         </div>
       </div>
@@ -79,7 +79,7 @@ export function ContextCompositionCard({ lookback }: { lookback: Lookback }) {
         <div style={{ flexShrink: 0 }}>
           <svg width={160} height={160}>
             {paths.map((p, i) => (
-              <path key={i} d={p.d} fill={p.col}
+              <path key={`seg-${i}`} d={p.d} fill={p.col}
                 stroke="rgba(20,16,12,.6)" strokeWidth="2" />
             ))}
             {/* Center: dominant segment pct */}

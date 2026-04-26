@@ -8,15 +8,22 @@ export const servicesRouter = router({
 
   register: publicProcedure
     .input(z.object({
-      provider: z.string().min(1),
-      label:    z.string().min(1),
-      category: z.enum(['llm', 'creative']).default('llm'),
+      provider:        z.string().min(1),
+      label:           z.string().min(1),
+      category:        z.enum(['llm', 'creative']).default('llm'),
+      billingPlan:     z.enum(['api', 'subscription']).default('api'),
+      monthlyBudgetUsd: z.number().min(0).default(0),
     }))
     .mutation(async ({ ctx, input }) => {
       return ctx.db.registeredService.upsert({
         where:  { provider: input.provider },
         create: input,
-        update: { label: input.label, category: input.category },
+        update: {
+          label:           input.label,
+          category:        input.category,
+          billingPlan:     input.billingPlan,
+          monthlyBudgetUsd: input.monthlyBudgetUsd,
+        },
       });
     }),
 

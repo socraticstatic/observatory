@@ -6,6 +6,8 @@ import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
   if (interval === '24 hours') return 86_400_000;
+  if (interval === '90 days')  return 90 * 86_400_000;
+  if (interval === '365 days') return 365 * 86_400_000;
   return 30 * 86_400_000;
 }
 
@@ -17,9 +19,10 @@ function lookbackToBucket(interval: string): string {
 
 export const whoRouter = router({
   providerBreakdown: publicProcedure
-    .input(z.object({ lookback: LookbackSchema }))
+    .input(z.object({ lookback: LookbackSchema, provider: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const rows = await ctx.db.$queryRaw<Array<{
         provider: string; calls: bigint; cost: unknown; tokens: unknown;
       }>>`
@@ -29,7 +32,7 @@ export const whoRouter = router({
           SUM("costUsd")::float AS cost,
           SUM("inputTokens" + "outputTokens")::float AS tokens
         FROM llm_events
-        WHERE ts >= ${since}
+        WHERE ts >= ${since} ${pfSql}
         GROUP BY provider
         ORDER BY cost DESC
       `;

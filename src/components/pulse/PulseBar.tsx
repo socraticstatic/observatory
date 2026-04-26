@@ -14,7 +14,7 @@ interface Props {
   provider?: string;
 }
 
-const LOOKBACK_KEYS: Lookback[] = ['1H', '24H', '30D'];
+const LOOKBACK_KEYS: Lookback[] = ['1H', '24H', '30D', '90D', '1Y'];
 
 
 function toPath(data: number[], w: number, h: number): string {
@@ -43,7 +43,6 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
 
   const tpmHist: number[] = chartData?.map(r => r.tokens) ?? [];
   const latHist: number[] = chartData?.map(r => r.latP95) ?? [];
-  const tpmNow  = tpmHist[tpmHist.length - 1] ?? 0;
   const latNow  = statData?.avgLatencyMs ?? 0;
 
   const tpmDeltaPct = statData && statData.prevTotalCalls > 0
@@ -61,7 +60,7 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
     { text: `${fmt(statData.totalCalls)} calls`,                                                       col: 'var(--accent)' },
     { text: `${statData.activeSessions} sessions`,                                                     col: 'var(--steel)' },
     { text: `out tok/req ${fmt(Math.round(statData.totalOutputTokens / Math.max(statData.totalCalls, 1)))}`, col: 'var(--steel)' },
-    { text: `efficiency ${statData.efficiency.toFixed(2)}×`,                                           col: 'var(--steel)' },
+    { text: `efficiency ${statData.efficiency.toFixed(1)}×`,                                           col: 'var(--steel)' },
     { text: latDeltaMs != null ? `latency ${latDeltaMs >= 0 ? '+' : ''}${latDeltaMs}ms` : `${fmt(statData.totalCalls)} calls / ${lookback}`, col: latDeltaMs != null && latDeltaMs > 50 ? 'var(--warn)' : 'var(--good)' },
   ] : [];
 
@@ -89,10 +88,11 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
   const tpmArea = toAreaPath(tpmHist, cw, svgH);
   const latLine = toPath(latHist, cw, svgH);
 
-  const tTotal = (statData?.totalInputTokens ?? 0) + (statData?.totalOutputTokens ?? 0) + (statData?.totalCachedTokens ?? 0);
-  const inVal  = tTotal > 0 ? Math.round(tpmNow * (statData!.totalInputTokens  / tTotal)) : Math.round(tpmNow * 0.05);
-  const outVal = tTotal > 0 ? Math.round(tpmNow * (statData!.totalOutputTokens / tTotal)) : Math.round(tpmNow * 0.84);
-  const cacVal = tTotal > 0 ? Math.round(tpmNow * (statData!.totalCachedTokens / tTotal)) : Math.round(tpmNow * 0.11);
+  // Actual token totals for the period — never estimated
+  const inVal  = statData?.totalInputTokens  ?? 0;
+  const outVal = statData?.totalOutputTokens ?? 0;
+  const cacVal = statData?.totalCachedTokens ?? 0;
+  const tTotal = inVal + outVal + cacVal;
 
   const { label } = LOOKBACKS[lookback];
 
@@ -108,7 +108,11 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
     ? ['-60m', '-45m', '-30m', '-15m', 'now']
     : lookback === '24H'
     ? ['-24h', '-18h', '-12h', '-6h', 'now']
-    : ['-30d', '-22d', '-15d', '-7d', 'now'];
+    : lookback === '30D'
+    ? ['-30d', '-22d', '-15d', '-7d', 'now']
+    : lookback === '90D'
+    ? ['-90d', '-67d', '-45d', '-22d', 'now']
+    : ['-12mo', '-9mo', '-6mo', '-3mo', 'now'];
 
   return (
     <div className="card" style={{ padding: 0 }}>
@@ -123,12 +127,12 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
           borderRight: '1px solid var(--line)',
           background: 'rgba(111,168,179,.04)',
         }}>
-          <div className="label" style={{ marginBottom: 6 }}>Tokens / Minute</div>
+          <div className="label" style={{ marginBottom: 6 }}>Total Tokens · {label}</div>
           <div className="num" style={{ fontSize: 34, fontWeight: 600, lineHeight: 1, color: 'var(--mist)' }}>
-            {fmt(tpmNow)}
+            {fmt(tTotal)}
           </div>
           <div style={{ fontSize: 11, color: tpmDeltaPct == null ? 'var(--steel)' : tpmDeltaPct >= 0 ? 'var(--good)' : 'var(--warn)', marginTop: 4, marginBottom: 14 }}>
-            {tpmDeltaPct == null ? '—' : `${tpmDeltaPct >= 0 ? '+' : ''}${tpmDeltaPct.toFixed(1)}%`}
+            {tpmDeltaPct == null ? '—' : `${tpmDeltaPct >= 0 ? '+' : ''}${tpmDeltaPct.toFixed(1)}% calls`}
           </div>
           <div style={{ display: 'flex', gap: 16 }}>
             {[
@@ -206,7 +210,7 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
 
             {/* Spike markers */}
             {spikeXs.map((s, idx) => (
-              <g key={idx} style={{ cursor: 'pointer' }} onClick={() => onDrillSpike?.(s)}>
+              <g key={`spike-${idx}`} style={{ cursor: 'pointer' }} onClick={() => onDrillSpike?.(s)}>
                 <line x1={s.x} y1={0} x2={s.x} y2={svgH} stroke="#B86B6B" strokeWidth="1" strokeOpacity="0.5" />
                 <circle cx={s.x} cy={svgH / 2} r={3} fill="#B86B6B" />
               </g>
@@ -256,7 +260,7 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
       <div style={{ borderTop: '1px solid var(--line)', overflow: 'hidden', height: 30, display: 'flex', alignItems: 'center' }}>
         <div className="ticker-track" style={{ display: 'flex', gap: 36 }}>
           {[...tickerItems, ...tickerItems].map((item, i) => (
-            <span key={i} className="mono" style={{ fontSize: 10, color: item.col, flexShrink: 0 }}>
+            <span key={`ticker-${i}`} className="mono" style={{ fontSize: 10, color: item.col, flexShrink: 0 }}>
               {item.text}
             </span>
           ))}

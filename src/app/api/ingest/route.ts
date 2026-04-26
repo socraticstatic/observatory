@@ -23,8 +23,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unparseable payload' }, { status: 422 });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await db.llmEvent.create({ data: event as any });
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await db.llmEvent.create({ data: event as any });
+  } catch (err: unknown) {
+    // P2002 = unique constraint violation — duplicate event fired by multi-process LiteLLM
+    if ((err as { code?: string })?.code === 'P2002') {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+    throw err;
+  }
 
   return NextResponse.json({ ok: true });
 }

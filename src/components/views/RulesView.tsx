@@ -66,13 +66,13 @@ const INPUT_STYLE: React.CSSProperties = {
   fontFamily: 'inherit',
 };
 
-export function RulesView() {
+export function RulesView({ provider }: { provider?: string }) {
   const [showForm, setShowForm] = useState(false);
   const [form,     setForm]     = useState<FormState>(BLANK_FORM);
 
   const { data: rawRules = [], refetch } = trpc.alertRules.list.useQuery();
   // Cast DB response to local type — metric/lookback/operator are constrained by insert, safe to narrow
-  const rules: AlertRule[] = rawRules.map(r => ({
+  const rules: AlertRule[] = rawRules.map((r: typeof rawRules[number]) => ({
     ...r,
     metric:   r.metric   as Metric,
     lookback: r.lookback as Lookback,
@@ -84,12 +84,12 @@ export function RulesView() {
   const deleteRule = trpc.alertRules.delete.useMutation({ onSuccess: () => refetch() });
 
   // Always fetch all lookbacks — queries are tiny and rules can span windows
-  const { data: stats1H  } = trpc.pulse.statStrip.useQuery({ lookback: '1H'  });
-  const { data: stats24H } = trpc.pulse.statStrip.useQuery({ lookback: '24H' });
-  const { data: stats30D } = trpc.pulse.statStrip.useQuery({ lookback: '30D' });
-  const { data: cost1H   } = trpc.pulse.overallCost.useQuery({ lookback: '1H'  });
-  const { data: cost24H  } = trpc.pulse.overallCost.useQuery({ lookback: '24H' });
-  const { data: cost30D  } = trpc.pulse.overallCost.useQuery({ lookback: '30D' });
+  const { data: stats1H  } = trpc.pulse.statStrip.useQuery({ lookback: '1H',  provider });
+  const { data: stats24H } = trpc.pulse.statStrip.useQuery({ lookback: '24H', provider });
+  const { data: stats30D } = trpc.pulse.statStrip.useQuery({ lookback: '30D', provider });
+  const { data: cost1H   } = trpc.pulse.overallCost.useQuery({ lookback: '1H',  provider });
+  const { data: cost24H  } = trpc.pulse.overallCost.useQuery({ lookback: '24H', provider });
+  const { data: cost30D  } = trpc.pulse.overallCost.useQuery({ lookback: '30D', provider });
 
   function snapshot(lb: Lookback): Record<Metric, number> | null {
     const s = lb === '1H' ? stats1H  : lb === '24H' ? stats24H : stats30D;

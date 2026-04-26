@@ -10,6 +10,8 @@ const LOOKBACK_MINUTES: Record<Lookback, number> = {
   '1H':  60,
   '24H': 1440,
   '30D': 43200,
+  '90D': 129600,
+  '1Y':  525960,
 };
 
 interface Props {
@@ -18,12 +20,20 @@ interface Props {
 }
 
 export function AppSurfaceCard({ lookback = '24H', provider }: Props) {
-  const { data: raw } = trpc.surface.appSurface.useQuery({ lookback, provider });
+  const { data: raw, isLoading } = trpc.surface.appSurface.useQuery({ lookback, provider });
+
+  if (isLoading) {
+    return (
+      <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+        <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+      </div>
+    );
+  }
 
   if (!raw || raw.length === 0) {
     return (
       <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
-        <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+        <span style={{ fontSize: 12, color: 'var(--steel)' }}>No data in this window</span>
       </div>
     );
   }

@@ -4,11 +4,19 @@ import { createCallerFactory } from '@/server/trpc';
 import { insightsRouter } from '@/server/routers/insights';
 
 const createCaller = createCallerFactory(insightsRouter);
-const mockDb = { $queryRaw: vi.fn() };
+const mockDb = {
+  $queryRaw: vi.fn(),
+  annotation: { findMany: vi.fn(), create: vi.fn() },
+  llmEvent: { findMany: vi.fn() },
+};
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const caller = createCaller({ db: mockDb as any });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockDb.annotation.findMany.mockResolvedValue([]);
+  mockDb.llmEvent.findMany.mockResolvedValue([]);
+});
 
 // ZOMBIE_ROW produces type='loop' because steps > 12 and last_ts is old enough
 // (ageMs > 5 * 60_000). We use a date far in the past so ageMs is large.
@@ -161,5 +169,109 @@ describe('insightsRouter.zombieSessions', () => {
     const result = await caller.zombieSessions();
     expect(typeof result[0].ageMs).toBe('number');
     expect(result[0].ageMs).toBeGreaterThan(0);
+  });
+});
+
+// Prisma event row shape returned by llmEvent.findMany
+// costUsd uses a plain number here; Number(n) === n works for primitives
+const EVENT_ROW = {
+  id: 'evt-1',
+  ts: new Date('2025-01-01T10:00:00Z'),
+  model: 'claude-opus-4-5',
+  project: 'myproject',
+  sessionId: 'sess-1',
+  costUsd: 0.05 as unknown as number,
+  inputTokens: 1000,
+  outputTokens: 500,
+  cachedTokens: 0,
+  status: 'ok',
+};
+
+// bucketRows: $queryRaw returns BigInt for sum columns
+const BUCKET_ROWS: Array<{ bucket: unknown; total_tokens: unknown }> = [];
+
+describe('insightsRouter.sessionAnomalies', () => {
+  it('returns correct top-level shape', async () => {
+    mockDb.llmEvent.findMany.mockResolvedValue([]);
+    mockDb.$queryRaw.mockResolvedValue(BUCKET_ROWS);
+    const result = await caller.sessionAnomalies();
+    expect(result).toHaveProperty('events');
+    expect(result).toHaveProperty('riskScore');
+    expect(result).toHaveProperty('tokenBuckets');
+    expect(result).toHaveProperty('counts');
+  });
+
+  it('tokenBuckets always has exactly 60 elements', async () => {
+    mockDb.llmEvent.findMany.mockResolvedValue([]);
+    mockDb.$queryRaw.mockResolvedValue(BUCKET_ROWS);
+    const result = await caller.sessionAnomalies();
+    expect(result.tokenBuckets).toHaveLength(60);
+  });
+
+  it('riskScore is 0 when there are no events', async () => {
+    mockDb.llmEvent.findMany.mockResolvedValue([]);
+    mockDb.$queryRaw.mockResolvedValue(BUCKET_ROWS);
+    const result = await caller.sessionAnomalies();
+    expect(result.riskScore).toBe(0);
+  });
+
+  it('status=error produces lvl=bad and tag=STATUS.ERROR', async () => {
+    mockDb.llmEvent.findMany.mockResolvedValue([{ ...EVENT_ROW, status: 'error' }]);
+    mockDb.$queryRaw.mockResolvedValue(BUCKET_ROWS);
+    const result = await caller.sessionAnomalies();
+    expect(result.events[0].lvl).toBe('bad');
+    expect(result.events[0].tag).toBe('STATUS.ERROR');
+  });
+
+  it('costUsd > 0.10 produces lvl=warn and tag=COST.SPIKE', async () => {
+    const highCostRow = { ...EVENT_ROW, costUsd: 0.50 as unknown as number, status: 'ok' };
+    mockDb.llmEvent.findMany.mockResolvedValue([highCostRow]);
+    mockDb.$queryRaw.mockResolvedValue(BUCKET_ROWS);
+    const result = await caller.sessionAnomalies();
+    expect(result.events[0].lvl).toBe('warn');
+    expect(result.events[0].tag).toBe('COST.SPIKE');
+  });
+
+  it('outputTokens > 8000 produces tag=OUTPUT.SPIKE', async () => {
+    mockDb.llmEvent.findMany.mockResolvedValue([{ ...EVENT_ROW, outputTokens: 10000 }]);
+    mockDb.$queryRaw.mockResolvedValue(BUCKET_ROWS);
+    const result = await caller.sessionAnomalies();
+    expect(result.events[0].tag).toBe('OUTPUT.SPIKE');
+  });
+
+  it('cachedTokens > 0 produces tag=CACHE.HIT', async () => {
+    mockDb.llmEvent.findMany.mockResolvedValue([{ ...EVENT_ROW, cachedTokens: 200 }]);
+    mockDb.$queryRaw.mockResolvedValue(BUCKET_ROWS);
+    const result = await caller.sessionAnomalies();
+    expect(result.events[0].tag).toBe('CACHE.HIT');
+    expect(result.events[0].lvl).toBe('ok');
+  });
+
+  it('normal event produces tag=INFERENCE.OK and lvl=ok', async () => {
+    mockDb.llmEvent.findMany.mockResolvedValue([EVENT_ROW]);
+    mockDb.$queryRaw.mockResolvedValue(BUCKET_ROWS);
+    const result = await caller.sessionAnomalies();
+    expect(result.events[0].tag).toBe('INFERENCE.OK');
+    expect(result.events[0].lvl).toBe('ok');
+  });
+
+  it('counts.errors reflects STATUS.ERROR events', async () => {
+    mockDb.llmEvent.findMany.mockResolvedValue([
+      { ...EVENT_ROW, status: 'error' },
+      { ...EVENT_ROW, id: 'evt-2', status: 'ok' },
+    ]);
+    mockDb.$queryRaw.mockResolvedValue(BUCKET_ROWS);
+    const result = await caller.sessionAnomalies();
+    expect(result.counts.errors).toBe(1);
+  });
+
+  it('riskScore increases when there are errors', async () => {
+    mockDb.llmEvent.findMany.mockResolvedValue([
+      { ...EVENT_ROW, status: 'error' },
+      { ...EVENT_ROW, id: 'evt-2', status: 'error' },
+    ]);
+    mockDb.$queryRaw.mockResolvedValue(BUCKET_ROWS);
+    const result = await caller.sessionAnomalies();
+    expect(result.riskScore).toBeGreaterThan(0);
   });
 });

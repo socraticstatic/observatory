@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc-client';
-import { fmtUsd, fmtMs } from '@/lib/fmt';
+import { fmt, fmtUsd, fmtMs } from '@/lib/fmt';
 import type { Lookback } from '@/lib/lookback';
 
 interface Props {
   lookback: Lookback;
+  provider?: string;
 }
 
 const PROVIDER_META: Record<string, { label: string; dot: string }> = {
@@ -30,11 +31,6 @@ function providerDot(p: string): string {
   return PROVIDER_META[p]?.dot ?? '#7A7068';
 }
 
-function fmt2(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
-  return String(n);
-}
 
 type TraceItem = {
   id: string;
@@ -55,12 +51,18 @@ type TraceItem = {
   rawPayload: unknown;
 };
 
-export function TracesView({ lookback }: Props) {
-  const [provider, setProvider] = useState<string | undefined>(undefined);
+export function TracesView({ lookback, provider: externalProvider }: Props) {
+  const [provider, setProvider] = useState<string | undefined>(externalProvider);
   const [status,   setStatus]   = useState<'ok' | 'error' | undefined>(undefined);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [cursor,   setCursor]   = useState<string | undefined>(undefined);
   const [allItems, setAllItems] = useState<TraceItem[]>([]);
+
+  useEffect(() => {
+    setProvider(externalProvider);
+    setCursor(undefined);
+    setAllItems([]);
+  }, [externalProvider]);
 
   const { data, isFetching } = trpc.traces.list.useQuery(
     { lookback, provider, status, cursor, limit: 50 },
@@ -185,9 +187,9 @@ export function TracesView({ lookback }: Props) {
                 <span style={{ color: 'var(--steel)' }}>{row.provider}</span>
               </span>
               <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
-                {fmt2(row.inputTokens + row.outputTokens)}
+                {fmt(row.inputTokens + row.outputTokens)}
                 {row.cachedTokens > 0 && (
-                  <span style={{ color: 'var(--accent-2)', marginLeft: 4 }}>+{fmt2(row.cachedTokens)}c</span>
+                  <span style={{ color: 'var(--accent-2)', marginLeft: 4 }}>+{fmt(row.cachedTokens)}c</span>
                 )}
               </span>
               <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
@@ -217,10 +219,10 @@ export function TracesView({ lookback }: Props) {
                     { label: 'Project',           val: row.project      ?? '—' },
                     { label: 'Surface',           val: row.surface      ?? '—' },
                     { label: 'Content type',      val: row.contentType  ?? '—' },
-                    { label: 'Input tokens',      val: fmt2(row.inputTokens) },
-                    { label: 'Output tokens',     val: fmt2(row.outputTokens) },
-                    { label: 'Cached tokens',     val: fmt2(row.cachedTokens) },
-                    { label: 'Reasoning tokens',  val: fmt2(row.reasoningTokens) },
+                    { label: 'Input tokens',      val: fmt(row.inputTokens) },
+                    { label: 'Output tokens',     val: fmt(row.outputTokens) },
+                    { label: 'Cached tokens',     val: fmt(row.cachedTokens) },
+                    { label: 'Reasoning tokens',  val: fmt(row.reasoningTokens) },
                   ].map(({ label, val }) => (
                     <div key={label}>
                       <div className="label" style={{ marginBottom: 2 }}>{label}</div>

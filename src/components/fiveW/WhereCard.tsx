@@ -65,7 +65,7 @@ interface Props {
 
 export function WhereCard({ lookback = '24H', provider }: Props) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
-  const { data: raw } = trpc.where.regional.useQuery({ lookback, provider });
+  const { data: raw, isLoading } = trpc.where.regional.useQuery({ lookback, provider });
 
   const rows: (RegionRow & { meta: { city: string; lat: number; lng: number }; vol: number; status: Status })[] = (() => {
     if (!raw || raw.length === 0) return [];
@@ -156,17 +156,23 @@ export function WhereCard({ lookback = '24H', provider }: Props) {
           </ZoomableGroup>
         </ComposableMap>
 
-        {rows.length === 0 && (
+        {isLoading && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 11, color: 'var(--steel)' }}>Loading…</span>
+          </div>
+        )}
+
+        {!isLoading && rows.length === 0 && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <span style={{
               fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase',
-              color: 'var(--warn)', padding: '2px 8px',
-              background: 'rgba(201,150,107,.1)', borderRadius: 'var(--r)',
-              border: '1px solid rgba(201,150,107,.25)',
-            }}>PENDING</span>
-            <span style={{ fontSize: 11, color: 'var(--steel)' }}>Region metadata not available for this traffic</span>
-            <span style={{ fontSize: 10, color: 'var(--graphite)', maxWidth: 240, textAlign: 'center' }}>
-              Route calls through the LiteLLM proxy to capture region data
+              color: 'var(--steel)', padding: '2px 8px',
+              background: 'rgba(138,146,151,.08)', borderRadius: 'var(--r)',
+              border: '1px solid rgba(138,146,151,.2)',
+            }}>NO REGION DATA</span>
+            <span style={{ fontSize: 11, color: 'var(--steel)' }}>Region not captured for this traffic</span>
+            <span style={{ fontSize: 10, color: 'var(--graphite)', maxWidth: 260, textAlign: 'center' }}>
+              Tag events with a <span style={{ color: 'var(--fog)', fontFamily: "'JetBrains Mono', monospace" }}>region</span> field via your proxy or ingestion layer
             </span>
           </div>
         )}

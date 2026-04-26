@@ -1,20 +1,28 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
   if (interval === '24 hours') return 86_400_000;
+  if (interval === '90 days')  return 90 * 86_400_000;
+  if (interval === '365 days') return 365 * 86_400_000;
   return 30 * 86_400_000;
 }
 
 export const eventsRouter = router({
   timeline: publicProcedure
-    .input(z.object({ lookback: LookbackSchema }).optional())
+    .input(z.object({
+      lookback: LookbackSchema.optional(),
+      provider: z.string().optional(),
+    }).optional())
     .query(async ({ ctx, input }) => {
-      const interval = lookbackToInterval(input?.lookback ?? '30D');
+      const lb = input?.lookback ?? '30D';
+      const interval = lookbackToInterval(lb);
       const since = new Date(Date.now() - msSince(interval));
-      const trunc = (input?.lookback ?? '30D') === '1H' ? 'minute' : (input?.lookback ?? '30D') === '24H' ? 'hour' : 'day';
+      const trunc = lb === '1H' ? 'minute' : lb === '24H' ? 'hour' : 'day';
+      const pfSql = input?.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const [annotations, daily] = await Promise.all([
         ctx.db.annotation.findMany({
           where: { ts: { gte: since } },
@@ -22,7 +30,7 @@ export const eventsRouter = router({
         }),
         ctx.db.$queryRaw<Array<{ d: Date; cost: unknown }>>`
           SELECT date_trunc(${trunc}, ts) AS d, SUM("costUsd")::float AS cost
-          FROM llm_events WHERE ts >= ${since}
+          FROM llm_events WHERE ts >= ${since} ${pfSql}
           GROUP BY d ORDER BY d ASC
         `,
       ]);

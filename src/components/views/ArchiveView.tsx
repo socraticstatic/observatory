@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc-client';
-import { fmtUsd, fmtMs } from '@/lib/fmt';
+import { fmt, fmtUsd, fmtMs } from '@/lib/fmt';
 
 function todayStr(): string {
   return new Date().toISOString().split('T')[0];
@@ -15,17 +15,17 @@ function nDaysAgoStr(n: number): string {
 }
 
 function providerDot(p: string): string {
-  if (p === 'anthropic') return '#6FA8B3';
-  if (p === 'google')    return '#8BA89C';
-  if (p === 'xai')       return '#B88A8A';
+  if (p === 'anthropic')  return '#6FA8B3';
+  if (p === 'google')     return '#8BA89C';
+  if (p === 'xai')        return '#B88A8A';
+  if (p === 'openai')     return '#7CA893';
+  if (p === 'meta')       return '#9BA87C';
+  if (p === 'elevenlabs') return '#C9966B';
+  if (p === 'heygen')     return '#7C8BA8';
+  if (p === 'leonardo')   return '#9B7CA8';
   return '#7A7068';
 }
 
-function fmt2(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
-  return String(n);
-}
 
 function fmtDay(iso: string): string {
   const d = new Date(iso + 'T12:00:00Z');
@@ -111,7 +111,7 @@ function BreakdownPanel({ title, items, total }: {
                   </span>
                   <div style={{ display: 'flex', gap: 10, flexShrink: 0, alignItems: 'center' }}>
                     <span className="mono" style={{ fontSize: 9, color: 'var(--graphite)' }}>
-                      {fmt2(item.calls)}
+                      {fmt(item.calls)}
                     </span>
                     <span className="mono" style={{ fontSize: 10, color: 'var(--mist)', minWidth: 52, textAlign: 'right' }}>
                       {fmtUsd(item.cost)}
@@ -146,13 +146,13 @@ const PRESETS = [
   { label: '1Y',  n: 365 },
 ];
 
-export function ArchiveView() {
+export function ArchiveView({ provider }: { provider?: string }) {
   const [from,  setFrom]  = useState(nDaysAgoStr(30));
   const [to,    setTo]    = useState(todayStr());
   const [query, setQuery] = useState<{ from: string; to: string } | null>(null);
 
   const { data, isFetching } = trpc.archive.summary.useQuery(
-    { from: query?.from ?? '', to: query?.to ?? '' },
+    { from: query?.from ?? '', to: query?.to ?? '', provider },
     { enabled: !!query },
   );
 
@@ -256,7 +256,7 @@ export function ArchiveView() {
             <div style={statCell}>
               <div className="label" style={{ fontSize: 9 }}>Total calls</div>
               <div className="mono" style={{ fontSize: 22, fontWeight: 600, color: 'var(--mist)', letterSpacing: '-.02em' }}>
-                {fmt2(data.totalCalls)}
+                {fmt(data.totalCalls)}
               </div>
             </div>
             <div style={statCell}>
@@ -265,7 +265,7 @@ export function ArchiveView() {
                 fontSize: 22, fontWeight: 600, letterSpacing: '-.02em',
                 color: data.errorCount > 0 ? 'var(--bad)' : 'var(--mist)',
               }}>
-                {fmt2(data.errorCount)}
+                {fmt(data.errorCount)}
               </div>
             </div>
             <div style={statCell}>

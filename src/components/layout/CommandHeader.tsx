@@ -37,7 +37,7 @@ function LiveBar({ buckets }: { buckets: number[] }) {
   return (
     <div className="live-bar">
       {heights.map((h, i) => (
-        <span key={i} style={{ height: h }} />
+        <span key={`bar-${i}`} style={{ height: h }} />
       ))}
     </div>
   );

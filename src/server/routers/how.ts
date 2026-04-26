@@ -1,5 +1,14 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
+import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
+
+function msSince(interval: string): number {
+  if (interval === '1 hour')   return 3_600_000;
+  if (interval === '24 hours') return 86_400_000;
+  if (interval === '90 days')  return 90 * 86_400_000;
+  if (interval === '365 days') return 365 * 86_400_000;
+  return 30 * 86_400_000;
+}
 
 function mapEvents(events: Array<{
   id: string; ts: Date; model: string | null; provider: string | null;
@@ -37,23 +46,27 @@ export const howRouter = router({
       const events = await ctx.db.llmEvent.findMany({
         where: { sessionId: input.sessionId },
         orderBy: { ts: 'asc' },
+        take: 200,
         select: SELECT_FIELDS,
       });
       return mapEvents(events);
     }),
 
   latestTrace: publicProcedure
-    .query(async ({ ctx }) => {
-      const since24h = new Date(Date.now() - 86_400_000);
+    .input(z.object({ lookback: LookbackSchema.optional(), provider: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const since = new Date(Date.now() - msSince(lookbackToInterval(input?.lookback ?? '24H')));
+      const pf = input?.provider ? { provider: input.provider } : {};
       const recent = await ctx.db.llmEvent.findFirst({
-        where: { ts: { gte: since24h }, sessionId: { not: null } },
+        where: { ts: { gte: since }, sessionId: { not: null }, ...pf },
         orderBy: { ts: 'desc' },
         select: { sessionId: true },
       });
       if (!recent?.sessionId) return { sessionId: null, events: [] };
       const events = await ctx.db.llmEvent.findMany({
-        where: { sessionId: recent.sessionId, ts: { gte: since24h } },
+        where: { sessionId: recent.sessionId, ts: { gte: since } },
         orderBy: { ts: 'asc' },
+        take: 200,
         select: SELECT_FIELDS,
       });
       return { sessionId: recent.sessionId, events: mapEvents(events) };

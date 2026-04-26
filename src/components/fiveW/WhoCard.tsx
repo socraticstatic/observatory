@@ -36,16 +36,16 @@ interface WhoCardProps {
   selected: string | null;
   setSelected: (id: string | null) => void;
   lookback: Lookback;
-  providerFilter?: string;
+  provider?: string;
   onDrill?: (m: ModelRow) => void;
 }
 
-export function WhoCard({ selected, setSelected, lookback, providerFilter, onDrill }: WhoCardProps) {
+export function WhoCard({ selected, setSelected, lookback, provider, onDrill }: WhoCardProps) {
   const [simOn, setSimOn] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('tpm');
 
-  const { data: modelData } = trpc.who.modelAttribution.useQuery({ lookback, provider: providerFilter });
-  const { data: trendData } = trpc.who.trendByModel.useQuery({ lookback, provider: providerFilter });
+  const { data: modelData, isLoading } = trpc.who.modelAttribution.useQuery({ lookback, provider });
+  const { data: trendData } = trpc.who.trendByModel.useQuery({ lookback, provider });
 
   const models: ModelRow[] = useMemo(() => {
     if (!modelData || modelData.length === 0) return [];
@@ -74,9 +74,15 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
 
   const totalTPM = models.reduce((s, m) => s + m.tpm, 0);
 
-  if (!models.length) return (
+  if (isLoading) return (
     <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
       <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
+
+  if (!models.length) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>No models in this window</span>
     </div>
   );
 
@@ -171,7 +177,7 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
       </div>
 
       {/* Table */}
-      <div style={{ overflowX: 'auto' }}>
+      <div style={{ overflowX: 'auto', maxHeight: 360, overflowY: 'auto' }}>
         <table>
           <thead>
             <tr>

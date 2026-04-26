@@ -71,12 +71,13 @@ function ActionButton({ severity, action, onClick }: { severity: Severity; actio
 
 interface ZombieSessionsCardProps {
   onReview?: (sessionId: string) => void;
+  provider?: string;
 }
 
-export function ZombieSessionsCard({ onReview }: ZombieSessionsCardProps) {
+export function ZombieSessionsCard({ onReview, provider }: ZombieSessionsCardProps) {
   const [reviewed, setReviewed] = useState<Set<string>>(new Set());
   const [killedSessions, setKilledSessions] = useState<Set<string>>(new Set());
-  const { data: zombieData, refetch } = trpc.insights.zombieSessions.useQuery();
+  const { data: zombieData, refetch } = trpc.insights.zombieSessions.useQuery({ provider });
   const killMutation = trpc.insights.killSession.useMutation({
     onSuccess: (_data, variables) => {
       setKilledSessions(prev => new Set([...prev, variables.sessionId]));

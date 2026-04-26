@@ -6,6 +6,8 @@ import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
   if (interval === '24 hours') return 86_400_000;
+  if (interval === '90 days')  return 90 * 86_400_000;
+  if (interval === '365 days') return 365 * 86_400_000;
   return 30 * 86_400_000;
 }
 

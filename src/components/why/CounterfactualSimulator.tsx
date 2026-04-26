@@ -3,6 +3,7 @@
 import { useState, useEffect, Fragment } from 'react';
 import { fmtUsd } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
+import type { Lookback } from '@/lib/lookback';
 
 const EMPTY_BASE = {
   dailyCostUsd:       0,
@@ -77,8 +78,8 @@ function Slider({ label, value, min, max, onChange }: SliderProps) {
   );
 }
 
-export function CounterfactualSimulator() {
-  const { data: baselineData, isLoading } = trpc.costDrivers.baseline.useQuery();
+export function CounterfactualSimulator({ lookback, provider }: { lookback?: Lookback; provider?: string }) {
+  const { data: baselineData, isLoading } = trpc.costDrivers.baseline.useQuery({ lookback, provider });
 
   const activeBase: Base = baselineData ?? EMPTY_BASE;
 

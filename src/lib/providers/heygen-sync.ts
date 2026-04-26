@@ -4,6 +4,7 @@
 // inputTokens and costUsd=0 so data is honest, not estimated.
 
 import { db } from '@/server/db';
+import { getPricing } from '@/lib/pricing';
 
 const LIST_URL  = 'https://api.heygen.com/v1/video.list';
 const DETAIL_URL = 'https://api.heygen.com/v1/video_status.get';
@@ -70,6 +71,8 @@ export async function syncHeyGen(): Promise<{ inserted: number; skipped: number 
     const detail = await fetchDetail(apiKey, v.video_id);
     const durationSec = Math.round(detail?.duration ?? 0);
     const ts = new Date((detail?.created_at ?? v.created_at) * 1000);
+    const heygenRate = getPricing('avatar').inputPerToken;
+    const costUsd = (durationSec * heygenRate).toFixed(8);
 
     await db.llmEvent.create({
       data: {
@@ -82,7 +85,7 @@ export async function syncHeyGen(): Promise<{ inserted: number; skipped: number 
         reasoningTokens:     0,
         cachedTokens:        0,
         cacheCreationTokens: 0,
-        costUsd:             '0.000000',
+        costUsd,
         status:              v.status === 'completed' ? 'ok' : 'error',
         contentType:         'video',
         rawPayload:          (detail ?? v) as unknown as import('@prisma/client').Prisma.InputJsonValue,

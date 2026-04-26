@@ -15,20 +15,20 @@ describe('whenRouter.heatmap', () => {
   it('maps days_ago, h, value correctly', async () => {
     mockDb.$queryRaw.mockResolvedValue([ROW]);
     const result = await caller.heatmap();
-    expect(result[0].days_ago).toBe(15);
-    expect(result[0].h).toBe(9);
-    expect(result[0].value).toBeCloseTo(0.0123);
+    expect(result.rows[0].days_ago).toBe(15);
+    expect(result.rows[0].h).toBe(9);
+    expect(result.rows[0].value).toBeCloseTo(0.0123);
   });
 
   it('converts unknown value to number', async () => {
     mockDb.$queryRaw.mockResolvedValue([{ days_ago: 0, h: 0, value: '0.005' }]);
     const result = await caller.heatmap();
-    expect(typeof result[0].value).toBe('number');
+    expect(typeof result.rows[0].value).toBe('number');
   });
 
   it('returns empty array for no rows', async () => {
     mockDb.$queryRaw.mockResolvedValue([]);
     const result = await caller.heatmap();
-    expect(result).toEqual([]);
+    expect(result.rows).toEqual([]);
   });
 });

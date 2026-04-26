@@ -76,7 +76,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
 
         {/* Horizontal grid lines only */}
         {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
-          <line key={i}
+          <line key={`grid-${i}`}
             x1={PAD_L} x2={PAD_L + innerW}
             y1={PAD_T + innerH * (1 - p)} y2={PAD_T + innerH * (1 - p)}
             stroke="rgba(138,146,151,.08)" strokeWidth=".8"
@@ -85,7 +85,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
 
         {/* Y axis ticks */}
         {yTicks.map((t, i) => (
-          <g key={i}>
+          <g key={`ytick-${i}`}>
             <line x1={PAD_L - 4} y1={t.y} x2={PAD_L + innerW} y2={t.y}
               stroke="rgba(42,49,55,.8)" strokeWidth=".5" strokeDasharray={i === 0 ? 'none' : '3,3'} />
             <text x={PAD_L - 7} y={t.y + 4} textAnchor="end" fill="#4A5358" fontSize={9}
@@ -102,7 +102,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
             const layers = LAYERS;
             let yCursor = yScale(0);
             return (
-              <g key={i}
+              <g key={`bar-${i}`}
                 onClick={() => onDrill?.(bar, i)}
                 onMouseMove={e => setTooltip({ x: e.clientX, y: e.clientY, bar, idx: i })}
                 onMouseLeave={() => setTooltip(null)}
@@ -123,7 +123,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           if (mode === 'grouped') {
             const subW = gw / LAYERS.length;
             return (
-              <g key={i}
+              <g key={`bar-${i}`}
                 onMouseMove={e => setTooltip({ x: e.clientX, y: e.clientY, bar, idx: i })}
                 onMouseLeave={() => setTooltip(null)}
                 onClick={() => onDrill?.(bar, i)}
@@ -144,7 +144,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           const total = safe(bar.cached) + safe(bar.cacheCreation) + safe(bar.input) + safe(bar.output) + safe(bar.reasoning);
           const h = safe((total / maxVal) * innerH);
           return (
-            <rect key={i} x={gx} y={yScale(total)} width={gw} height={h}
+            <rect key={`bar-${i}`} x={gx} y={yScale(total)} width={gw} height={h}
               fill={`url(#wc-grad-input)`} opacity=".7"
               onMouseMove={e => setTooltip({ x: e.clientX, y: e.clientY, bar, idx: i })}
               onMouseLeave={() => setTooltip(null)}
@@ -158,7 +158,7 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           if (i % 4 !== 0) return null;
           const x = PAD_L + i * barGroupW + barGroupW / 2;
           return (
-            <text key={i} x={x} y={H - 6} textAnchor="middle" fill="var(--steel)"
+            <text key={`xlabel-${i}`} x={x} y={H - 6} textAnchor="middle" fill="var(--steel)"
               fontSize={9} fontFamily="JetBrains Mono, monospace">{bar.label}</text>
           );
         })}
@@ -181,7 +181,10 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           <div style={{ borderTop: '1px solid var(--line)', marginTop: 5, paddingTop: 5, display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 10, color: 'var(--steel)' }}>Cache ratio</span>
             <span className="num" style={{ fontSize: 11, color: 'var(--accent)' }}>
-              {(tooltip.bar.cached / (tooltip.bar.cached + tooltip.bar.cacheCreation + tooltip.bar.input + tooltip.bar.output + tooltip.bar.reasoning) * 100).toFixed(0)}%
+              {(() => {
+                const denom = tooltip.bar.cached + tooltip.bar.cacheCreation + tooltip.bar.input + tooltip.bar.output + tooltip.bar.reasoning;
+                return denom > 0 ? `${((tooltip.bar.cached / denom) * 100).toFixed(0)}%` : '—';
+              })()}
             </span>
           </div>
         </div>
@@ -304,7 +307,7 @@ export function WhatCard({ lookback, provider, onDrill }: WhatCardProps) {
   const [width, setWidth] = useState(600);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { data: rawData } = trpc.what.tokenLifecycle.useQuery({ lookback, provider });
+  const { data: rawData, isLoading } = trpc.what.tokenLifecycle.useQuery({ lookback, provider });
   const data: Bar[] = (rawData ?? []).map((r, i, arr) => ({
     label:         formatBucketLabel(r.label, lookback, i, arr.length),
     cached:        r.cached,
@@ -326,9 +329,15 @@ export function WhatCard({ lookback, provider, onDrill }: WhatCardProps) {
     return () => ro.disconnect();
   }, []);
 
-  if (!data.length) return (
+  if (isLoading) return (
     <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
       <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
+
+  if (!data.length) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>No data in this window</span>
     </div>
   );
 

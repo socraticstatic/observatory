@@ -1,31 +1,35 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
 
 export const archiveRouter = router({
   summary: publicProcedure
     .input(z.object({
-      from: z.string(),
-      to:   z.string(),
+      from:     z.string(),
+      to:       z.string(),
+      provider: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
       const from = new Date(input.from);
       const to   = new Date(input.to);
       to.setHours(23, 59, 59, 999);
+      const pf    = input.provider ? { provider: input.provider } : {};
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
 
       const [agg, errors, byModel, byProvider, daily] = await Promise.all([
         ctx.db.llmEvent.aggregate({
-          where: { ts: { gte: from, lte: to } },
+          where: { ts: { gte: from, lte: to }, ...pf },
           _sum:   { costUsd: true, inputTokens: true, cachedTokens: true },
           _count: { id: true },
           _avg:   { latencyMs: true },
         }),
-        ctx.db.llmEvent.count({ where: { ts: { gte: from, lte: to }, status: 'error' } }),
+        ctx.db.llmEvent.count({ where: { ts: { gte: from, lte: to }, status: 'error', ...pf } }),
         ctx.db.$queryRaw<Array<{ model: string; cost: unknown; calls: unknown }>>`
           SELECT model,
                  SUM("costUsd")::float  AS cost,
                  COUNT(*)::int          AS calls
           FROM   llm_events
-          WHERE  ts >= ${from} AND ts <= ${to}
+          WHERE  ts >= ${from} AND ts <= ${to} ${pfSql}
           GROUP  BY model
           ORDER  BY cost DESC
           LIMIT  8
@@ -35,7 +39,7 @@ export const archiveRouter = router({
                  SUM("costUsd")::float  AS cost,
                  COUNT(*)::int          AS calls
           FROM   llm_events
-          WHERE  ts >= ${from} AND ts <= ${to}
+          WHERE  ts >= ${from} AND ts <= ${to} ${pfSql}
           GROUP  BY provider
           ORDER  BY cost DESC
         `,
@@ -44,7 +48,7 @@ export const archiveRouter = router({
                  SUM("costUsd")::float               AS cost,
                  COUNT(*)::int                       AS calls
           FROM   llm_events
-          WHERE  ts >= ${from} AND ts <= ${to}
+          WHERE  ts >= ${from} AND ts <= ${to} ${pfSql}
           GROUP  BY DATE_TRUNC('day', ts)
           ORDER  BY day ASC
         `,

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { fmtMs, fmt } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
+import type { Lookback } from '@/lib/lookback';
 
 // Color by content type
 const TYPE_COL: Record<string, string> = {
@@ -39,15 +40,17 @@ type FilterType = 'all' | 'input' | 'output' | 'tool' | 'cache';
 
 interface Props {
   drill?: { type: string; source: string; stepHint?: number; at?: number; sessionId?: string } | null;
+  lookback?: Lookback;
+  provider?: string;
 }
 
-export function HowCard({ drill }: Props) {
+export function HowCard({ drill, lookback = '24H', provider }: Props) {
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
 
   const targetSessionId = drill?.sessionId ?? null;
 
-  const { data: latestData } = trpc.how.latestTrace.useQuery(undefined, {
+  const { data: latestData } = trpc.how.latestTrace.useQuery({ lookback, provider }, {
     enabled: !targetSessionId,
   });
   const { data: specificData } = trpc.how.agentTrace.useQuery(
@@ -135,11 +138,11 @@ export function HowCard({ drill }: Props) {
       {/* Timeline axis */}
       <div style={{ padding: '12px 18px 4px' }}>
         <div style={{ position: 'relative', height: 14, marginLeft: 200, marginRight: 120 }}>
-          {[0, .25, .5, .75, 1].map(t => {
+          {[0, .25, .5, .75, 1].map((t, ti) => {
             const ms = Math.round(t * totalMs);
             return (
               <div
-                key={t}
+                key={`label-${ti}`}
                 style={{
                   position: 'absolute',
                   left: `${t * 100}%`,
@@ -171,7 +174,7 @@ export function HowCard({ drill }: Props) {
       </div>
 
       {/* Waterfall rows */}
-      <div style={{ padding: '4px 18px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ padding: '4px 18px 14px', display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 440, overflowY: 'auto' }}>
         {visibleSteps.map((step) => {
           const leftPct = totalMs > 0 ? (step.msOffset / totalMs) * 100 : 0;
           const widthPct = totalMs > 0 ? (step.latencyMs / totalMs) * 100 : 1;
@@ -209,7 +212,7 @@ export function HowCard({ drill }: Props) {
             >
               <div style={{ minWidth: 0, overflow: 'hidden' }}>
                 <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--mist)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {step.contentType}
+                  {label}
                 </div>
                 <div style={{ fontSize: 9, color: 'var(--graphite)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {step.model}
@@ -283,6 +286,11 @@ export function HowCard({ drill }: Props) {
         <div style={{ fontSize: 10, color: 'var(--steel)' }}>
           Tokens out: <span className="mono" style={{ color: 'var(--fog)' }}>{fmt(events.reduce((a, e) => a + e.outputTokens, 0))}</span>
         </div>
+        {events.length >= 200 && (
+          <div style={{ fontSize: 9, color: 'var(--graphite)', letterSpacing: '.06em' }}>
+            CAPPED AT 200 STEPS
+          </div>
+        )}
         {drill && (
           <div style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--warn)' }}>
             Drill: {drill.source}

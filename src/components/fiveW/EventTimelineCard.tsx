@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { fmtUsd } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
+import type { Lookback } from '@/lib/lookback';
 
 type Sev = 'good' | 'bad' | 'warn' | 'info';
 
@@ -70,10 +71,15 @@ function buildCurve(data: number[]) {
   return { linePts, areaPath, px, py, min, max };
 }
 
-export function EventTimelineCard() {
+interface EventTimelineProps {
+  lookback?: Lookback;
+  provider?: string;
+}
+
+export function EventTimelineCard({ lookback = '30D', provider }: EventTimelineProps) {
   const [selected, setSelected] = useState<number | null>(null);
 
-  const { data: timelineData } = trpc.events.timeline.useQuery();
+  const { data: timelineData } = trpc.events.timeline.useQuery({ lookback, provider });
 
   const data = useMemo<number[]>(() => {
     if (timelineData && timelineData.daily.length > 0) {
@@ -169,7 +175,7 @@ export function EventTimelineCard() {
           {/* Grid lines */}
           {yTicks.map(({ v }, i) => (
             <line
-              key={i}
+              key={`gl-${i}`}
               x1={PAD.left} y1={py(v)}
               x2={PAD.left + CHART_W} y2={py(v)}
               stroke="var(--line)" strokeWidth="1" strokeDasharray="3,3"
@@ -177,9 +183,9 @@ export function EventTimelineCard() {
           ))}
 
           {/* Y axis labels */}
-          {yTicks.map(({ v, label }) => (
+          {yTicks.map(({ v, label }, i) => (
             <text
-              key={v}
+              key={`yl-${i}`}
               x={PAD.left - 6} y={py(v)}
               textAnchor="end" dominantBaseline="middle"
               fill="var(--graphite)" fontSize="9"
@@ -189,18 +195,31 @@ export function EventTimelineCard() {
             </text>
           ))}
 
-          {/* X axis day labels */}
-          {[0, 7, 14, 21, 29].map(i => (
-            <text
-              key={i}
-              x={px(i)} y={PAD.top + CHART_H + 14}
-              textAnchor="middle"
-              fill="var(--graphite)" fontSize="9"
-              fontFamily="'JetBrains Mono', monospace"
-            >
-              d{i + 1}
-            </text>
-          ))}
+          {/* X axis labels — 5 evenly-spaced ticks across the data range */}
+          {data.length > 0 && (() => {
+            const n = data.length;
+            const ticks = [0, Math.floor(n * 0.25), Math.floor(n * 0.5), Math.floor(n * 0.75), n - 1];
+            return ticks.map((i, tickIdx) => {
+              const label = timelineData?.daily[i]
+                ? (lookback === '1H'
+                    ? new Date(timelineData.daily[i].d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : lookback === '24H'
+                    ? new Date(timelineData.daily[i].d).toLocaleTimeString([], { hour: '2-digit' })
+                    : new Date(timelineData.daily[i].d).toLocaleDateString([], { month: 'short', day: 'numeric' }))
+                : '';
+              return (
+                <text
+                  key={`xtick-${tickIdx}`}
+                  x={px(i)} y={PAD.top + CHART_H + 14}
+                  textAnchor="middle"
+                  fill="var(--graphite)" fontSize="9"
+                  fontFamily="'JetBrains Mono', monospace"
+                >
+                  {label}
+                </text>
+              );
+            });
+          })()}
 
           {/* Area fill */}
           <path d={areaPath} fill="url(#etg)" />
@@ -217,7 +236,7 @@ export function EventTimelineCard() {
 
             return (
               <g
-                key={ann.d}
+                key={`ann-${i}`}
                 style={{ cursor: 'pointer' }}
                 onClick={() => setSelected(isSelected ? null : i)}
               >
