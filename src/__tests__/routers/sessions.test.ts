@@ -47,39 +47,39 @@ describe('sessionsRouter.list', () => {
   it('maps session_id to sessionId', async () => {
     mockDb.$queryRaw.mockResolvedValue([MOCK_ROW]);
     const result = await caller.list({ lookback: '24H' });
-    expect(result[0].sessionId).toBe('sess-abc123');
+    expect(result.items[0].sessionId).toBe('sess-abc123');
   });
 
   it('converts bigint call_count to number', async () => {
     mockDb.$queryRaw.mockResolvedValue([{ ...MOCK_ROW, call_count: 42n }]);
     const result = await caller.list({ lookback: '24H' });
-    expect(typeof result[0].callCount).toBe('number');
-    expect(result[0].callCount).toBe(42);
+    expect(typeof result.items[0].callCount).toBe('number');
+    expect(result.items[0].callCount).toBe(42);
   });
 
   it('converts bigint error_count to number', async () => {
     mockDb.$queryRaw.mockResolvedValue([{ ...MOCK_ROW, error_count: 5n }]);
     const result = await caller.list({ lookback: '24H' });
-    expect(typeof result[0].errorCount).toBe('number');
-    expect(result[0].errorCount).toBe(5);
+    expect(typeof result.items[0].errorCount).toBe('number');
+    expect(result.items[0].errorCount).toBe(5);
   });
 
   it('computes durationMs from started_at / ended_at', async () => {
     mockDb.$queryRaw.mockResolvedValue([MOCK_ROW]);
     const result = await caller.list({ lookback: '24H' });
-    expect(result[0].durationMs).toBe(300_000); // 5 min
+    expect(result.items[0].durationMs).toBe(300_000); // 5 min
   });
 
   it('returns startedAt as ISO string', async () => {
     mockDb.$queryRaw.mockResolvedValue([MOCK_ROW]);
     const result = await caller.list({ lookback: '24H' });
-    expect(result[0].startedAt).toBe('2026-01-01T10:00:00.000Z');
+    expect(result.items[0].startedAt).toBe('2026-01-01T10:00:00.000Z');
   });
 
   it('returns empty array when no sessions', async () => {
     mockDb.$queryRaw.mockResolvedValue([]);
     const result = await caller.list({ lookback: '1H' });
-    expect(result).toEqual([]);
+    expect(result.items).toEqual([]);
   });
 });
 
