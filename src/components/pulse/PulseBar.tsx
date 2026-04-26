@@ -16,17 +16,6 @@ interface Props {
 
 const LOOKBACK_KEYS: Lookback[] = ['1H', '24H', '30D'];
 
-const TICKER_ITEMS = [
-  { text: 'claude_opus · 18.2K tpm',    col: 'var(--accent)' },
-  { text: 'p95 latency +38ms',          col: 'var(--warn)' },
-  { text: 'cache hit 44%',              col: 'var(--accent-2)' },
-  { text: 'tool_calls/min 142',         col: 'var(--steel)' },
-  { text: 'error rate 0.4%',            col: 'var(--bad)' },
-  { text: 'cost threshold ok',          col: 'var(--good)' },
-  { text: 'haiku · 2.2K tpm',          col: 'var(--steel)' },
-  { text: 'session depth avg 6.2',      col: 'var(--steel)' },
-  { text: 'input tokens/req 3,840',     col: 'var(--steel)' },
-];
 
 function toPath(data: number[], w: number, h: number): string {
   if (!data || data.length < 2) return '';
@@ -64,6 +53,18 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
     ? Math.round(statData.avgLatencyMs - statData.prevAvgLatencyMs)
     : null;
 
+  const tickerItems: { text: string; col: string }[] = statData ? [
+    { text: `cache hit ${statData.cacheHitPct.toFixed(0)}%`,                                           col: 'var(--accent-2)' },
+    { text: `p50 ${fmtMs(statData.p50LatMs)}`,                                                        col: 'var(--steel)' },
+    { text: `error rate ${statData.errorRatePct.toFixed(1)}%`,                                        col: statData.errorRatePct > 1 ? 'var(--bad)' : 'var(--good)' },
+    { text: `p99 ${fmtMs(statData.p99LatMs)}`,                                                        col: 'var(--steel)' },
+    { text: `${fmt(statData.totalCalls)} calls`,                                                       col: 'var(--accent)' },
+    { text: `${statData.activeSessions} sessions`,                                                     col: 'var(--steel)' },
+    { text: `out tok/req ${fmt(Math.round(statData.totalOutputTokens / Math.max(statData.totalCalls, 1)))}`, col: 'var(--steel)' },
+    { text: `efficiency ${statData.efficiency.toFixed(2)}×`,                                           col: 'var(--steel)' },
+    { text: latDeltaMs != null ? `latency ${latDeltaMs >= 0 ? '+' : ''}${latDeltaMs}ms` : `${fmt(statData.totalCalls)} calls / ${lookback}`, col: latDeltaMs != null && latDeltaMs > 50 ? 'var(--warn)' : 'var(--good)' },
+  ] : [];
+
   // Auto-detect spikes: buckets where latP95 > 2× median
   const sortedLat = [...latHist].sort((a, b) => a - b);
   const medianLat = sortedLat.length > 0 ? sortedLat[Math.floor(sortedLat.length / 2)] : 0;
@@ -88,9 +89,10 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
   const tpmArea = toAreaPath(tpmHist, cw, svgH);
   const latLine = toPath(latHist, cw, svgH);
 
-  const inVal  = Math.round(tpmNow * 0.62);
-  const outVal = Math.round(tpmNow * 0.27);
-  const cacVal = Math.round(tpmNow * 0.11);
+  const tTotal = (statData?.totalInputTokens ?? 0) + (statData?.totalOutputTokens ?? 0) + (statData?.totalCachedTokens ?? 0);
+  const inVal  = tTotal > 0 ? Math.round(tpmNow * (statData!.totalInputTokens  / tTotal)) : Math.round(tpmNow * 0.05);
+  const outVal = tTotal > 0 ? Math.round(tpmNow * (statData!.totalOutputTokens / tTotal)) : Math.round(tpmNow * 0.84);
+  const cacVal = tTotal > 0 ? Math.round(tpmNow * (statData!.totalCachedTokens / tTotal)) : Math.round(tpmNow * 0.11);
 
   const { label } = LOOKBACKS[lookback];
 
@@ -102,7 +104,11 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
       : 0,
   }));
 
-  const timeLabels = ['-60m', '-45m', '-30m', '-15m', 'now'];
+  const timeLabels = lookback === '1H'
+    ? ['-60m', '-45m', '-30m', '-15m', 'now']
+    : lookback === '24H'
+    ? ['-24h', '-18h', '-12h', '-6h', 'now']
+    : ['-30d', '-22d', '-15d', '-7d', 'now'];
 
   return (
     <div className="card" style={{ padding: 0 }}>
@@ -224,7 +230,7 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
           borderLeft: '1px solid var(--line)',
           background: 'rgba(201,150,107,.04)',
         }}>
-          <div className="label" style={{ marginBottom: 6 }}>Latency — p95</div>
+          <div className="label" style={{ marginBottom: 6 }}>Latency — avg</div>
           <div className="num" style={{ fontSize: 34, fontWeight: 600, lineHeight: 1, color: 'var(--mist)' }}>
             {fmtMs(latNow)}
           </div>
@@ -249,7 +255,7 @@ export function PulseBar({ onDrillSpike, lookback, setLookback, provider }: Prop
       {/* TICKER */}
       <div style={{ borderTop: '1px solid var(--line)', overflow: 'hidden', height: 30, display: 'flex', alignItems: 'center' }}>
         <div className="ticker-track" style={{ display: 'flex', gap: 36 }}>
-          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
+          {[...tickerItems, ...tickerItems].map((item, i) => (
             <span key={i} className="mono" style={{ fontSize: 10, color: item.col, flexShrink: 0 }}>
               {item.text}
             </span>

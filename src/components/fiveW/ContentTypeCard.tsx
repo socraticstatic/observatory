@@ -14,7 +14,8 @@ const LABEL_MAP: Record<string, string> = {
   unknown:     'Unknown',
 };
 
-function flag(id: string, quality: number): string | null {
+function flag(id: string, quality: number | null): string | null {
+  if (quality == null) return null;
   if (id === 'tool_output' && quality < 80) return 'HIGH REPEAT';
   if ((id === 'context' || id === 'unknown') && quality < 75) return 'BLOAT';
   if (quality < 70) return 'OPTIMIZE';
@@ -44,8 +45,8 @@ export function ContentTypeCard({ lookback, provider }: Props) {
       ...r,
       label:     LABEL_MAP[r.id] ?? r.id,
       costShare: r.costUsd / totalCost,
-      quality:   r.avgQuality || 0,
-      flagText:  flag(r.id, r.avgQuality || 0),
+      quality:   r.avgQuality ?? null,
+      flagText:  flag(r.id, r.avgQuality ?? null),
     }));
   }, [data]);
 
@@ -81,7 +82,7 @@ export function ContentTypeCard({ lookback, provider }: Props) {
                 {fmt(t.inputTokens)}
               </td>
               <td className="mono" style={{ color: 'var(--fog)' }}>{fmt(t.outputTokens)}</td>
-              <td><UsefulBar pct={t.quality} /></td>
+              <td>{t.quality != null ? <UsefulBar pct={t.quality} /> : <span style={{ color: 'var(--graphite)', fontSize: 11 }}>—</span>}</td>
               <td>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 48, height: 3, background: 'var(--line-2)', borderRadius: 2, overflow: 'hidden' }}>

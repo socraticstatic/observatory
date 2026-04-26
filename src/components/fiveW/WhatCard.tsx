@@ -43,13 +43,17 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
   const innerW = width - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
 
-  const maxVal = Math.max(...data.map(b =>
-    mode === 'grouped'
-      ? Math.max(b.cached, b.cacheCreation, b.input, b.output, b.reasoning)
-      : b.cached + b.cacheCreation + b.input + b.output + b.reasoning
-  ));
+  const safe = (v: number) => (isFinite(v) && !isNaN(v)) ? v : 0;
+  const maxVal = data.reduce((mx, b) => {
+    const vals = [b.cached, b.cacheCreation, b.input, b.output, b.reasoning].map(safe);
+    const v = mode === 'grouped' ? Math.max(...vals) : vals.reduce((a, x) => a + x, 0);
+    return Math.max(mx, v);
+  }, 1);
 
-  const yScale = (v: number) => PAD_T + innerH - (v / maxVal) * innerH;
+  const yScale = (v: number) => {
+    const result = PAD_T + innerH - (v / maxVal) * innerH;
+    return isFinite(result) ? result : PAD_T;
+  };
   const yTicks = [0, .25, .5, .75, 1].map(t => ({ y: yScale(t * maxVal), label: fmt(t * maxVal) }));
 
   const barGroupW = innerW / data.length;
@@ -104,11 +108,11 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
                 onMouseLeave={() => setTooltip(null)}
                 style={{ cursor: 'pointer' }}>
                 {layers.map(l => {
-                  const h = (bar[l.key] / maxVal) * innerH;
+                  const h = safe((safe(bar[l.key]) / maxVal) * innerH);
                   const y = yCursor - h;
                   yCursor = y;
                   return (
-                    <rect key={l.key} x={gx} y={y} width={gw} height={h}
+                    <rect key={l.key} x={gx} y={safe(y)} width={gw} height={h}
                       fill={`url(#wc-grad-${l.key})`} />
                   );
                 })}
@@ -125,9 +129,9 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
                 onClick={() => onDrill?.(bar, i)}
                 style={{ cursor: 'pointer' }}>
                 {LAYERS.map((l, li) => {
-                  const h = (bar[l.key] / maxVal) * innerH;
+                  const h = safe((safe(bar[l.key]) / maxVal) * innerH);
                   return (
-                    <rect key={l.key} x={gx + li * subW + .5} y={yScale(bar[l.key])}
+                    <rect key={l.key} x={gx + li * subW + .5} y={yScale(safe(bar[l.key]))}
                       width={subW - 1} height={h}
                       fill={`url(#wc-grad-${l.key})`} />
                   );
@@ -137,8 +141,8 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
           }
 
           // flow: area-style, single bar representing total with gradient
-          const total = bar.cached + bar.cacheCreation + bar.input + bar.output + bar.reasoning;
-          const h = (total / maxVal) * innerH;
+          const total = safe(bar.cached) + safe(bar.cacheCreation) + safe(bar.input) + safe(bar.output) + safe(bar.reasoning);
+          const h = safe((total / maxVal) * innerH);
           return (
             <rect key={i} x={gx} y={yScale(total)} width={gw} height={h}
               fill={`url(#wc-grad-input)`} opacity=".7"
@@ -192,9 +196,10 @@ function LifecycleChart({ data, mode, width, onDrill }: LCProps) {
 interface SidebarProps {
   data: Bar[];
   lookback: Lookback;
+  provider?: string;
 }
 
-function Sidebar({ data, lookback }: SidebarProps) {
+function Sidebar({ data, lookback, provider }: SidebarProps) {
   const totals = data.reduce(
     (acc, b) => ({
       cached:        acc.cached + b.cached,
@@ -254,11 +259,19 @@ function Sidebar({ data, lookback }: SidebarProps) {
 
       <div style={{ marginTop: 'auto', padding: '10px 10px', background: 'rgba(79,123,131,.08)', border: '1px solid rgba(79,123,131,.2)', borderRadius: 'var(--r)' }}>
         <div className="label" style={{ marginBottom: 4 }}>Cache Savings</div>
-        <div className="num" style={{ fontSize: 18, color: 'var(--accent)', fontWeight: 600 }}>
-          {/* $2.70/MTok saved: Claude input $3/MTok vs cache read $0.30/MTok */}
-          ${((totals.cached * 2.70) / 1_000_000).toFixed(2)}
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--steel)' }}>est. {LOOKBACKS[lookback].label.toLowerCase()}</div>
+        {(!provider || provider === 'anthropic') ? (
+          <>
+            <div className="num" style={{ fontSize: 18, color: 'var(--accent)', fontWeight: 600 }}>
+              ${((totals.cached * 2.70) / 1_000_000).toFixed(2)}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--steel)' }}>est. {LOOKBACKS[lookback].label.toLowerCase()} · Claude pricing</div>
+          </>
+        ) : (
+          <>
+            <div className="num" style={{ fontSize: 18, color: 'var(--graphite)', fontWeight: 600 }}>—</div>
+            <div style={{ fontSize: 10, color: 'var(--steel)' }}>n/a for {provider}</div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -347,7 +360,7 @@ export function WhatCard({ lookback, provider, onDrill }: WhatCardProps) {
         <div style={{ padding: '12px 0 12px 8px', minWidth: 0 }}>
           <LifecycleChart data={data} mode={mode} width={Math.max(200, width - 8)} onDrill={onDrill} />
         </div>
-        <Sidebar data={data} lookback={lookback} />
+        <Sidebar data={data} lookback={lookback} provider={provider} />
       </div>
     </div>
   );

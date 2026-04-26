@@ -1,6 +1,9 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
+
+const NULL_PROJECT = '(no project)';
 
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
@@ -15,7 +18,7 @@ export const entityRouter = router({
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
       const rows = await ctx.db.$queryRaw<Array<{ project: string; calls: bigint; cost: unknown; sessions: bigint }>>`
         SELECT
-          COALESCE(project, 'untagged') AS project,
+          COALESCE(project, '(no project)') AS project,
           COUNT(*) AS calls,
           SUM("costUsd")::float AS cost,
           COUNT(DISTINCT "sessionId") AS sessions
@@ -31,6 +34,9 @@ export const entityRouter = router({
     .input(z.object({ project: z.string(), lookback: LookbackSchema }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const projectFilter = input.project === NULL_PROJECT
+        ? Prisma.sql`AND project IS NULL`
+        : Prisma.sql`AND project = ${input.project}`;
       const rows = await ctx.db.$queryRaw<Array<{ session_id: string; calls: bigint; cost: unknown; first_ts: Date; last_ts: Date }>>`
         SELECT
           "sessionId" AS session_id,
@@ -39,7 +45,7 @@ export const entityRouter = router({
           MIN(ts) AS first_ts,
           MAX(ts) AS last_ts
         FROM llm_events
-        WHERE ts >= ${since} AND project = ${input.project}
+        WHERE ts >= ${since} ${projectFilter}
         GROUP BY "sessionId"
         ORDER BY last_ts DESC
       `;

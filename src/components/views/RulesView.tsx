@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import { fmtUsd, fmtMs } from '@/lib/fmt';
-import type { Lookback } from '@/lib/lookback';
+import { type Lookback } from '@/lib/lookback';
 
 type Metric   = 'cost' | 'latency' | 'error_rate' | 'calls';
 type Operator = 'gt' | 'lt';
@@ -67,21 +67,21 @@ const INPUT_STYLE: React.CSSProperties = {
 };
 
 export function RulesView() {
-  const [rules,    setRules]    = useState<AlertRule[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form,     setForm]     = useState<FormState>(BLANK_FORM);
 
-  // Hydrate from localStorage after mount (avoids SSR mismatch)
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('observatory-rules');
-      if (raw) setRules(JSON.parse(raw) as AlertRule[]);
-    } catch { /* ignore corrupt storage */ }
-  }, []);
+  const { data: rawRules = [], refetch } = trpc.alertRules.list.useQuery();
+  // Cast DB response to local type — metric/lookback/operator are constrained by insert, safe to narrow
+  const rules: AlertRule[] = rawRules.map(r => ({
+    ...r,
+    metric:   r.metric   as Metric,
+    lookback: r.lookback as Lookback,
+    operator: r.operator as Operator,
+  }));
 
-  useEffect(() => {
-    localStorage.setItem('observatory-rules', JSON.stringify(rules));
-  }, [rules]);
+  const createRule = trpc.alertRules.create.useMutation({ onSuccess: () => { void refetch(); setShowForm(false); setForm(BLANK_FORM); } });
+  const toggleRule = trpc.alertRules.toggleEnabled.useMutation({ onSuccess: () => refetch() });
+  const deleteRule = trpc.alertRules.delete.useMutation({ onSuccess: () => refetch() });
 
   // Always fetch all lookbacks — queries are tiny and rules can span windows
   const { data: stats1H  } = trpc.pulse.statStrip.useQuery({ lookback: '1H'  });
@@ -115,26 +115,14 @@ export function RulesView() {
   function saveRule() {
     const threshold = parseFloat(form.threshold);
     if (!form.name.trim() || isNaN(threshold)) return;
-    setRules(prev => [...prev, {
-      id:        crypto.randomUUID(),
+    createRule.mutate({
       name:      form.name.trim(),
       metric:    form.metric,
       lookback:  form.lookback,
       operator:  form.operator,
       threshold,
       enabled:   true,
-      createdAt: new Date().toISOString(),
-    }]);
-    setForm(BLANK_FORM);
-    setShowForm(false);
-  }
-
-  function toggleRule(id: string) {
-    setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
-  }
-
-  function deleteRule(id: string) {
-    setRules(prev => prev.filter(r => r.id !== id));
+    });
   }
 
   const firingCount = rules.filter(r => evaluate(r).firing).length;
@@ -292,7 +280,7 @@ export function RulesView() {
               >
                 {/* Toggle switch */}
                 <button
-                  onClick={() => toggleRule(rule.id)}
+                  onClick={() => toggleRule.mutate({ id: rule.id, enabled: !rule.enabled })}
                   title={rule.enabled ? 'Disable' : 'Enable'}
                   style={{
                     width: 28, height: 16, borderRadius: 8, padding: 0,
@@ -363,7 +351,7 @@ export function RulesView() {
 
                 {/* Delete */}
                 <button
-                  onClick={() => deleteRule(rule.id)}
+                  onClick={() => deleteRule.mutate({ id: rule.id })}
                   title="Remove rule"
                   style={{
                     fontSize: 12, color: 'var(--graphite)',

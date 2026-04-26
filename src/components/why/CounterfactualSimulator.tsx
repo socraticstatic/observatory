@@ -4,11 +4,11 @@ import { useState, useEffect, Fragment } from 'react';
 import { fmtUsd } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 
-const FALLBACK_BASE = {
-  dailyCostUsd:       21.72,
-  opusSharePct:       42,
-  cacheDepthPct:      44,
-  reasoningBudgetPct: 38,
+const EMPTY_BASE = {
+  dailyCostUsd:       0,
+  opusSharePct:       0,
+  cacheDepthPct:      0,
+  reasoningBudgetPct: 0,
 };
 
 interface Base {
@@ -26,16 +26,7 @@ function derive(base: Base, opusShare: number, cacheDepth: number, reasoningBudg
   const deltaDaily  = opusDelta + cacheDelta + reasonDelta;
   const projDaily   = b + deltaDaily;
 
-  const baseQuality  = 94.2;
-  const qualityShift = ((opusShare - base.opusSharePct) / 100) * 6
-                     - ((cacheDepth - base.cacheDepthPct) / 100) * 2;
-  const qEffective   = baseQuality + qualityShift;
-
-  const effNow     = b / baseQuality;
-  const effNew     = projDaily / Math.max(qEffective, 1);
-  const effImprove = ((effNow - effNew) / effNow) * 100;
-
-  return { deltaDaily, projDaily, qualityShift, qEffective, effImprove };
+  return { deltaDaily, projDaily };
 }
 
 interface SliderProps {
@@ -87,13 +78,13 @@ function Slider({ label, value, min, max, onChange }: SliderProps) {
 }
 
 export function CounterfactualSimulator() {
-  const { data: baselineData } = trpc.costDrivers.baseline.useQuery();
+  const { data: baselineData, isLoading } = trpc.costDrivers.baseline.useQuery();
 
-  const activeBase: Base = baselineData ?? FALLBACK_BASE;
+  const activeBase: Base = baselineData ?? EMPTY_BASE;
 
-  const [opusShare,       setOpusShare]       = useState(FALLBACK_BASE.opusSharePct);
-  const [cacheDepth,      setCacheDepth]      = useState(FALLBACK_BASE.cacheDepthPct);
-  const [reasoningBudget, setReasoningBudget] = useState(FALLBACK_BASE.reasoningBudgetPct);
+  const [opusShare,       setOpusShare]       = useState(EMPTY_BASE.opusSharePct);
+  const [cacheDepth,      setCacheDepth]      = useState(EMPTY_BASE.cacheDepthPct);
+  const [reasoningBudget, setReasoningBudget] = useState(EMPTY_BASE.reasoningBudgetPct);
   const [seeded,          setSeeded]          = useState(false);
 
   // One-time seed from API data — intentional, not a cascade risk
@@ -110,20 +101,20 @@ export function CounterfactualSimulator() {
     }
   }, [baselineData, seeded]);
 
-  const { deltaDaily, projDaily, qualityShift, qEffective, effImprove } =
+  const noBaseline = !isLoading && (!baselineData || baselineData.dailyCostUsd === 0);
+
+  const { deltaDaily, projDaily } =
     derive(activeBase, opusShare, cacheDepth, reasoningBudget);
 
   const baseDaily   = activeBase.dailyCostUsd;
   const projMonthly = projDaily * 30;
   const projAnnual  = projDaily * 365;
 
-  const verdict = deltaDaily < 0 && qualityShift > -1
-    ? { col: '#7CA893', bg: 'rgba(122,158,138,.08)', border: 'rgba(122,158,138,.2)',  icon: '✓', text: 'Net improvement — cost down, quality stable.' }
-    : deltaDaily < 0 && qualityShift <= -1
-    ? { col: '#C9966B', bg: 'rgba(201,150,107,.08)', border: 'rgba(201,150,107,.2)',  icon: '~', text: 'Cost savings at meaningful quality cost. Review before applying.' }
+  const verdict = Math.abs(deltaDaily) < 0.001
+    ? { col: 'var(--steel)',  bg: 'rgba(140,140,140,.05)', border: 'rgba(140,140,140,.15)', icon: '—', text: 'At baseline. Move sliders to simulate a change.' }
+    : deltaDaily < 0
+    ? { col: '#7CA893', bg: 'rgba(122,158,138,.08)', border: 'rgba(122,158,138,.2)',  icon: '✓', text: 'Cost reduction projected at current traffic mix.' }
     : { col: '#B87070', bg: 'rgba(184,112,112,.08)', border: 'rgba(184,112,112,.2)',  icon: '✗', text: 'This configuration increases cost. Adjust sliders.' };
-
-  const qualityBarW = Math.min(100, Math.max(0, qEffective - 60)) / 40 * 100;
 
   return (
     <div className="card" style={{ padding: '20px 24px' }}>
@@ -167,94 +158,62 @@ export function CounterfactualSimulator() {
         </div>
 
         {/* Projections */}
-        <div>
-          {/* Spend grid */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--graphite)', marginBottom: 10, fontWeight: 500 }}>
-              Projected spend
+        <div style={noBaseline ? { display: 'flex', flexDirection: 'column', justifyContent: 'center' } : undefined}>
+          {noBaseline && (
+            <div style={{ padding: '24px 0', textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: 'var(--steel)', marginBottom: 6 }}>No baseline data</div>
+              <div style={{ fontSize: 11, color: 'var(--graphite)', lineHeight: 1.6 }}>
+                No API calls in the last 24h.<br />Projections will appear once activity is recorded.
+              </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '5px 14px', alignItems: 'baseline' }}>
-              {[
-                { period: 'Daily',   base: baseDaily,       proj: projDaily },
-                { period: 'Monthly', base: baseDaily * 30,  proj: projMonthly },
-                { period: 'Annual',  base: baseDaily * 365, proj: projAnnual },
-              ].map(row => (
-                <Fragment key={row.period}>
-                  <span style={{ fontSize: 10, color: 'var(--graphite)' }}>{row.period}</span>
-                  <span className="mono" style={{ fontSize: 10, color: 'rgba(200,185,165,.3)', textDecoration: 'line-through' }}>
-                    {fmtUsd(row.base)}
-                  </span>
-                  <span className="mono" style={{
-                    fontSize: 13, fontWeight: 600,
-                    color: deltaDaily < 0 ? '#7CA893' : '#B87070',
-                  }}>
-                    {fmtUsd(row.proj)}
-                  </span>
-                </Fragment>
-              ))}
-            </div>
-          </div>
+          )}
 
-          {/* Quality bar */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-              <span style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--graphite)', fontWeight: 500 }}>
-                Quality index
-              </span>
-              <span className="mono" style={{ fontSize: 11, fontWeight: 600, color: qualityShift >= 0 ? '#7CA893' : '#C9966B' }}>
-                {qEffective.toFixed(1)}{' '}
-                <span style={{ fontSize: 9, fontWeight: 400 }}>
-                  {qualityShift >= 0 ? `+${qualityShift.toFixed(1)}` : qualityShift.toFixed(1)}
-                </span>
-              </span>
-            </div>
-            <div style={{ height: 4, background: 'rgba(255,255,255,.06)', borderRadius: 2, overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', width: `${qualityBarW}%`,
-                background: qualityShift >= 0 ? '#7CA893' : '#C9966B',
-                borderRadius: 2, transition: 'width 0.2s ease',
-              }} />
-            </div>
-          </div>
-
-          {/* Efficiency */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--graphite)', marginBottom: 8, fontWeight: 500 }}>
-              Efficiency ($/quality-pt)
-            </div>
-            <div style={{ display: 'flex', gap: 18 }}>
-              {[
-                { label: 'baseline',  val: (baseDaily / 94.2).toFixed(3),                       col: 'rgba(200,185,165,.5)' },
-                { label: 'projected', val: (projDaily / Math.max(qEffective, 1)).toFixed(3),     col: effImprove > 0 ? '#7CA893' : '#B87070' },
-                { label: 'delta',     val: `${effImprove > 0 ? '+' : ''}${effImprove.toFixed(1)}%`, col: effImprove > 0 ? '#7CA893' : '#B87070' },
-              ].map(m => (
-                <div key={m.label}>
-                  <div style={{ fontSize: 9, color: 'rgba(200,185,165,.35)', marginBottom: 3, letterSpacing: '.06em' }}>
-                    {m.label}
-                  </div>
-                  <div className="mono" style={{ fontSize: 13, color: m.col, fontWeight: 600 }}>
-                    {m.val}
-                  </div>
+          {!noBaseline && (
+            <>
+              {/* Spend grid */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--graphite)', marginBottom: 10, fontWeight: 500 }}>
+                  Projected spend
                 </div>
-              ))}
-            </div>
-          </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '5px 14px', alignItems: 'baseline' }}>
+                  {[
+                    { period: 'Daily',   base: baseDaily,       proj: projDaily },
+                    { period: 'Monthly', base: baseDaily * 30,  proj: projMonthly },
+                    { period: 'Annual',  base: baseDaily * 365, proj: projAnnual },
+                  ].map(row => (
+                    <Fragment key={row.period}>
+                      <span style={{ fontSize: 10, color: 'var(--graphite)' }}>{row.period}</span>
+                      <span className="mono" style={{ fontSize: 10, color: 'rgba(200,185,165,.3)', textDecoration: 'line-through' }}>
+                        {fmtUsd(row.base)}
+                      </span>
+                      <span className="mono" style={{
+                        fontSize: 13, fontWeight: 600,
+                        color: deltaDaily < 0 ? '#7CA893' : '#B87070',
+                      }}>
+                        {fmtUsd(row.proj)}
+                      </span>
+                    </Fragment>
+                  ))}
+                </div>
+              </div>
 
-          {/* Verdict */}
-          <div style={{
-            padding: '8px 12px',
-            background: verdict.bg,
-            border: `1px solid ${verdict.border}`,
-            borderRadius: 'var(--r)',
-            display: 'flex', gap: 9, alignItems: 'flex-start',
-          }}>
-            <span style={{ fontSize: 13, color: verdict.col, lineHeight: 1.2, flexShrink: 0 }}>
-              {verdict.icon}
-            </span>
-            <span style={{ fontSize: 11, color: verdict.col, lineHeight: 1.5 }}>
-              {verdict.text}
-            </span>
-          </div>
+              {/* Verdict */}
+              <div style={{
+                padding: '8px 12px',
+                background: verdict.bg,
+                border: `1px solid ${verdict.border}`,
+                borderRadius: 'var(--r)',
+                display: 'flex', gap: 9, alignItems: 'flex-start',
+              }}>
+                <span style={{ fontSize: 13, color: verdict.col, lineHeight: 1.2, flexShrink: 0 }}>
+                  {verdict.icon}
+                </span>
+                <span style={{ fontSize: 11, color: verdict.col, lineHeight: 1.5 }}>
+                  {verdict.text}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

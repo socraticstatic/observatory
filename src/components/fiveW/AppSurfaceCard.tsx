@@ -101,7 +101,9 @@ export function AppSurfaceCard({ lookback = '24H', provider }: Props) {
                       {fmtUsd(s.costUsd)}
                     </td>
                     <td className="mono" style={{ fontSize: 11, color: 'var(--fog)' }}>{fmt(tpm)}</td>
-                    <td className="mono" style={{ fontSize: 11, color: 'var(--fog)' }}>{fmtMs(s.p50LatMs)}</td>
+                    <td className="mono" style={{ fontSize: 11, color: s.p50LatMs != null ? 'var(--fog)' : 'var(--graphite)' }}>
+                      {s.p50LatMs != null ? fmtMs(s.p50LatMs) : '—'}
+                    </td>
                     <td className="mono" style={{ fontSize: 11, color: 'var(--steel)' }}>{s.sessions}</td>
                   </tr>
                 );

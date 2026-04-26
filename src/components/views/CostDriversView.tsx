@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import { fmtUsd, fmtMs } from '@/lib/fmt';
 import type { Lookback } from '@/lib/lookback';
 
-interface Props { lookback: Lookback }
+interface Props { lookback: Lookback; onNavigate?: (view: string) => void }
 
 const DIMS = [
   { key: 'provider'    as const, label: 'Provider' },
@@ -27,9 +27,11 @@ interface DimItem {
   p95LatMs: number | null;
 }
 
-export function CostDriversView({ lookback }: Props) {
+export function CostDriversView({ lookback, onNavigate }: Props) {
   const [dimIdx, setDimIdx] = useState(0);
   const [sel, setSel] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, isFetching } = trpc.costDrivers.sixDimension.useQuery({ lookback });
   const { data: baseline }   = trpc.costDrivers.baseline.useQuery();
@@ -41,6 +43,13 @@ export function CostDriversView({ lookback }: Props) {
   }, [data, dim.key]);
 
   const selItem = items[sel] ?? null;
+
+  const handleRowClick = useCallback((i: number, label: string) => {
+    setSel(i);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(`${label} — drill-down to Sessions view →`);
+    toastTimer.current = setTimeout(() => setToast(null), 2000);
+  }, []);
 
   return (
     <>
@@ -73,11 +82,11 @@ export function CostDriversView({ lookback }: Props) {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)' }}>
             {/* LEFT: treemap bar + table */}
-            <div style={{ borderRight: '1px solid var(--line)' }}>
+            <div style={{ borderRight: '1px solid var(--line)', position: 'relative' }}>
               {/* Treemap bar */}
               <div style={{ padding: '14px 18px 8px', display: 'flex', height: 46, borderBottom: '1px solid var(--line)' }}>
                 {items.map((r, i) => (
-                  <div key={r.label} onClick={() => setSel(i)}
+                  <div key={r.label} onClick={() => handleRowClick(i, r.label)}
                     style={{
                       width: `${r.pct}%`,
                       background: `linear-gradient(180deg,${r.color},${r.color}BB)`,
@@ -111,7 +120,7 @@ export function CostDriversView({ lookback }: Props) {
                 </thead>
                 <tbody>
                   {items.map((r, i) => (
-                    <tr key={r.label} className={sel === i ? 'selected' : ''} onClick={() => setSel(i)}>
+                    <tr key={r.label} className={sel === i ? 'selected' : ''} onClick={() => handleRowClick(i, r.label)}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ width: 8, height: 8, background: r.color, borderRadius: 1, flexShrink: 0 }} />
@@ -144,6 +153,25 @@ export function CostDriversView({ lookback }: Props) {
                   </tr>
                 </tbody>
               </table>
+
+              {/* Toast: appears on row click, fades after 2s */}
+              {toast && (
+                <div style={{
+                  position: 'absolute', bottom: 12, left: 12, right: 12,
+                  padding: '7px 12px',
+                  background: 'rgba(17,23,27,.92)',
+                  border: '1px solid rgba(111,168,179,.4)',
+                  borderRadius: 'var(--r)',
+                  fontSize: 11, color: 'var(--accent-2)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  letterSpacing: '.04em',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  pointerEvents: 'none',
+                  zIndex: 10,
+                }}>
+                  <span>{toast}</span>
+                </div>
+              )}
             </div>
 
             {/* RIGHT: drill detail */}
@@ -199,7 +227,14 @@ export function CostDriversView({ lookback }: Props) {
                         ? `p95 latency of ${fmtMs(selItem.p95LatMs)} is elevated. Check for retries or large contexts.`
                         : 'Within expected range. No action needed.'}
                   </div>
-                  <button className="mbtn primary" style={{ marginTop: 8 }}>Open related traces ▸</button>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                    <button className="mbtn primary" onClick={() => onNavigate?.('Sessions')}>
+                      Sessions ▸
+                    </button>
+                    <button className="mbtn" onClick={() => onNavigate?.('Traces')}>
+                      Traces ▸
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

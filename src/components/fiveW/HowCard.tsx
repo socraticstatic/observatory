@@ -38,14 +38,26 @@ function typeCategory(contentType: string): 'input' | 'output' | 'tool' | 'cache
 type FilterType = 'all' | 'input' | 'output' | 'tool' | 'cache';
 
 interface Props {
-  drill?: { type: string; source: string; stepHint?: number; at?: number } | null;
+  drill?: { type: string; source: string; stepHint?: number; at?: number; sessionId?: string } | null;
 }
 
 export function HowCard({ drill }: Props) {
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
 
-  const { data } = trpc.how.latestTrace.useQuery();
+  const targetSessionId = drill?.sessionId ?? null;
+
+  const { data: latestData } = trpc.how.latestTrace.useQuery(undefined, {
+    enabled: !targetSessionId,
+  });
+  const { data: specificData } = trpc.how.agentTrace.useQuery(
+    { sessionId: targetSessionId ?? '' },
+    { enabled: !!targetSessionId },
+  );
+
+  const data = targetSessionId
+    ? (specificData ? { sessionId: targetSessionId, events: specificData } : undefined)
+    : latestData;
 
   const events = data?.events ?? [];
   const totalMs = events.length > 0
@@ -89,8 +101,8 @@ export function HowCard({ drill }: Props) {
           <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--mist)' }}>HOW</span>
           <span style={{ fontSize: 10, color: 'var(--steel)', letterSpacing: '.08em' }}>Agent Trace Waterfall</span>
           {data.sessionId && (
-            <span style={{ fontSize: 9, color: 'var(--graphite)', fontFamily: "'JetBrains Mono', monospace" }}>
-              {data.sessionId.slice(0, 8)}…
+            <span style={{ fontSize: 9, color: targetSessionId ? 'var(--warn)' : 'var(--graphite)', fontFamily: "'JetBrains Mono', monospace" }}>
+              {targetSessionId ? `▶ ${data.sessionId.slice(0, 8)}…` : `${data.sessionId.slice(0, 8)}…`}
             </span>
           )}
         </div>
@@ -239,7 +251,12 @@ export function HowCard({ drill }: Props) {
                 {tokens > 0 && (
                   <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>{fmt(tokens)} tok</span>
                 )}
-                <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>{fmtMs(step.latencyMs)}</span>
+                {step.latencyMs > 0
+                  ? <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>{fmtMs(step.latencyMs)}</span>
+                  : step.inputTokens > 0
+                  ? <span style={{ fontSize: 9, color: 'var(--accent-2)', letterSpacing: '.08em', fontFamily: "'JetBrains Mono', monospace" }}>cache</span>
+                  : <span className="mono" style={{ fontSize: 10, color: 'var(--graphite)' }}>—</span>
+                }
               </div>
             </div>
           );

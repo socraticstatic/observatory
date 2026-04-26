@@ -69,10 +69,20 @@ function ActionButton({ severity, action, onClick }: { severity: Severity; actio
   );
 }
 
-export function ZombieSessionsCard() {
-  const [killed, setKilled] = useState<Set<string>>(new Set());
+interface ZombieSessionsCardProps {
+  onReview?: (sessionId: string) => void;
+}
+
+export function ZombieSessionsCard({ onReview }: ZombieSessionsCardProps) {
   const [reviewed, setReviewed] = useState<Set<string>>(new Set());
-  const { data: zombieData } = trpc.insights.zombieSessions.useQuery();
+  const [killedSessions, setKilledSessions] = useState<Set<string>>(new Set());
+  const { data: zombieData, refetch } = trpc.insights.zombieSessions.useQuery();
+  const killMutation = trpc.insights.killSession.useMutation({
+    onSuccess: (_data, variables) => {
+      setKilledSessions(prev => new Set([...prev, variables.sessionId]));
+      void refetch();
+    },
+  });
 
   const ZOMBIES = useMemo<readonly Zombie[]>(() => {
     if (!zombieData || zombieData.length === 0) return [];
@@ -88,15 +98,16 @@ export function ZombieSessionsCard() {
   }, [zombieData]);
 
   const handleKill = (id: string) => {
-    setKilled(prev => new Set([...prev, id]));
+    killMutation.mutate({ sessionId: id });
   };
 
   const handleReview = (id: string) => {
     setReviewed(prev => new Set([...prev, id]));
+    onReview?.(id);
   };
 
-  const active = ZOMBIES.filter(z => !killed.has(z.id));
-  const killedCount = killed.size;
+  const active = ZOMBIES.filter(z => !killedSessions.has(z.id));
+  const killedCount = killedSessions.size;
 
   if (!zombieData) return (
     <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 120 }}>

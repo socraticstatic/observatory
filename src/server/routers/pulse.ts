@@ -91,12 +91,15 @@ export const pulseRouter = router({
           _sum: { cachedTokens: true, inputTokens: true },
           _avg: { latencyMs: true },
         }),
-        ctx.db.$queryRaw<Array<{ p50: unknown; p99: unknown }>>`
+        ctx.db.$queryRaw<Array<{ p50: unknown; p99: unknown; avg_lat: unknown; prev_avg_lat: unknown }>>`
           SELECT
-            PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY "latencyMs") AS p50,
-            PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY "latencyMs") AS p99
+            PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY "latencyMs") FILTER (WHERE ts >= ${since}) AS p50,
+            PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY "latencyMs") FILTER (WHERE ts >= ${since}) AS p99,
+            AVG("latencyMs") FILTER (WHERE ts >= ${since}) AS avg_lat,
+            AVG("latencyMs") FILTER (WHERE ts >= ${prevSince} AND ts < ${since}) AS prev_avg_lat
           FROM llm_events
-          WHERE ts >= ${since} AND status = 'ok' ${pfSql}
+          WHERE ts >= ${prevSince} AND status = 'ok' ${pfSql}
+            AND ("contentType" NOT IN ('tts', 'video', 'image') OR "contentType" IS NULL)
         `,
       ]);
       const total = Number(agg._count.id ?? 0);
@@ -106,8 +109,8 @@ export const pulseRouter = router({
       const totalOutput = Number(agg._sum.outputTokens ?? 0);
       const prevCached  = Number(prevAgg._sum.cachedTokens ?? 0);
       const prevInput   = Number(prevAgg._sum.inputTokens ?? 0);
-      const avgLat      = Number(agg._avg.latencyMs ?? 0);
-      const prevAvgLat  = Number(prevAgg._avg.latencyMs ?? 0);
+      const avgLat      = latPct[0]?.avg_lat != null ? Math.round(Number(latPct[0].avg_lat)) : 0;
+      const prevAvgLat  = latPct[0]?.prev_avg_lat != null ? Math.round(Number(latPct[0].prev_avg_lat)) : 0;
       return {
         totalCalls:       total,
         prevTotalCalls:   prevTotal,
@@ -115,8 +118,8 @@ export const pulseRouter = router({
         prevCacheHitPct:  prevInput > 0 ? (prevCached / (prevInput + prevCached)) * 100 : 0,
         avgLatencyMs:     avgLat,
         prevAvgLatencyMs: prevAvgLat,
-        p50LatMs:         Math.round(Number(latPct[0]?.p50 ?? 0)),
-        p99LatMs:         Math.round(Number(latPct[0]?.p99 ?? 0)),
+        p50LatMs:         latPct[0]?.p50 != null ? Math.round(Number(latPct[0].p50)) : 0,
+        p99LatMs:         latPct[0]?.p99 != null ? Math.round(Number(latPct[0].p99)) : 0,
         avgQuality:       Number(agg._avg.qualityScore ?? 0),
         errorRatePct:     total > 0 ? (errors / total) * 100 : 0,
         activeSessions:   sessions.length,
@@ -166,6 +169,7 @@ export const pulseRouter = router({
           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs") AS lat_p95
         FROM llm_events
         WHERE ts >= ${since} AND status = 'ok' ${pfSql}
+          AND ("contentType" NOT IN ('tts', 'video', 'image') OR "contentType" IS NULL)
         GROUP BY bucket
         ORDER BY bucket ASC
       `;

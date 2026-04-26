@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { trpc } from '@/lib/trpc-client';
 
 type Category = 'llm' | 'creative';
 
@@ -36,6 +37,17 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
   const [status, setStatus] = useState<'idle' | 'saving' | 'ok' | 'err'>('idle');
   const [errMsg, setErrMsg] = useState('');
 
+  const registerMutation = trpc.services.register.useMutation({
+    onSuccess: () => {
+      setStatus('ok');
+      setTimeout(() => { onSaved(); onClose(); }, 1200);
+    },
+    onError: (e) => {
+      setErrMsg(e.message ?? 'unknown error');
+      setStatus('err');
+    },
+  });
+
   const visibleProviders = PROVIDERS.filter(p => p.category === category);
   const prov = PROVIDERS.find(p => p.id === provider) ?? PROVIDERS[0];
 
@@ -47,23 +59,14 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
     setStatus('idle');
   }
 
-  async function save() {
+  function save() {
     if (!key.trim()) return;
     setStatus('saving');
-    try {
-      const res = await fetch('/api/services', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, key: key.trim() }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error ?? 'unknown error');
-      setStatus('ok');
-      setTimeout(() => { onSaved(); onClose(); }, 1200);
-    } catch (e: unknown) {
-      setErrMsg(e instanceof Error ? e.message : String(e));
-      setStatus('err');
-    }
+    registerMutation.mutate({
+      provider,
+      label: prov.label,
+      category,
+    });
   }
 
   return (

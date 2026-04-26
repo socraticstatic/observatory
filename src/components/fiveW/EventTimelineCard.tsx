@@ -35,15 +35,36 @@ const CHART_W = W - PAD.left - PAD.right;
 const CHART_H = H - PAD.top - PAD.bottom;
 
 function buildCurve(data: number[]) {
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const n = data.length;
+  const safeData = data.map(v => (isFinite(v) && !isNaN(v)) ? v : 0);
+  const n = safeData.length;
 
-  const px = (i: number) => PAD.left + (i / (n - 1)) * CHART_W;
-  const py = (v: number) => PAD.top + CHART_H - ((v - min) / range) * CHART_H;
+  // Guard: empty data → return stubs so callers never receive NaN
+  if (n === 0) {
+    const fallbackY = PAD.top + CHART_H;
+    const fallbackX = PAD.left + CHART_W / 2;
+    return {
+      linePts: '',
+      areaPath: '',
+      px: (_i: number) => fallbackX,
+      py: (_v: number) => fallbackY,
+      min: 0,
+      max: 0,
+    };
+  }
 
-  const linePts = data.map((v, i) => `${i === 0 ? 'M' : 'L'}${px(i).toFixed(2)},${py(v).toFixed(2)}`).join(' ');
+  const min = Math.min(...safeData);
+  const max = Math.max(...safeData);
+  // -Infinity is truthy in JS, so use isFinite guard instead of || 1
+  const range = isFinite(max - min) && (max - min) > 0 ? max - min : 1;
+
+  const px = (i: number) => n <= 1 ? PAD.left + CHART_W / 2 : PAD.left + (i / (n - 1)) * CHART_W;
+  const py = (v: number) => {
+    const sv = (isFinite(v) && !isNaN(v)) ? v : 0;
+    const result = PAD.top + CHART_H - ((sv - min) / range) * CHART_H;
+    return isFinite(result) ? result : PAD.top + CHART_H;
+  };
+
+  const linePts = safeData.map((v, i) => `${i === 0 ? 'M' : 'L'}${px(i).toFixed(2)},${py(v).toFixed(2)}`).join(' ');
   const areaPath = `${linePts} L${px(n - 1).toFixed(2)},${(PAD.top + CHART_H).toFixed(2)} L${PAD.left},${(PAD.top + CHART_H).toFixed(2)} Z`;
 
   return { linePts, areaPath, px, py, min, max };
@@ -62,14 +83,34 @@ export function EventTimelineCard() {
   }, [timelineData]);
 
   const ANNOTATIONS = useMemo<readonly Annotation[]>(() => {
-    if (!timelineData || timelineData.annotations.length === 0) return [];
-    return timelineData.annotations.map((a, i) => ({
-      d: Math.min(29, Math.max(0, i * 5)),
-      type: a.type,
-      title: a.title,
-      severity: normalizeSeverity(a.severity),
-      detail: a.detail ?? '',
-    }));
+    if (!timelineData || timelineData.annotations.length === 0 || timelineData.daily.length === 0) return [];
+
+    // Build a map from ISO date prefix (YYYY-MM-DD) → index in daily array
+    const dayIndexMap = new Map<string, number>();
+    timelineData.daily.forEach((row, i) => {
+      dayIndexMap.set(row.d.slice(0, 10), i);
+    });
+
+    const firstDayMs  = new Date(timelineData.daily[0].d).getTime();
+    const msPerDay    = 86_400_000;
+    const lastIdx     = timelineData.daily.length - 1;
+
+    return timelineData.annotations.map(a => {
+      const annDateKey = a.ts.slice(0, 10);
+      let d = dayIndexMap.get(annDateKey);
+      if (d === undefined) {
+        // Annotation date not in daily series — compute nearest index by ms offset
+        const offsetDays = Math.round((new Date(a.ts).getTime() - firstDayMs) / msPerDay);
+        d = Math.min(lastIdx, Math.max(0, offsetDays));
+      }
+      return {
+        d,
+        type: a.type,
+        title: a.title,
+        severity: normalizeSeverity(a.severity),
+        detail: a.detail ?? '',
+      };
+    });
   }, [timelineData]);
 
   const { linePts, areaPath, px, py, min, max } = useMemo(() => buildCurve(data), [data]);

@@ -53,10 +53,10 @@ interface RegionRow {
   region: string;
   calls: number;
   cost: number;
-  avgLatMs: number;
+  avgLatMs: number | null;
 }
 
-interface TooltipState { x: number; y: number; region: string; city: string; status: Status; lat: number; vol: number }
+interface TooltipState { x: number; y: number; region: string; city: string; status: Status; lat: number | null; vol: number }
 
 interface Props {
   lookback?: Lookback;
@@ -76,7 +76,7 @@ export function WhereCard({ lookback = '24H', provider }: Props) {
         ...r,
         meta,
         vol: Math.round((r.calls / totalCalls) * 100),
-        status: latencyToStatus(r.avgLatMs),
+        status: r.avgLatMs != null ? latencyToStatus(r.avgLatMs) : ('ok' as Status),
       };
     });
   })();
@@ -157,8 +157,17 @@ export function WhereCard({ lookback = '24H', provider }: Props) {
         </ComposableMap>
 
         {rows.length === 0 && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--steel)' }}>No regional data</span>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <span style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase',
+              color: 'var(--warn)', padding: '2px 8px',
+              background: 'rgba(201,150,107,.1)', borderRadius: 'var(--r)',
+              border: '1px solid rgba(201,150,107,.25)',
+            }}>PENDING</span>
+            <span style={{ fontSize: 11, color: 'var(--steel)' }}>Region metadata not available for this traffic</span>
+            <span style={{ fontSize: 10, color: 'var(--graphite)', maxWidth: 240, textAlign: 'center' }}>
+              Route calls through the LiteLLM proxy to capture region data
+            </span>
           </div>
         )}
 
@@ -171,7 +180,9 @@ export function WhereCard({ lookback = '24H', provider }: Props) {
             <div style={{ fontSize: 10, color: 'var(--steel)', marginBottom: 4 }}>{tooltip.region}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 3 }}>
               <span style={{ color: 'var(--fog)', fontSize: 11 }}>Avg latency</span>
-              <span className="num" style={{ fontSize: 11 }}>{tooltip.lat}ms</span>
+              <span className="num" style={{ fontSize: 11, color: tooltip.lat == null ? 'var(--graphite)' : undefined }}>
+                {tooltip.lat != null ? `${tooltip.lat}ms` : '—'}
+              </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
               <span style={{ color: 'var(--fog)', fontSize: 11 }}>Traffic share</span>

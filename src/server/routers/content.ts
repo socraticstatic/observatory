@@ -25,6 +25,7 @@ export const contentRouter = router({
           AVG("qualityScore")::float AS avg_quality
         FROM llm_events
         WHERE ts >= ${since} ${pfSql}
+          AND ("contentType" NOT IN ('tts', 'video', 'image') OR "contentType" IS NULL)
         GROUP BY "contentType"
         ORDER BY cost DESC
       `;
@@ -35,7 +36,7 @@ export const contentRouter = router({
         inputTokens: Number(r.input),
         outputTokens: Number(r.output),
         costUsd: Number(r.cost),
-        avgQuality: Number(r.avg_quality ?? 0),
+        avgQuality: r.avg_quality != null ? Number(r.avg_quality) : null,
       }));
     }),
 });

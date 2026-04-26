@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { trpc } from '@/lib/trpc-client';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { CommandHeader } from '@/components/layout/CommandHeader';
 import { ServicesRail } from '@/components/pulse/ServicesRail';
@@ -47,7 +48,7 @@ export default function App() {
   const [accent, setAccent] = useState('#6FA8B3');
   const [density, setDensity] = useState<Density>('comfortable');
   const [showTicker, setShowTicker] = useState(true);
-  const [drill, setDrill] = useState<{ type: string; source: string; stepHint?: number; at?: number } | null>(null);
+  const [drill, setDrill] = useState<{ type: string; source: string; stepHint?: number; at?: number; sessionId?: string } | null>(null);
   const howRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,8 +68,17 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const drillTo = (type: string, source: string, stepHint?: number) => {
-    setDrill({ type, source, stepHint, at: Date.now() });
+  const { data: health } = trpc.health.status.useQuery(undefined, { refetchInterval: 30_000 });
+
+  // CommandHeader model toggle acts as a provider filter — merge with ServicesRail selection.
+  // CommandHeader wins when it's not ALL; ServicesRail wins otherwise.
+  const effectiveProvider = useMemo(
+    () => (modelFilter !== 'ALL' ? modelFilter : (providerFilter ?? undefined)),
+    [modelFilter, providerFilter],
+  );
+
+  const drillTo = (type: string, source: string, stepHint?: number, sessionId?: string) => {
+    setDrill({ type, source, stepHint, at: Date.now(), sessionId });
     setTimeout(() => howRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   };
 
@@ -82,14 +92,14 @@ export default function App() {
           lookback={lookback}
           setLookback={setLookback}
           modelFilter={modelFilter}
-          setModelFilter={setModelFilter}
+          setModelFilter={(m) => { setModelFilter(m); if (m !== 'ALL') setProviderFilter(null); }}
           onToggleSystemLog={() => setSystemLogOpen(v => !v)}
           systemLogOpen={systemLogOpen}
         />
 
         <div className="page" style={{ paddingTop: 20 }}>
           {view === 'Traces'   && <TracesView lookback={lookback} />}
-          {view === 'Costs'    && <CostDriversView lookback={lookback} />}
+          {view === 'Costs'    && <CostDriversView lookback={lookback} onNavigate={setView} />}
           {view === 'Sessions' && <SessionsView lookback={lookback} />}
           {view === 'Rules'    && <RulesView />}
           {view === 'Archive'  && <ArchiveView />}
@@ -99,18 +109,18 @@ export default function App() {
               <ServicesRail
                 lookback={lookback}
                 providerFilter={providerFilter}
-                onSelect={setProviderFilter}
+                onSelect={(pf) => { setProviderFilter(pf); if (pf !== null) setModelFilter('ALL'); }}
               />
-              <OverallCostHero lookback={lookback} provider={providerFilter ?? undefined} />
+              <OverallCostHero lookback={lookback} provider={effectiveProvider} />
               <PulseBar
                 lookback={lookback}
                 setLookback={setLookback}
-                provider={providerFilter ?? undefined}
+                provider={effectiveProvider}
                 onDrillSpike={(s) => drillTo('spike', 'pulse spike', 4)}
               />
 
               <BurnRateRail lookback={lookback} />
-              <StatStrip lookback={lookback} provider={providerFilter ?? undefined} />
+              <StatStrip lookback={lookback} provider={effectiveProvider} />
 
               {/* DIAGNOSTICS divider */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 24, marginBottom: 12 }}>
@@ -124,34 +134,34 @@ export default function App() {
               </div>
 
               <WhyInsightsCard />
-              <ZombieSessionsCard />
+              <ZombieSessionsCard onReview={(sid) => drillTo('session', `ZOMBIE · ${sid.slice(0, 8)}…`, undefined, sid)} />
               <EntityExplorer lookback={lookback} />
 
               <div id="5w-what" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,1fr)', gap: 16, marginTop: 16 }}>
-                <WhatCard lookback={lookback} provider={providerFilter ?? undefined} onDrill={(b, i) => drillTo('bar', `WHAT · ${b.label}`, 3)} />
+                <WhatCard lookback={lookback} provider={effectiveProvider} onDrill={(b, i) => drillTo('bar', `WHAT · ${b.label}`, 3)} />
                 <div id="5w-who">
                   <WhoCard
                     selected={selectedModel}
                     setSelected={setSelectedModel}
                     lookback={lookback}
-                    providerFilter={providerFilter ?? undefined}
+                    providerFilter={effectiveProvider}
                     onDrill={(m) => drillTo('model', `WHO · ${m.name}`, 1)}
                   />
                 </div>
               </div>
 
               <div style={{ marginTop: 16 }}>
-                <ContentTypeCard lookback={lookback} provider={providerFilter ?? undefined} />
+                <ContentTypeCard lookback={lookback} provider={effectiveProvider} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)', gap: 16, marginTop: 16 }}>
-                <div id="5w-where"><WhereCard lookback={lookback} provider={providerFilter ?? undefined} /></div>
-                <AppSurfaceCard lookback={lookback} provider={providerFilter ?? undefined} />
+                <div id="5w-where"><WhereCard lookback={lookback} provider={effectiveProvider} /></div>
+                <AppSurfaceCard lookback={lookback} provider={effectiveProvider} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)', gap: 16, marginTop: 16 }}>
                 <div id="5w-when">
-                  <WhenCard provider={providerFilter ?? undefined} onDrill={(c) => drillTo('heatmap', `WHEN · D-${String(30 - c.d).padStart(2, '0')} ${String(c.h).padStart(2, '0')}:00`, 2)} />
+                  <WhenCard provider={effectiveProvider} onDrill={(c) => drillTo('heatmap', `WHEN · D-${String(30 - c.d).padStart(2, '0')} ${String(c.h).padStart(2, '0')}:00`, 2)} />
                 </div>
                 <EventTimelineCard />
               </div>
@@ -174,7 +184,15 @@ export default function App() {
               {/* Footer */}
               <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--graphite)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', padding: '12px 0', borderTop: '1px solid var(--line)' }}>
                 <span>Observatory v0.1.0 · personal build</span>
-                <span className="mono" style={{ color: 'var(--steel)' }}>retention: 90d · last ingest: 00:00:03 ago</span>
+                <span className="mono" style={{ color: 'var(--steel)' }}>
+                  retention: 90d ·{' '}
+                  {health?.secondsAgo != null
+                    ? `last ingest: ${health.secondsAgo < 60 ? `${health.secondsAgo}s` : `${Math.round(health.secondsAgo / 60)}m`} ago`
+                    : 'no ingest data'}
+                  {health?.dataRange.oldest && (
+                    <> · data from {health.dataRange.oldest.slice(0, 10)}</>
+                  )}
+                </span>
                 <span>keys: <span className="kbd">⌥T</span> tweaks <span className="kbd">F</span> filter</span>
               </div>
             </>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import type { Lookback } from '@/lib/lookback';
 
@@ -32,6 +32,76 @@ function fmtDuration(ms: number): string {
   if (ms < 60_000)    return `${(ms / 1000).toFixed(1)}s`;
   if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
   return `${Math.floor(ms / 3_600_000)}h ${Math.floor((ms % 3_600_000) / 60_000)}m`;
+}
+
+function LabelCell({ sessionId }: { sessionId: string }) {
+  const [editing, setEditing] = useState(false);
+  const [draft,   setDraft]   = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const { data: label, refetch } = trpc.sessionLabels.get.useQuery({ sessionId });
+  const setLabel = trpc.sessionLabels.set.useMutation({ onSuccess: () => { refetch(); setEditing(false); } });
+  const delLabel = trpc.sessionLabels.delete.useMutation({ onSuccess: () => { refetch(); } });
+
+  function startEdit(e: React.MouseEvent) {
+    e.stopPropagation();
+    setDraft(label ?? '');
+    setEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 10);
+  }
+
+  function save(e: React.KeyboardEvent | React.FocusEvent) {
+    if ('key' in e && e.key === 'Escape') { setEditing(false); return; }
+    if ('key' in e && e.key !== 'Enter') return;
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      if (label) delLabel.mutate({ sessionId });
+      else setEditing(false);
+    } else {
+      setLabel.mutate({ sessionId, label: trimmed });
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={save}
+        onBlur={save}
+        placeholder="Add label…"
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'rgba(111,168,179,.08)', border: '1px solid rgba(111,168,179,.35)',
+          borderRadius: 'var(--r)', padding: '2px 7px', fontSize: 10,
+          color: 'var(--mist)', outline: 'none', fontFamily: 'inherit', width: 160,
+        }}
+      />
+    );
+  }
+
+  return label ? (
+    <span
+      onClick={startEdit}
+      title="Click to edit label"
+      style={{
+        fontSize: 10, color: 'var(--accent-2)', cursor: 'text',
+        background: 'rgba(111,168,179,.08)', border: '1px solid rgba(111,168,179,.2)',
+        borderRadius: 'var(--r)', padding: '2px 7px',
+      }}
+    >
+      {label}
+    </span>
+  ) : (
+    <span
+      onClick={startEdit}
+      title="Add label"
+      style={{ fontSize: 9, color: 'var(--graphite)', cursor: 'text', letterSpacing: '.06em' }}
+    >
+      + label
+    </span>
+  );
 }
 
 export function SessionsView({ lookback }: Props) {
@@ -134,12 +204,15 @@ export function SessionsView({ lookback }: Props) {
                   }}>
                     {s.sessionId}
                   </span>
-                  <div style={{ display: 'flex', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
                     {s.project && (
                       <span className="label" style={{ fontSize: 9 }}>{s.project}</span>
                     )}
                     {s.surface && (
                       <span className="label" style={{ fontSize: 9, color: 'var(--steel)' }}>{s.surface}</span>
+                    )}
+                    {s.sessionId !== '(no session)' && (
+                      <LabelCell sessionId={s.sessionId} />
                     )}
                   </div>
                 </div>

@@ -9,12 +9,16 @@ interface Props {
   lookback: Lookback;
 }
 
-const PROVIDERS = [
-  { id: undefined,    label: 'All' },
-  { id: 'anthropic',  label: 'Claude' },
-  { id: 'google',     label: 'Gemini' },
-  { id: 'xai',        label: 'Grok' },
-];
+const PROVIDER_META: Record<string, { label: string; dot: string }> = {
+  anthropic:  { label: 'Claude',     dot: '#6FA8B3' },
+  google:     { label: 'Gemini',     dot: '#8BA89C' },
+  xai:        { label: 'Grok',       dot: '#B88A8A' },
+  meta:       { label: 'Llama',      dot: '#9BA87C' },
+  ollama:     { label: 'Ollama',     dot: '#A89276' },
+  openai:     { label: 'OpenAI',     dot: '#7CA893' },
+};
+
+const CREATIVE_PROVIDERS = new Set(['heygen', 'elevenlabs', 'leonardo', 'fal', 'replicate', 'stability']);
 
 const STATUS_OPTS: { id: 'ok' | 'error' | undefined; label: string }[] = [
   { id: undefined, label: 'All' },
@@ -23,10 +27,7 @@ const STATUS_OPTS: { id: 'ok' | 'error' | undefined; label: string }[] = [
 ];
 
 function providerDot(p: string): string {
-  if (p === 'anthropic') return '#6FA8B3';
-  if (p === 'google')    return '#8BA89C';
-  if (p === 'xai')       return '#B88A8A';
-  return '#7A7068';
+  return PROVIDER_META[p]?.dot ?? '#7A7068';
 }
 
 function fmt2(n: number): string {
@@ -64,6 +65,17 @@ export function TracesView({ lookback }: Props) {
   const { data, isFetching } = trpc.traces.list.useQuery(
     { lookback, provider, status, cursor, limit: 50 },
   );
+  const { data: providerData } = trpc.who.providerBreakdown.useQuery({ lookback });
+
+  const providerOptions = [
+    { id: undefined as string | undefined, label: 'All' },
+    ...(providerData ?? [])
+      .filter(p => !CREATIVE_PROVIDERS.has(p.provider))
+      .map(p => ({
+        id: p.provider,
+        label: PROVIDER_META[p.provider]?.label ?? p.provider,
+      })),
+  ];
 
   // Pagination accumulator — intentional direct setState, not a cascade risk
   useEffect(() => {
@@ -101,7 +113,7 @@ export function TracesView({ lookback }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <span className="label">Provider</span>
         <div className="seg">
-          {PROVIDERS.map(p => (
+          {providerOptions.map(p => (
             <button
               key={String(p.id)}
               className={provider === p.id ? 'on' : ''}
@@ -182,7 +194,11 @@ export function TracesView({ lookback }: Props) {
                 {fmtUsd(row.costUsd)}
               </span>
               <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
-                {row.latencyMs > 0 ? fmtMs(row.latencyMs) : '—'}
+                {row.latencyMs > 0
+                  ? fmtMs(row.latencyMs)
+                  : row.cachedTokens > 0
+                  ? <span style={{ fontSize: 9, color: 'var(--accent-2)', letterSpacing: '.08em' }}>cache</span>
+                  : '—'}
               </span>
               <span style={{ fontSize: 10, fontWeight: 600, color: row.status === 'error' ? 'var(--bad)' : 'var(--good)' }}>
                 {row.status.toUpperCase()}

@@ -7,20 +7,16 @@ interface Props {
   lookback: Lookback;
 }
 
-const BUDGET = 200;
-const SPENT  = 42.18;
-const UTIL   = SPENT / BUDGET;
-
 export function BurnRateRail({ lookback: _lookback }: Props) {
   const { data } = trpc.pulse.burnRate.useQuery();
-  const todayCost = data?.todayCost ?? SPENT;
-  const projected = data?.projected ?? 58.40;
-  const runway = data?.runway ?? 18.2;
-  const utilPct = data ? Math.round(data.utilPct) : Math.round(UTIL * 100);
-  const budget = data?.budget ?? BUDGET;
+  const todayCost = data?.todayCost;
+  const projected = data?.projected;
+  const runway = data?.runway;
+  const utilPct = data ? Math.round(data.utilPct) : null;
+  const budget = data?.budget ?? 200;
   const deltaText = data
     ? `${data.deltaVsYesterday > 0 ? '+' : ''}${data.deltaVsYesterday.toFixed(0)}% vs yesterday`
-    : '+8% vs yesterday';
+    : null;
 
   return (
     <div
@@ -44,9 +40,9 @@ export function BurnRateRail({ lookback: _lookback }: Props) {
           className="mono"
           style={{ fontSize: 22, fontWeight: 700, color: 'var(--mist)', lineHeight: 1, marginBottom: 4 }}
         >
-          ${todayCost.toFixed(2)}
+          {todayCost != null ? `$${todayCost.toFixed(2)}` : '—'}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--warn)' }}>{deltaText}</div>
+        <div style={{ fontSize: 10, color: 'var(--warn)' }}>{deltaText ?? ''}</div>
       </div>
 
       {/* Projected */}
@@ -61,7 +57,7 @@ export function BurnRateRail({ lookback: _lookback }: Props) {
           className="mono"
           style={{ fontSize: 18, fontWeight: 600, color: 'var(--fog)', lineHeight: 1, marginBottom: 4 }}
         >
-          ${projected.toFixed(2)}
+          {projected != null ? `$${projected.toFixed(2)}` : '—'}
         </div>
         <div style={{ fontSize: 10, color: 'var(--steel)' }}>per day at current rate</div>
       </div>
@@ -78,7 +74,7 @@ export function BurnRateRail({ lookback: _lookback }: Props) {
           className="mono"
           style={{ fontSize: 18, fontWeight: 600, color: 'var(--accent)', lineHeight: 1, marginBottom: 4 }}
         >
-          {runway.toFixed(1)} days
+          {runway != null ? `${runway.toFixed(1)} days` : '—'}
         </div>
         <div style={{ fontSize: 10, color: 'var(--steel)' }}>at current pace</div>
       </div>
@@ -91,7 +87,7 @@ export function BurnRateRail({ lookback: _lookback }: Props) {
             className="mono"
             style={{ fontSize: 18, fontWeight: 600, color: 'var(--mist)', lineHeight: 1 }}
           >
-            {utilPct}%
+            {utilPct != null ? `${utilPct}%` : '—'}
           </span>
           <span style={{ fontSize: 10, color: 'var(--steel)' }}>of ${budget}</span>
         </div>
@@ -108,7 +104,7 @@ export function BurnRateRail({ lookback: _lookback }: Props) {
           <div
             style={{
               height: '100%',
-              width: `${utilPct}%`,
+              width: `${utilPct ?? 0}%`,
               borderRadius: 3,
               background: 'linear-gradient(90deg, var(--good), #6FA88A)',
               transition: 'width .4s ease',

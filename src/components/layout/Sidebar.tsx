@@ -103,7 +103,7 @@ export function Sidebar({ view, setView, expanded, setExpanded }: Props) {
     setTimeout(() => {
       const el = document.getElementById(`5w-${label.toLowerCase()}`);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
+    }, 150);
   }
 
   return (

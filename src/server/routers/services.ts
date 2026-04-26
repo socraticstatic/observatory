@@ -19,4 +19,20 @@ export const servicesRouter = router({
         update: { label: input.label, category: input.category },
       });
     }),
+
+  delete: publicProcedure
+    .input(z.object({ provider: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.registeredService.delete({ where: { provider: input.provider } });
+      return { ok: true };
+    }),
+
+  deleteMany: publicProcedure
+    .input(z.object({ providers: z.array(z.string().min(1)).min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const { count } = await ctx.db.registeredService.deleteMany({
+        where: { provider: { in: input.providers } },
+      });
+      return { count };
+    }),
 });

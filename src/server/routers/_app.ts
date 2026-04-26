@@ -16,9 +16,13 @@ import { sessionsRouter } from './sessions';
 import { costDriversRouter } from './costDrivers';
 import { servicesRouter } from './services';
 import { archiveRouter } from './archive';
+import { healthRouter } from './health';
+import { sessionLabelsRouter } from './sessionLabels';
+import { alertRulesRouter } from './alertRules';
 
 export const appRouter = router({
   pulse:        pulseRouter,
+  health:       healthRouter,
   what:         whatRouter,
   who:          whoRouter,
   where:        whereRouter,
@@ -32,8 +36,10 @@ export const appRouter = router({
   traces:       tracesRouter,
   sessions:     sessionsRouter,
   costDrivers:  costDriversRouter,
-  services:     servicesRouter,
-  archive:      archiveRouter,
+  services:      servicesRouter,
+  archive:       archiveRouter,
+  sessionLabels: sessionLabelsRouter,
+  alertRules:    alertRulesRouter,
 });
 
 export type AppRouter = typeof appRouter;

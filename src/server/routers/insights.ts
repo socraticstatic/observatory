@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 
 export const insightsRouter = router({
@@ -22,13 +23,13 @@ export const insightsRouter = router({
       const weekHit  = Number(cache7d[0]?.hit_ratio ?? 0);
       const cacheDecay = weekHit > 0 && todayHit < weekHit * 0.6;
 
-      // Routing opportunity: opus sessions with avg quality < 92
-      const routingRows = await ctx.db.$queryRaw<Array<{ project: string; avg_quality: unknown; cost: unknown }>>`
-        SELECT project, AVG("qualityScore")::float AS avg_quality, SUM("costUsd")::float AS cost
+      // Routing opportunity: opus projects spending > $2 in last 7d (Sonnet likely sufficient)
+      const routingRows = await ctx.db.$queryRaw<Array<{ project: string; cost: unknown }>>`
+        SELECT project, SUM("costUsd")::float AS cost
         FROM llm_events
         WHERE ts >= ${since7d} AND model LIKE '%opus%'
         GROUP BY project
-        HAVING AVG("qualityScore") < 92
+        HAVING SUM("costUsd") > 2.00
         ORDER BY cost DESC
         LIMIT 3
       `;
@@ -48,16 +49,114 @@ export const insightsRouter = router({
           id: `routing-${row.project}`,
           severity: 'info',
           title: `Routing opportunity: ${row.project}`,
-          detail: `Opus avg quality ${Number(row.avg_quality).toFixed(1)} - Sonnet may suffice`,
+          detail: `$${Number(row.cost).toFixed(2)} Opus spend in 7d — Sonnet may suffice`,
           recommendation: `Switch ${row.project} to Sonnet. Est. saving: ~60%.`,
         });
       }
       return insights;
     }),
 
+  sessionAnomalies: publicProcedure
+    .query(async ({ ctx }) => {
+      const since1h = new Date(Date.now() - 3_600_000);
+
+      const [events, bucketRows] = await Promise.all([
+        ctx.db.llmEvent.findMany({
+          where: { ts: { gte: since1h } },
+          orderBy: { ts: 'desc' },
+          take: 100,
+          select: {
+            id: true, ts: true, model: true, project: true,
+            sessionId: true, costUsd: true, inputTokens: true,
+            outputTokens: true, cachedTokens: true, status: true,
+          },
+        }),
+        ctx.db.$queryRaw<Array<{ bucket: unknown; total_tokens: unknown }>>`
+          SELECT
+            FLOOR(EXTRACT(EPOCH FROM (NOW() - ts)) / 60)::int AS bucket,
+            SUM("inputTokens" + "outputTokens") AS total_tokens
+          FROM llm_events
+          WHERE ts >= ${since1h}
+          GROUP BY 1
+          ORDER BY 1 ASC
+        `,
+      ]);
+
+      const bucketMap = new Map<number, number>();
+      for (const b of bucketRows) {
+        bucketMap.set(Number(b.bucket), Number(b.total_tokens));
+      }
+
+      const maxTokens = Math.max(1, ...bucketMap.values());
+
+      const mapped = events.map(e => {
+        const cost = Number(e.costUsd);
+        const isError   = e.status === 'error';
+        const isCostHigh = cost > 0.10;
+        const isSpike    = e.outputTokens > 8000;
+        const isCached   = e.cachedTokens > 0;
+        const tag = isError ? 'STATUS.ERROR' : isCostHigh ? 'COST.SPIKE' : isSpike ? 'OUTPUT.SPIKE' : isCached ? 'CACHE.HIT' : 'INFERENCE.OK';
+        const lvl: 'ok' | 'warn' | 'bad' = isError ? 'bad' : (isCostHigh || isSpike) ? 'warn' : 'ok';
+        const t = new Date(e.ts);
+        const ts = t.toTimeString().slice(0, 8);
+        const msg = isError
+          ? `error · ${e.model ?? 'unknown'}`
+          : isCostHigh
+            ? `$${cost.toFixed(4)} · ${e.model ?? 'unknown'} · ${e.project ?? 'unknown'}`
+            : isSpike
+              ? `${e.outputTokens.toLocaleString()} out tokens · ${e.model ?? 'unknown'}`
+              : isCached
+                ? `${e.cachedTokens.toLocaleString()} cached · ${e.model ?? 'unknown'}`
+                : `${(e.inputTokens + e.outputTokens).toLocaleString()} tokens · ${e.model ?? 'unknown'}`;
+        return { id: e.id, t: ts, lvl, tag, msg, src: e.project ?? 'unknown', span: e.sessionId ? '#' + e.sessionId.slice(0, 6) : '' };
+      });
+
+      const errorCount   = mapped.filter(e => e.lvl === 'bad').length;
+      const warnCount    = mapped.filter(e => e.lvl === 'warn').length;
+      const riskScore    = Math.min(100, Math.round((errorCount * 10 + warnCount * 3) / Math.max(1, mapped.length) * 100));
+
+      const tokenBuckets = Array.from({ length: 60 }, (_, i) => ({
+        sev: Math.min(1, (bucketMap.get(i) ?? 0) / maxTokens),
+      }));
+
+      return {
+        events: mapped,
+        riskScore,
+        tokenBuckets,
+        counts: {
+          errors:  mapped.filter(e => e.tag === 'STATUS.ERROR').length,
+          costHigh: mapped.filter(e => e.tag === 'COST.SPIKE').length,
+          spikes:  mapped.filter(e => e.tag === 'OUTPUT.SPIKE').length,
+          cacheHits: mapped.filter(e => e.tag === 'CACHE.HIT').length,
+        },
+      };
+    }),
+
+  killSession: publicProcedure
+    .input(z.object({ sessionId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.annotation.create({
+        data: {
+          ts:       new Date(),
+          type:     'kill_order',
+          title:    input.sessionId,
+          detail:   'Killed via Observatory UI',
+          severity: 'info',
+        },
+      });
+      return { ok: true };
+    }),
+
   zombieSessions: publicProcedure
     .query(async ({ ctx }) => {
       const since24h = new Date(Date.now() - 24 * 3_600_000);
+
+      const killed = await ctx.db.annotation.findMany({
+        where:  { type: 'kill_order' },
+        select: { title: true },
+      });
+      const killedSet = new Set(killed.map(k => k.title));
+
       const rows = await ctx.db.$queryRaw<Array<{
         session_id: string; project: string; surface: string;
         steps: bigint; cost: unknown; last_ts: Date;
@@ -66,7 +165,7 @@ export const insightsRouter = router({
         SELECT
           "sessionId" AS session_id,
           project,
-          surface,
+          MODE() WITHIN GROUP (ORDER BY surface) AS surface,
           COUNT(*) AS steps,
           SUM("costUsd")::float AS cost,
           MAX(ts) AS last_ts,
@@ -74,7 +173,7 @@ export const insightsRouter = router({
           (ARRAY_AGG("inputTokens" ORDER BY ts DESC))[1] AS last_input
         FROM llm_events
         WHERE ts >= ${since24h} AND "sessionId" IS NOT NULL
-        GROUP BY "sessionId", project, surface
+        GROUP BY "sessionId", project
         HAVING COUNT(*) >= 2
         ORDER BY cost DESC
         LIMIT 20
@@ -100,6 +199,6 @@ export const insightsRouter = router({
           type,
           bloatRatio: Math.round(bloatRatio * 100) / 100,
         };
-      }).filter(r => r.type !== 'active');
+      }).filter(r => r.type !== 'active' && !killedSet.has(r.sessionId));
     }),
 });

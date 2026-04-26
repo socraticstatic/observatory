@@ -20,7 +20,7 @@ export interface NormalizedEvent {
   rawPayload: unknown;
 }
 
-// Rate table USD per token (rough estimates - replace with real pricing table)
+// Rate table USD per token
 const INPUT_RATE: Record<string, number> = {
   'claude-opus':      0.000015,
   'claude-sonnet':    0.000003,
@@ -41,6 +41,10 @@ const OUTPUT_RATE: Record<string, number> = {
   default:            0.000015,
 };
 
+// Cache write is 1.25× input rate; cache read is 0.1× input rate
+const CACHE_WRITE_MULTIPLIER = 1.25;
+const CACHE_READ_MULTIPLIER  = 0.10;
+
 function getRate(model: string, table: Record<string, number>): number {
   for (const key of Object.keys(table)) {
     if (key !== 'default' && model.includes(key)) return table[key]!;
@@ -48,11 +52,49 @@ function getRate(model: string, table: Record<string, number>): number {
   return table.default!;
 }
 
-function calcCost(model: string, input: number, output: number, reasoning: number): string {
+function calcCost(
+  model: string,
+  input: number,
+  output: number,
+  reasoning: number,
+  cacheWrite = 0,
+  cacheRead  = 0,
+): string {
+  const ir = getRate(model, INPUT_RATE);
+  const or = getRate(model, OUTPUT_RATE);
   const cost =
-    input * getRate(model, INPUT_RATE) +
-    (output + reasoning) * getRate(model, OUTPUT_RATE);
+    input     * ir +
+    cacheWrite * ir * CACHE_WRITE_MULTIPLIER +
+    cacheRead  * ir * CACHE_READ_MULTIPLIER  +
+    (output + reasoning) * or;
   return cost.toFixed(6);
+}
+
+const CREATIVE_PROVIDERS = new Set(['elevenlabs', 'heygen', 'leonardo', 'stability']);
+
+// Creative service payload format:
+// { provider, service_type, model, units_used, cost_usd, latency_ms, status, metadata }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseCreativePayload(body: any): NormalizedEvent | null {
+  const provider: string = body.provider;
+  if (!CREATIVE_PROVIDERS.has(provider)) return null;
+  return {
+    provider,
+    model:              body.model ?? body.service_type ?? provider,
+    surface:            body.metadata?.surface,
+    sessionId:          body.metadata?.session_id,
+    project:            body.metadata?.project,
+    inputTokens:        Math.round(body.units_used ?? 0),
+    outputTokens:       0,
+    reasoningTokens:    0,
+    cachedTokens:       0,
+    cacheCreationTokens: 0,
+    costUsd:            Number(body.cost_usd ?? 0).toFixed(6),
+    latencyMs:          body.latency_ms ? Math.round(body.latency_ms) : undefined,
+    status:             body.status ?? (body.error ? 'error' : 'ok'),
+    contentType:        body.service_type ?? provider,
+    rawPayload:         body,
+  };
 }
 
 // LiteLLM wraps all providers in a consistent envelope:
@@ -60,6 +102,7 @@ function calcCost(model: string, input: number, output: number, reasoning: numbe
 // The raw vendor response is in `response` field.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parseIngestPayload(body: any): NormalizedEvent | null {
+  if (body?.provider && CREATIVE_PROVIDERS.has(body.provider)) return parseCreativePayload(body);
   if (!body || typeof body !== 'object') return null;
 
   // LiteLLM standard envelope
@@ -70,7 +113,8 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
   const sessionId: string | undefined = body.metadata?.session_id ?? body.metadata?.tags?.session_id;
   const project: string | undefined = body.metadata?.project ?? body.metadata?.tags?.project;
   const surface: string | undefined = body.metadata?.surface ?? body.metadata?.tags?.surface;
-  const status: string = body.response?.choices?.[0]?.finish_reason === 'stop' ? 'ok' : (body.error ? 'error' : 'ok');
+  const status: string = body.error ? 'error' : (body.response?.choices?.[0]?.finish_reason === 'stop' ? 'ok' : 'ok');
+  const contentType: string | undefined = body.content_type ?? undefined;
   // Optional quality score — seeder or caller can pass via metadata
   const qualityRaw = body.metadata?.quality_score ?? body.quality_score;
   const qualityScore: string | undefined = qualityRaw != null ? Number(qualityRaw).toFixed(2) : undefined;
@@ -114,7 +158,7 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
   const litellmCost = body.response_cost ?? body.cost;
   const costUsd = litellmCost != null
     ? Number(litellmCost).toFixed(6)
-    : calcCost(model, inputTokens, outputTokens, reasoningTokens);
+    : calcCost(model, inputTokens, outputTokens, reasoningTokens, cacheCreationTokens, cachedTokens);
 
   return {
     provider,
@@ -130,6 +174,7 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
     costUsd,
     latencyMs,
     status,
+    contentType,
     qualityScore,
     rawPayload: body,
   };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { fmtUsd } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 import { AddServiceModal } from './AddServiceModal';
@@ -36,9 +36,26 @@ function fmtTokens(n: number): string {
 }
 
 export function ServicesRail({ lookback, providerFilter, onSelect }: ServicesRailProps) {
-  const [showModal, setShowModal] = useState(false);
+  const [showModal,  setShowModal]  = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected,   setSelected]   = useState<Set<string>>(new Set());
+  const [confirm,    setConfirm]    = useState<string | null>(null); // provider to confirm single-delete
+
   const { data: liveData, refetch } = trpc.who.providerBreakdown.useQuery({ lookback });
   const { data: registered }        = trpc.services.list.useQuery();
+
+  const deleteOne  = trpc.services.delete.useMutation({ onSuccess: () => refetch() });
+  const deleteMany = trpc.services.deleteMany.useMutation({
+    onSuccess: () => { void refetch(); setSelected(new Set()); setSelectMode(false); },
+  });
+
+  const toggleSelect = useCallback((provider: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(provider)) next.delete(provider); else next.add(provider);
+      return next;
+    });
+  }, []);
 
   const liveRows  = liveData ?? [];
   const liveSet   = new Set(liveRows.map(r => r.provider));
@@ -52,6 +69,41 @@ export function ServicesRail({ lookback, providerFilter, onSelect }: ServicesRai
 
   return (
     <>
+      {/* Group-action toolbar — only when registered-only services exist */}
+      {registeredOnly.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <button
+            className="mbtn"
+            onClick={() => { setSelectMode(v => !v); setSelected(new Set()); }}
+            style={{ fontSize: 9, letterSpacing: '.1em', padding: '3px 9px' }}
+          >
+            {selectMode ? 'Cancel' : 'Select'}
+          </button>
+          {selectMode && selected.size > 0 && (
+            <button
+              className="mbtn"
+              onClick={() => deleteMany.mutate({ providers: Array.from(selected) })}
+              style={{
+                fontSize: 9, letterSpacing: '.1em', padding: '3px 9px',
+                color: 'var(--bad)', border: '1px solid rgba(184,107,107,.4)',
+                background: 'rgba(184,107,107,.07)',
+              }}
+            >
+              Delete {selected.size} selected
+            </button>
+          )}
+          {selectMode && registeredOnly.length > 1 && (
+            <button
+              className="mbtn"
+              onClick={() => setSelected(new Set(registeredOnly.map(s => s.provider)))}
+              style={{ fontSize: 9, letterSpacing: '.1em', padding: '3px 9px' }}
+            >
+              Select all
+            </button>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'row', gap: 8, marginBottom: 16, overflowX: 'auto' }}>
         {/* All selector */}
         <div
@@ -117,12 +169,48 @@ export function ServicesRail({ lookback, providerFilter, onSelect }: ServicesRai
         {/* Registered-only services (no live events yet) */}
         {showRegisteredOnly && registeredOnly.map((svc: RegisteredService) => {
           const meta = PROVIDER_META[svc.provider] ?? { label: svc.label, col: '#6A7278', initial: svc.label[0].toUpperCase(), category: svc.category as 'llm' | 'creative' };
+          const isChecked = selected.has(svc.provider);
           return (
             <div
               key={svc.provider}
               className="card"
-              style={{ width: 180, flexShrink: 0, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, opacity: 0.6 }}
+              onClick={selectMode ? () => toggleSelect(svc.provider) : undefined}
+              style={{
+                width: 180, flexShrink: 0, padding: '14px 16px',
+                display: 'flex', flexDirection: 'column', gap: 6, opacity: 0.6,
+                position: 'relative',
+                cursor: selectMode ? 'pointer' : 'default',
+                border: selectMode && isChecked ? '1px solid rgba(184,107,107,.5)' : undefined,
+                background: selectMode && isChecked ? 'rgba(184,107,107,.06)' : undefined,
+              }}
             >
+              {selectMode ? (
+                <div style={{
+                  position: 'absolute', top: 8, right: 8,
+                  width: 14, height: 14, borderRadius: 3,
+                  border: `1.5px solid ${isChecked ? 'var(--bad)' : 'var(--line-2)'}`,
+                  background: isChecked ? 'rgba(184,107,107,.2)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {isChecked && <span style={{ fontSize: 9, color: 'var(--bad)', lineHeight: 1 }}>✓</span>}
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setConfirm(svc.provider); }}
+                  title="Delete service"
+                  style={{
+                    position: 'absolute', top: 6, right: 6,
+                    width: 18, height: 18, borderRadius: 3, border: 'none',
+                    background: 'transparent', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, color: 'var(--steel)',
+                    opacity: 0, transition: 'opacity .12s',
+                  }}
+                  className="svc-delete-btn"
+                >
+                  ×
+                </button>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{
                   width: 22, height: 22, borderRadius: 4, background: meta.col,
@@ -171,6 +259,37 @@ export function ServicesRail({ lookback, providerFilter, onSelect }: ServicesRai
           onClose={() => setShowModal(false)}
           onSaved={() => { refetch(); }}
         />
+      )}
+
+      {/* Single-delete confirmation */}
+      {confirm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 200,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div className="card" style={{ padding: '22px 26px', maxWidth: 360, width: '100%' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--mist)', marginBottom: 8 }}>
+              Remove service?
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--steel)', marginBottom: 18, lineHeight: 1.5 }}>
+              Remove <span style={{ color: 'var(--fog)', fontWeight: 600 }}>{confirm}</span> from registered services.
+              Historical event data is not deleted.
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="mbtn" onClick={() => setConfirm(null)}>Cancel</button>
+              <button
+                className="mbtn"
+                onClick={() => { deleteOne.mutate({ provider: confirm }); setConfirm(null); }}
+                style={{
+                  color: 'var(--bad)', border: '1px solid rgba(184,107,107,.4)',
+                  background: 'rgba(184,107,107,.07)',
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
