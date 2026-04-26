@@ -5,7 +5,7 @@ import { trpc } from '@/lib/trpc-client';
 import { fmtUsd, fmtMs } from '@/lib/fmt';
 import type { Lookback } from '@/lib/lookback';
 
-interface Props { lookback: Lookback; onNavigate?: (view: string) => void }
+interface Props { lookback: Lookback; onNavigate?: (view: string) => void; provider?: string; }
 
 const DIMS = [
   { key: 'provider'    as const, label: 'Provider' },
@@ -27,14 +27,15 @@ interface DimItem {
   p95LatMs: number | null;
 }
 
-export function CostDriversView({ lookback, onNavigate }: Props) {
+export function CostDriversView({ lookback, onNavigate, provider }: Props) {
   const [dimIdx, setDimIdx] = useState(0);
   const [sel, setSel] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data, isFetching } = trpc.costDrivers.sixDimension.useQuery({ lookback });
-  const { data: baseline }   = trpc.costDrivers.baseline.useQuery();
+  const { data, isFetching } = trpc.costDrivers.sixDimension.useQuery({ lookback, provider });
+  const { data: baseline }   = trpc.costDrivers.baseline.useQuery({ lookback, provider });
+  const { data: insights }   = trpc.insights.whyInsights.useQuery({ provider });
 
   const dim   = DIMS[dimIdx];
   const items = useMemo<DimItem[]>(() => {
@@ -217,25 +218,48 @@ export function CostDriversView({ lookback, onNavigate }: Props) {
                   </div>
                 </div>
 
-                {/* Recommendation */}
-                <div style={{ padding: 10, border: '1px solid rgba(111,168,179,.3)', borderRadius: 'var(--r)', background: 'rgba(111,168,179,.04)', marginTop: 'auto' }}>
-                  <div className="label" style={{ color: 'var(--accent-2)' }}>Insight</div>
-                  <div style={{ fontSize: 11, color: 'var(--fog)', marginTop: 4, lineHeight: 1.5 }}>
-                    {selItem.pct > 50
-                      ? `${selItem.label} dominates at ${Math.round(selItem.pct)}% — consider routing optimizations.`
-                      : selItem.p95LatMs && selItem.p95LatMs > 3000
-                        ? `p95 latency of ${fmtMs(selItem.p95LatMs)} is elevated. Check for retries or large contexts.`
-                        : 'Within expected range. No action needed.'}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                    <button className="mbtn primary" onClick={() => onNavigate?.('Sessions')}>
-                      Sessions ▸
-                    </button>
-                    <button className="mbtn" onClick={() => onNavigate?.('Traces')}>
-                      Traces ▸
-                    </button>
-                  </div>
-                </div>
+                {/* Insight — rule-based, matched to selected item */}
+                {(() => {
+                  const label = selItem.label.toLowerCase();
+                  const matched = (insights ?? []).find(ins =>
+                    ins.title.toLowerCase().includes(label) ||
+                    ins.detail.toLowerCase().includes(label)
+                  );
+                  const latencyFlag = selItem.p95LatMs && selItem.p95LatMs > 3000;
+                  const dominantFlag = selItem.pct > 50;
+
+                  const insightText = matched
+                    ? matched.detail
+                    : dominantFlag
+                      ? `${selItem.label} is ${Math.round(selItem.pct)}% of spend in this window.`
+                      : latencyFlag
+                        ? `p95 latency ${fmtMs(selItem.p95LatMs!)} — check for large contexts or retries.`
+                        : null;
+
+                  const sevColor = matched?.severity === 'warn' ? '#C9966B'
+                    : matched?.severity === 'info' ? 'var(--steel)'
+                    : 'var(--accent-2)';
+
+                  return (
+                    <div style={{ padding: 10, border: `1px solid ${insightText ? 'rgba(201,150,107,.3)' : 'rgba(111,168,179,.2)'}`, borderRadius: 'var(--r)', background: 'rgba(0,0,0,.15)', marginTop: 'auto' }}>
+                      <div className="label" style={{ color: sevColor }}>
+                        {matched ? `${matched.severity.toUpperCase()} · ${matched.title}` : 'Insight'}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--fog)', marginTop: 4, lineHeight: 1.5 }}>
+                        {insightText ?? 'No active findings for this contributor.'}
+                      </div>
+                      {matched?.recommendation && (
+                        <div style={{ fontSize: 10, color: 'var(--graphite)', marginTop: 4 }}>
+                          → {matched.recommendation}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                        <button className="mbtn primary" onClick={() => onNavigate?.('Sessions')}>Sessions ▸</button>
+                        <button className="mbtn" onClick={() => onNavigate?.('Intel')}>Intel ▸</button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

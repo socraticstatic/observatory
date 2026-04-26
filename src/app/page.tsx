@@ -31,6 +31,7 @@ import { CostDriversView } from '@/components/views/CostDriversView';
 import { SessionsView } from '@/components/views/SessionsView';
 import { RulesView } from '@/components/views/RulesView';
 import { ArchiveView } from '@/components/views/ArchiveView';
+import { InsightsView } from '@/components/views/InsightsView';
 import type { Lookback } from '@/lib/lookback';
 
 type Density = 'comfortable' | 'compact' | 'dense';
@@ -106,11 +107,12 @@ export default function App() {
         />
 
         <div className="page" style={{ paddingTop: 20 }}>
-          {view === 'Traces'   && <TracesView lookback={lookback} />}
-          {view === 'Costs'    && <CostDriversView lookback={lookback} onNavigate={setView} />}
-          {view === 'Sessions' && <SessionsView lookback={lookback} />}
-          {view === 'Rules'    && <RulesView />}
-          {view === 'Archive'  && <ArchiveView />}
+          {view === 'Traces'   && <TracesView lookback={lookback} provider={effectiveProvider} />}
+          {view === 'Costs'    && <CostDriversView lookback={lookback} provider={effectiveProvider} onNavigate={setView} />}
+          {view === 'Intel'    && <InsightsView lookback={lookback} provider={effectiveProvider} onNavigate={setView} />}
+          {view === 'Sessions' && <SessionsView lookback={lookback} provider={effectiveProvider} />}
+          {view === 'Rules'    && <RulesView provider={effectiveProvider} />}
+          {view === 'Archive'  && <ArchiveView provider={effectiveProvider} />}
 
           {view === 'Pulse' && (
             <>
@@ -127,7 +129,7 @@ export default function App() {
                 onDrillSpike={(s) => drillTo('spike', 'pulse spike', 4)}
               />
 
-              <BurnRateRail lookback={lookback} />
+              <BurnRateRail lookback={lookback} provider={effectiveProvider} />
               <StatStrip lookback={lookback} provider={effectiveProvider} />
 
               {/* DIAGNOSTICS divider */}
@@ -141,9 +143,9 @@ export default function App() {
                 </span>
               </div>
 
-              <WhyInsightsCard />
-              <ZombieSessionsCard onReview={(sid) => drillTo('session', `ZOMBIE · ${sid.slice(0, 8)}…`, undefined, sid)} />
-              <EntityExplorer lookback={lookback} />
+              <WhyInsightsCard provider={effectiveProvider} />
+              <ZombieSessionsCard provider={effectiveProvider} onReview={(sid) => drillTo('session', `ZOMBIE · ${sid.slice(0, 8)}…`, undefined, sid)} />
+              <EntityExplorer lookback={lookback} provider={effectiveProvider} />
 
               <div id="5w-what" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,1fr)', gap: 16, marginTop: 16 }}>
                 <WhatCard lookback={lookback} provider={effectiveProvider} onDrill={(b, i) => drillTo('bar', `WHAT · ${b.label}`, 3)} />
@@ -152,7 +154,7 @@ export default function App() {
                     selected={selectedModel}
                     setSelected={setSelectedModel}
                     lookback={lookback}
-                    providerFilter={effectiveProvider}
+                    provider={effectiveProvider}
                     onDrill={(m) => drillTo('model', `WHO · ${m.name}`, 1)}
                   />
                 </div>
@@ -169,22 +171,22 @@ export default function App() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)', gap: 16, marginTop: 16 }}>
                 <div id="5w-when">
-                  <WhenCard provider={effectiveProvider} onDrill={(c) => drillTo('heatmap', `WHEN · D-${String(30 - c.d).padStart(2, '0')} ${String(c.h).padStart(2, '0')}:00`, 2)} />
+                  <WhenCard lookback={lookback} provider={effectiveProvider} onDrill={(c) => drillTo('heatmap', `WHEN · D-${String(30 - c.d).padStart(2, '0')} ${String(c.h).padStart(2, '0')}:00`, 2)} />
                 </div>
-                <EventTimelineCard />
+                <EventTimelineCard lookback={lookback} provider={effectiveProvider} />
               </div>
 
               <div id="5w-how" style={{ marginTop: 16 }} ref={howRef}>
-                <HowCard drill={drill} />
+                <HowCard drill={drill} lookback={lookback} provider={effectiveProvider} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.15fr) minmax(0,1fr)', gap: 16, marginTop: 16 }}>
-                <ContextCompositionCard lookback={lookback} />
-                <QualityCostScatter lookback={lookback} />
+                <ContextCompositionCard lookback={lookback} provider={effectiveProvider} />
+                <QualityCostScatter lookback={lookback} provider={effectiveProvider} />
               </div>
 
               <div style={{ marginTop: 16 }}>
-                <CounterfactualSimulator />
+                <CounterfactualSimulator lookback={lookback} provider={effectiveProvider} />
               </div>
 
               <SecurityTerminal />
@@ -195,7 +197,7 @@ export default function App() {
                 <span className="mono" style={{ color: 'var(--steel)' }}>
                   retention: 90d ·{' '}
                   {health?.secondsAgo != null
-                    ? `last ingest: ${health.secondsAgo < 60 ? `${health.secondsAgo}s` : `${Math.round(health.secondsAgo / 60)}m`} ago`
+                    ? `last ingest: ${health.secondsAgo < 60 ? `${health.secondsAgo}s` : health.secondsAgo < 3600 ? `${Math.round(health.secondsAgo / 60)}m` : `${Math.round(health.secondsAgo / 3600)}h`} ago`
                     : 'no ingest data'}
                   {health?.dataRange.oldest && (
                     <> · data from {health.dataRange.oldest.slice(0, 10)}</>
