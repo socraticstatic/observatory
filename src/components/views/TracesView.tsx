@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import { fmt, fmtUsd, fmtMs } from '@/lib/fmt';
+import { fmtUnits } from '@/lib/service-registry';
 import type { Lookback } from '@/lib/lookback';
 
 interface Props {
@@ -42,12 +43,13 @@ type TraceItem = {
   cachedTokens: number;
   reasoningTokens: number;
   costUsd: number;
-  latencyMs: number;
+  latencyMs: number | null;
   status: string;
   sessionId: string | null;
   project: string | null;
   surface: string | null;
   contentType: string | null;
+  billingUnit: string;
   rawPayload: unknown;
 };
 
@@ -149,7 +151,7 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ display: 'grid', gridTemplateColumns: COL, padding: '8px 16px', borderBottom: '1px solid var(--line)', gap: 8 }}>
-          {['Time', 'Model', 'Provider', 'Tokens', 'Cost', 'Latency', 'Status', ''].map(h => (
+          {['Time', 'Model', 'Provider', 'Units', 'Cost', 'Latency', 'Status', ''].map(h => (
             <span key={h} className="label" style={{ fontSize: 9 }}>{h}</span>
           ))}
         </div>
@@ -187,16 +189,16 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
                 <span style={{ color: 'var(--steel)' }}>{row.provider}</span>
               </span>
               <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
-                {fmt(row.inputTokens + row.outputTokens)}
-                {row.cachedTokens > 0 && (
-                  <span style={{ color: 'var(--accent-2)', marginLeft: 4 }}>+{fmt(row.cachedTokens)}c</span>
-                )}
+                {row.billingUnit === 'tokens'
+                  ? <>{fmt(row.inputTokens + row.outputTokens)}{row.cachedTokens > 0 && <span style={{ color: 'var(--accent-2)', marginLeft: 4 }}>+{fmt(row.cachedTokens)}c</span>}</>
+                  : fmtUnits(row.inputTokens, row.provider)
+                }
               </span>
               <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
                 {fmtUsd(row.costUsd)}
               </span>
               <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
-                {row.latencyMs > 0
+                {(row.latencyMs ?? 0) > 0
                   ? fmtMs(row.latencyMs)
                   : row.cachedTokens > 0
                   ? <span style={{ fontSize: 9, color: 'var(--accent-2)', letterSpacing: '.08em' }}>cache</span>
@@ -219,8 +221,8 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
                     { label: 'Project',           val: row.project      ?? '—' },
                     { label: 'Surface',           val: row.surface      ?? '—' },
                     { label: 'Content type',      val: row.contentType  ?? '—' },
-                    { label: 'Input tokens',      val: fmt(row.inputTokens) },
-                    { label: 'Output tokens',     val: fmt(row.outputTokens) },
+                    { label: row.billingUnit === 'tokens' ? 'Input tokens'  : `Input (${row.billingUnit})`, val: fmt(row.inputTokens) },
+                    { label: row.billingUnit === 'tokens' ? 'Output tokens' : 'Output units',              val: fmt(row.outputTokens) },
                     { label: 'Cached tokens',     val: fmt(row.cachedTokens) },
                     { label: 'Reasoning tokens',  val: fmt(row.reasoningTokens) },
                   ].map(({ label, val }) => (

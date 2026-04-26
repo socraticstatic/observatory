@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
+import { getBillingUnit } from '@/lib/service-registry';
 
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
@@ -54,12 +55,13 @@ export const tracesRouter = router({
           cachedTokens:    e.cachedTokens,
           reasoningTokens: e.reasoningTokens,
           costUsd:         Number(e.costUsd),
-          latencyMs:       e.latencyMs ?? 0,
+          latencyMs:       e.latencyMs ?? null,
           status:          e.status,
           sessionId:       e.sessionId  ?? null,
           project:         e.project    ?? null,
           surface:         e.surface    ?? null,
           contentType:     e.contentType ?? null,
+          billingUnit:     getBillingUnit(e.provider),
           rawPayload:      e.rawPayload,
         })),
         nextCursor: hasMore ? page[page.length - 1].ts.toISOString() : null,

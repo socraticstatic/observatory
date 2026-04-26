@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 import { syncElevenLabs } from '@/lib/providers/elevenlabs-sync';
 import { syncHeyGen }     from '@/lib/providers/heygen-sync';
+import { syncLeonardo }   from '@/lib/providers/leonardo-sync';
 import { runDailyRollup } from '@/lib/providers/daily-rollup';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,8 @@ export async function POST() {
                     .catch(e => { results.elevenlabs = { error: String(e) }; }),
     syncHeyGen().then(r      => { results.heygen = r; })
                 .catch(e     => { results.heygen = { error: String(e) }; }),
+    syncLeonardo().then(r    => { results.leonardo = r; })
+                  .catch(e  => { results.leonardo = { error: String(e) }; }),
   ]);
 
   // Self-archive — roll up events older than 7 days into daily rollups

@@ -6,6 +6,7 @@
 
 import { NextRequest } from 'next/server';
 import { db } from '@/server/db';
+import { calcCost } from '@/lib/pricing';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,45 +19,6 @@ const OBSERVATORY_HEADERS = [
   'x-observatory-surface',
 ];
 
-// Rate table (USD per token) — mirrors src/lib/ingest.ts
-const INPUT_RATE: Record<string, number> = {
-  'claude-opus':   0.000015,
-  'claude-sonnet': 0.000003,
-  'claude-haiku':  0.0000008,
-  default:         0.000003,
-};
-const OUTPUT_RATE: Record<string, number> = {
-  'claude-opus':   0.000075,
-  'claude-sonnet': 0.000015,
-  'claude-haiku':  0.000004,
-  default:         0.000015,
-};
-const CACHE_WRITE_MULT = 1.25;
-const CACHE_READ_MULT  = 0.10;
-
-function getRate(model: string, table: Record<string, number>): number {
-  for (const key of Object.keys(table)) {
-    if (key !== 'default' && model.includes(key)) return table[key]!;
-  }
-  return table.default!;
-}
-
-function calcCost(
-  model: string,
-  input: number,
-  output: number,
-  cacheWrite = 0,
-  cacheRead  = 0,
-): string {
-  const ir = getRate(model, INPUT_RATE);
-  const or = getRate(model, OUTPUT_RATE);
-  return (
-    input      * ir +
-    cacheWrite * ir * CACHE_WRITE_MULT +
-    cacheRead  * ir * CACHE_READ_MULT  +
-    output     * or
-  ).toFixed(6);
-}
 
 interface UsageAccum {
   model:               string;
@@ -70,13 +32,13 @@ interface UsageAccum {
 }
 
 async function logEvent(usage: UsageAccum, startMs: number): Promise<void> {
-  const costUsd = calcCost(
-    usage.model,
-    usage.inputTokens,
-    usage.outputTokens,
-    usage.cacheCreationTokens,
-    usage.cacheReadTokens,
-  );
+  const costUsd = calcCost({
+    model:              usage.model,
+    inputTokens:        usage.inputTokens,
+    outputTokens:       usage.outputTokens,
+    cacheCreationTokens:usage.cacheCreationTokens,
+    cachedTokens:       usage.cacheReadTokens,
+  });
   await db.llmEvent.create({
     data: {
       provider:            'anthropic',

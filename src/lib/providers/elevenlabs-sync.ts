@@ -71,9 +71,10 @@ export async function syncElevenLabs(): Promise<{ inserted: number; skipped: num
           costUsd,
           status:              item.state === 'created' ? 'ok' : item.state,
           contentType:         'tts',
+          billingUnit:         'characters',
           rawPayload:          item as unknown as import('@prisma/client').Prisma.InputJsonValue,
           ts,
-        },
+        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
       });
       inserted++;
     }

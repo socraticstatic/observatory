@@ -79,7 +79,7 @@ export const entityRouter = router({
         inputTokens: e.inputTokens,
         outputTokens: e.outputTokens,
         costUsd: Number(e.costUsd),
-        latencyMs: e.latencyMs ?? 0,
+        latencyMs: e.latencyMs ?? null,
         status: e.status,
       }));
     }),

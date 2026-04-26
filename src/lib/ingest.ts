@@ -2,6 +2,7 @@
 
 import { createHash } from 'crypto';
 import { calcCost } from './pricing';
+import { getBillingUnit } from './service-registry';
 
 export interface NormalizedEvent {
   provider: string;
@@ -19,6 +20,7 @@ export interface NormalizedEvent {
   region?: string;
   status: string;
   contentType?: string;
+  billingUnit: string;
   qualityScore?: string;
   eventHash?: string;
   rawPayload: unknown;
@@ -54,6 +56,7 @@ function parseCreativePayload(body: any): NormalizedEvent | null {
     latencyMs:          body.latency_ms ? Math.round(body.latency_ms) : undefined,
     status:             body.status ?? (body.error ? 'error' : 'ok'),
     contentType:        body.service_type ?? provider,
+    billingUnit:        getBillingUnit(provider),
     rawPayload:         body,
   };
 }
@@ -139,6 +142,7 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
     latencyMs,
     status,
     contentType,
+    billingUnit: getBillingUnit(provider),
     qualityScore,
     eventHash,
     rawPayload: body,

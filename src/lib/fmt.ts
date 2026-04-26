@@ -5,8 +5,10 @@ export const fmt = (n: number): string => {
   return n.toFixed(0);
 };
 
-export const fmtMs = (n: number): string =>
-  n < 1000 ? n.toFixed(0) + 'ms' : (n / 1000).toFixed(2) + 's';
+export const fmtMs = (n: number | null | undefined): string => {
+  if (n == null || n <= 0) return '—';
+  return n < 1000 ? n.toFixed(0) + 'ms' : (n / 1000).toFixed(2) + 's';
+};
 
 export const fmtUsd = (n: number): string =>
   (n < 0 ? '-' : '') + '$' + Math.abs(n).toFixed(2);

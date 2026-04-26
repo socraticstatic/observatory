@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
+import { getBillingUnit } from '@/lib/service-registry';
 
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
@@ -117,9 +118,10 @@ export const sessionsRouter = router({
         outputTokens: e.outputTokens,
         cachedTokens: e.cachedTokens,
         costUsd:      Number(e.costUsd),
-        latencyMs:    e.latencyMs ?? 0,
+        latencyMs:    e.latencyMs ?? null,
         status:       e.status,
         contentType:  e.contentType ?? null,
+        billingUnit:  getBillingUnit(e.provider),
       }));
     }),
 });

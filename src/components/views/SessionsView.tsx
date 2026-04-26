@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import { fmtMs } from '@/lib/fmt';
+import { fmtUnits } from '@/lib/service-registry';
 import type { Lookback } from '@/lib/lookback';
 
 interface Props { lookback: Lookback; provider?: string; }
@@ -306,9 +307,15 @@ export function SessionsView({ lookback, provider }: Props) {
                               {new Date(e.ts).toLocaleTimeString()}
                             </td>
                             <td className="mono" style={{ padding: '5px 12px', color: 'var(--mist)' }}>{e.model}</td>
-                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>{e.inputTokens.toLocaleString()}</td>
-                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>{e.outputTokens.toLocaleString()}</td>
-                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>{e.cachedTokens.toLocaleString()}</td>
+                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>
+                              {e.billingUnit === 'tokens' ? e.inputTokens.toLocaleString() : fmtUnits(e.inputTokens, e.provider)}
+                            </td>
+                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>
+                              {e.billingUnit === 'tokens' ? e.outputTokens.toLocaleString() : '—'}
+                            </td>
+                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>
+                              {e.billingUnit === 'tokens' ? e.cachedTokens.toLocaleString() : '—'}
+                            </td>
                             <td className="mono" style={{ padding: '5px 12px', color: 'var(--mist)' }}>{fmtCost(e.costUsd)}</td>
                             <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>{fmtMs(e.latencyMs)}</td>
                             <td className="mono" style={{

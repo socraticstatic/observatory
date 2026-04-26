@@ -88,9 +88,10 @@ export async function syncHeyGen(): Promise<{ inserted: number; skipped: number 
         costUsd,
         status:              v.status === 'completed' ? 'ok' : 'error',
         contentType:         'video',
+        billingUnit:         'seconds',
         rawPayload:          (detail ?? v) as unknown as import('@prisma/client').Prisma.InputJsonValue,
         ts,
-      },
+      } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     });
     inserted++;
   }

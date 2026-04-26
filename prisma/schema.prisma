@@ -25,6 +25,7 @@ model LlmEvent {
   status               String   @default("ok")
   contentType          String?
   qualityScore         Decimal? @db.Decimal(4, 2)
+  billingUnit          String   @default("tokens") @map("billing_unit")
   rawPayload           Json
   eventHash            String?  @unique @map("event_hash")
 
