@@ -17,15 +17,16 @@ interface Props {
 const LOOKBACK_KEYS = Object.keys(LOOKBACKS) as Lookback[];
 
 const PROVIDER_META: Record<string, { label: string; dot: string }> = {
-  anthropic: { label: 'Claude',  dot: '#6FA8B3' },
-  google:    { label: 'Gemini',  dot: '#8BA89C' },
-  xai:       { label: 'Grok',    dot: '#B88A8A' },
-  meta:      { label: 'Llama',   dot: '#9BA87C' },
-  ollama:    { label: 'Ollama',  dot: '#A89276' },
-  openai:    { label: 'OpenAI',  dot: '#7CA893' },
+  anthropic:  { label: 'Claude',      dot: '#6FA8B3' },
+  google:     { label: 'Gemini',      dot: '#8BA89C' },
+  xai:        { label: 'Grok',        dot: '#B88A8A' },
+  meta:       { label: 'Llama',       dot: '#9BA87C' },
+  ollama:     { label: 'Ollama',      dot: '#A89276' },
+  openai:     { label: 'OpenAI',      dot: '#7CA893' },
+  elevenlabs: { label: 'ElevenLabs',  dot: '#C9966B' },
+  leonardo:   { label: 'Leonardo',    dot: '#9B7CA8' },
+  heygen:     { label: 'HeyGen',      dot: '#7C8BA8' },
 };
-
-const CREATIVE_PROVIDERS = new Set(['heygen', 'elevenlabs', 'leonardo', 'fal', 'replicate', 'stability']);
 
 // --- LiveBar ---
 
@@ -196,15 +197,20 @@ export function CommandHeader({
   const status = health?.status ?? 'ok';
   const secondsAgo = health?.secondsAgo ?? null;
 
+  // Active providers in the current window — used to dim inactive pills
+  const activeProviders = new Set(
+    (providerData ?? []).map(p => p.provider)
+  );
+
+  // Always show all known providers — never collapse to what's active in window
   const providerToggles = [
-    { id: 'ALL', label: 'ALL', dot: null as string | null },
-    ...(providerData ?? [])
-      .filter(p => !CREATIVE_PROVIDERS.has(p.provider))
-      .map(p => ({
-        id: p.provider,
-        label: PROVIDER_META[p.provider]?.label ?? p.provider,
-        dot: PROVIDER_META[p.provider]?.dot ?? '#8A9297',
-      })),
+    { id: 'ALL', label: 'ALL', dot: null as string | null, active: true },
+    ...Object.entries(PROVIDER_META).map(([id, meta]) => ({
+      id,
+      label: meta.label,
+      dot: meta.dot,
+      active: activeProviders.has(id),
+    })),
   ];
 
   return (
@@ -236,11 +242,12 @@ export function CommandHeader({
       {/* CENTER: provider toggle */}
       <div className="cmd-cell" style={{ justifyContent: 'center' }}>
         <div className="model-toggle">
-          {providerToggles.map(({ id, label, dot }) => (
+          {providerToggles.map(({ id, label, dot, active }) => (
             <button
               key={id}
               className={modelFilter === id ? 'on' : ''}
               onClick={() => setModelFilter(id)}
+              style={{ opacity: modelFilter === id || active ? 1 : 0.35 }}
             >
               {dot && (
                 <span

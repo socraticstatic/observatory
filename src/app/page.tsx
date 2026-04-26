@@ -68,6 +68,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Proactive sync: pull real usage from provider APIs every 15 minutes
+  useEffect(() => {
+    const run = () => fetch('/api/sync', { method: 'POST' }).catch(() => {});
+    run(); // immediate on mount
+    const t = setInterval(run, 15 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const { data: health } = trpc.health.status.useQuery(undefined, { refetchInterval: 30_000 });
 
   // CommandHeader model toggle acts as a provider filter — merge with ServicesRail selection.
