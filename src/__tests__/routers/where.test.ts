@@ -28,10 +28,10 @@ describe('whereRouter.regional', () => {
     expect(result[0].calls).toBe(10);
   });
 
-  it('handles null avg_lat by rounding to 0', async () => {
+  it('returns null avgLatMs when avg_lat is null', async () => {
     mockDb.$queryRaw.mockResolvedValue([{ ...ROW, avg_lat: null }]);
     const result = await caller.regional({ lookback: '24H' });
-    expect(result[0].avgLatMs).toBe(0);
+    expect(result[0].avgLatMs).toBeNull();
   });
 
   it('returns empty array for no rows', async () => {

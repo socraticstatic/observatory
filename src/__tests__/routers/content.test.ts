@@ -49,10 +49,10 @@ describe('contentRouter.contentTypes', () => {
     expect(result[0].avgQuality).toBeCloseTo(4.2);
   });
 
-  it('falls back avgQuality to 0 when null', async () => {
+  it('returns null avgQuality when avg_quality is null', async () => {
     mockDb.$queryRaw.mockResolvedValue([{ ...ROW, avg_quality: null }]);
     const result = await caller.contentTypes({ lookback: '24H' });
-    expect(result[0].avgQuality).toBe(0);
+    expect(result[0].avgQuality).toBeNull();
   });
 
   it('returns empty array for no rows', async () => {

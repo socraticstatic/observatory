@@ -1,26 +1,32 @@
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
+
+const NULL_PROJECT = '(no project)';
 
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
   if (interval === '24 hours') return 86_400_000;
+  if (interval === '90 days')  return 90 * 86_400_000;
+  if (interval === '365 days') return 365 * 86_400_000;
   return 30 * 86_400_000;
 }
 
 export const entityRouter = router({
   projects: publicProcedure
-    .input(z.object({ lookback: LookbackSchema }))
+    .input(z.object({ lookback: LookbackSchema, provider: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const rows = await ctx.db.$queryRaw<Array<{ project: string; calls: bigint; cost: unknown; sessions: bigint }>>`
         SELECT
-          COALESCE(project, 'untagged') AS project,
+          COALESCE(project, '(no project)') AS project,
           COUNT(*) AS calls,
           SUM("costUsd")::float AS cost,
           COUNT(DISTINCT "sessionId") AS sessions
         FROM llm_events
-        WHERE ts >= ${since}
+        WHERE ts >= ${since} ${pfSql}
         GROUP BY project
         ORDER BY cost DESC
       `;
@@ -28,18 +34,23 @@ export const entityRouter = router({
     }),
 
   sessions: publicProcedure
-    .input(z.object({ project: z.string(), lookback: LookbackSchema }))
+    .input(z.object({ project: z.string(), lookback: LookbackSchema, provider: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
-      const rows = await ctx.db.$queryRaw<Array<{ session_id: string; calls: bigint; cost: unknown; first_ts: Date; last_ts: Date }>>`
+      const projectFilter = input.project === NULL_PROJECT
+        ? Prisma.sql`AND project IS NULL`
+        : Prisma.sql`AND project = ${input.project}`;
+      const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
+      const rows = await ctx.db.$queryRaw<Array<{ session_id: string; calls: bigint; cost: unknown; total_tokens: unknown; first_ts: Date; last_ts: Date }>>`
         SELECT
           "sessionId" AS session_id,
           COUNT(*) AS calls,
           SUM("costUsd")::float AS cost,
+          COALESCE(SUM("inputTokens" + "outputTokens"), 0)::float AS total_tokens,
           MIN(ts) AS first_ts,
           MAX(ts) AS last_ts
         FROM llm_events
-        WHERE ts >= ${since} AND project = ${input.project}
+        WHERE ts >= ${since} ${projectFilter} ${pfSql}
         GROUP BY "sessionId"
         ORDER BY last_ts DESC
       `;
@@ -47,6 +58,7 @@ export const entityRouter = router({
         sessionId: r.session_id,
         calls: Number(r.calls),
         costUsd: Number(r.cost),
+        totalTokens: Number(r.total_tokens),
         firstTs: r.first_ts.toISOString(),
         lastTs: r.last_ts.toISOString(),
       }));
@@ -58,6 +70,7 @@ export const entityRouter = router({
       const events = await ctx.db.llmEvent.findMany({
         where: { sessionId: input.sessionId },
         orderBy: { ts: 'asc' },
+        take: 200,
         select: { id: true, ts: true, model: true, inputTokens: true, outputTokens: true, costUsd: true, latencyMs: true, status: true },
       });
       return events.map((e, i) => ({
@@ -68,7 +81,7 @@ export const entityRouter = router({
         inputTokens: e.inputTokens,
         outputTokens: e.outputTokens,
         costUsd: Number(e.costUsd),
-        latencyMs: e.latencyMs ?? 0,
+        latencyMs: e.latencyMs ?? null,
         status: e.status,
       }));
     }),

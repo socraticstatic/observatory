@@ -25,7 +25,9 @@ model LlmEvent {
   status               String   @default("ok")
   contentType          String?
   qualityScore         Decimal? @db.Decimal(4, 2)
+  billingUnit          String   @default("tokens") @map("billing_unit")
   rawPayload           Json
+  eventHash            String?  @unique @map("event_hash")
 
   @@index([ts(sort: Desc)])
   @@index([provider, ts(sort: Desc)])
@@ -35,11 +37,13 @@ model LlmEvent {
 }
 
 model RegisteredService {
-  id        String   @id @default(uuid())
-  provider  String   @unique
-  label     String
-  category  String   @default("llm")
-  addedAt   DateTime @default(now())
+  id               String   @id @default(uuid())
+  provider         String   @unique
+  label            String
+  category         String   @default("llm")
+  billingPlan      String   @default("api")   @map("billing_plan")
+  monthlyBudgetUsd Float    @default(0)        @map("monthly_budget_usd")
+  addedAt          DateTime @default(now())
 
   @@map("registered_services")
 }
@@ -57,8 +61,57 @@ model Annotation {
   @@map("annotations")
 }
 
+model ArchiveRun {
+  id              String    @id @db.Uuid
+  startedAt       DateTime  @map("started_at") @db.Timestamptz
+  finishedAt      DateTime? @map("finished_at") @db.Timestamptz
+  status          String    @default("running")
+  cutoffDays      Int       @map("cutoff_days")
+  hotCount        Int       @default(0) @map("hot_count")
+  warmCount       Int       @default(0) @map("warm_count")
+  coldCount       Int       @default(0) @map("cold_count")
+  archiveCount    Int       @default(0) @map("archive_count")
+  rowsRolledUp    Int       @default(0) @map("rows_rolled_up")
+  rowsDeleted     Int       @default(0) @map("rows_deleted")
+  rollupDaysSpan  Int       @default(0) @map("rollup_days_span")
+  exportPath      String?   @map("export_path")
+  errorMessage    String?   @map("error_message")
+
+  @@map("archive_runs")
+}
+
+model LlmDailyRollup {
+  id                  String   @id @db.Uuid
+  day                 DateTime @db.Date
+  provider            String
+  model               String
+  project             String?
+  surface             String?
+  calls               Int      @default(0)
+  costUsd             Decimal  @default(0) @map("cost_usd") @db.Decimal(12, 6)
+  inputTokens         BigInt   @default(0) @map("input_tokens")
+  outputTokens        BigInt   @default(0) @map("output_tokens")
+  cachedTokens        BigInt   @default(0) @map("cached_tokens")
+  cacheCreationTokens BigInt   @default(0) @map("cache_creation_tokens")
+  reasoningTokens     BigInt   @default(0) @map("reasoning_tokens")
+  errorCount          Int      @default(0) @map("error_count")
+  avgLatencyMs        Float?   @map("avg_latency_ms")
+  archivedRawCount    Int      @default(0) @map("archived_raw_count")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("llm_daily_rollups")
+}
+
+model SessionLabel {
+  sessionId String   @id
+  label     String
+  updatedAt DateTime @updatedAt
+
+  @@map("session_labels")
+}
+
 model AlertRule {
-  id        String   @id @default(uuid())
+  id        String   @id
   name      String
   metric    String
   lookback  String

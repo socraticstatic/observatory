@@ -1,6 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { fmtUsd } from '@/lib/fmt';
+import { trpc } from '@/lib/trpc-client';
+import type { Lookback } from '@/lib/lookback';
 
 const EVENTS = [
   {d:2,  type:'edit',   title:'Edit: research_agent system prompt',        detail:'1.2k → 3.8k tokens',      impact:'+212% cost/run', severity:'bad'},
@@ -32,25 +35,58 @@ const SEV_COLOR: Record<string, string> = {
   info: '#6FA8B3',
 };
 
-function makeRng(seed: number) {
-  let s = seed;
-  return () => {
-    s = (s * 1664525 + 1013904223) & 0xffffffff;
-    return (s >>> 0) / 4294967296;
+const PAD = { top: 14, right: 8, bottom: 20, left: 40 };
+const CHART_W = 600 - PAD.left - PAD.right;
+const CHART_H = 80 - PAD.top - PAD.bottom;
+
+type Annotation = {
+  d: number;
+  type: string;
+  title: string;
+  severity: 'good' | 'warn' | 'bad' | 'info';
+  detail: string;
+};
+
+function normalizeSeverity(s: string): 'good' | 'warn' | 'bad' | 'info' {
+  if (s === 'good' || s === 'warn' || s === 'bad' || s === 'info') return s as 'good' | 'warn' | 'bad' | 'info';
+  if (s === 'critical' || s === 'error') return 'bad';
+  if (s === 'warning') return 'warn';
+  return 'info';
+}
+
+function buildCurve(data: number[]) {
+  const safeData = data.map(v => (isFinite(v) && !isNaN(v)) ? v : 0);
+  const n = safeData.length;
+
+  if (n === 0) {
+    const fallbackY = PAD.top + CHART_H;
+    const fallbackX = PAD.left + CHART_W / 2;
+    return {
+      linePts: '',
+      areaPath: '',
+      px: (_i: number) => fallbackX,
+      py: (_v: number) => fallbackY,
+      min: 0,
+      max: 0,
+    };
+  }
+
+  const min = Math.min(...safeData);
+  const max = Math.max(...safeData);
+  const range = isFinite(max - min) && (max - min) > 0 ? max - min : 1;
+
+  const px = (i: number) => n <= 1 ? PAD.left + CHART_W / 2 : PAD.left + (i / (n - 1)) * CHART_W;
+  const py = (v: number) => {
+    const sv = (isFinite(v) && !isNaN(v)) ? v : 0;
+    const result = PAD.top + CHART_H - ((sv - min) / range) * CHART_H;
+    return isFinite(result) ? result : PAD.top + CHART_H;
   };
-}
 
-function buildSpend(): number[] {
-  const rng = makeRng(42);
-  return Array.from({ length: 30 }, (_, i) => {
-    const base = 6 + Math.sin(i / 5) * 1.6 + Math.sin(i / 1.8) * 0.8;
-    const spike = (i === 2 ? 1.6 : 0) + (i === 8 ? 2.4 : 0) + (i === 21 ? 3.8 : 0) + (i === 14 ? -1.2 : 0);
-    return Math.max(2, base + spike + (rng() - 0.5) * 1.1);
-  });
-}
+  const linePts = safeData.map((v, i) => `${i === 0 ? 'M' : 'L'}${px(i).toFixed(2)},${py(v).toFixed(2)}`).join(' ');
+  const areaPath = `${linePts} L${px(n - 1).toFixed(2)},${(PAD.top + CHART_H).toFixed(2)} L${PAD.left},${(PAD.top + CHART_H).toFixed(2)} Z`;
 
-const SPEND = buildSpend();
-const SPEND_MAX = Math.max(...SPEND);
+  return { linePts, areaPath, px, py, min, max };
+}
 
 function getSevKey(severity: string): string {
   if (severity === 'good') return 'good';
@@ -59,8 +95,65 @@ function getSevKey(severity: string): string {
   return 'bad';
 }
 
-export function EventTimelineCard() {
+interface EventTimelineProps {
+  lookback?: Lookback;
+  provider?: string;
+}
+
+export function EventTimelineCard({ lookback = '30D', provider }: EventTimelineProps) {
+  const [selected, setSelected] = useState<number | null>(null);
   const [sel, setSel] = useState<EventItem>(EVENTS[5]);
+
+  const { data: timelineData } = trpc.events.timeline.useQuery({ lookback, provider });
+
+  const data = useMemo<number[]>(() => {
+    if (timelineData && timelineData.daily.length > 0) {
+      return timelineData.daily.map(d => d.costUsd);
+    }
+    return [];
+  }, [timelineData]);
+
+  const ANNOTATIONS = useMemo<readonly Annotation[]>(() => {
+    if (!timelineData || timelineData.annotations.length === 0 || timelineData.daily.length === 0) return [];
+
+    const dayIndexMap = new Map<string, number>();
+    timelineData.daily.forEach((row, i) => {
+      dayIndexMap.set(row.d.slice(0, 10), i);
+    });
+
+    const firstDayMs  = new Date(timelineData.daily[0].d).getTime();
+    const msPerDay    = 86_400_000;
+    const lastIdx     = timelineData.daily.length - 1;
+
+    return timelineData.annotations.map(a => {
+      const annDateKey = a.ts.slice(0, 10);
+      let d = dayIndexMap.get(annDateKey);
+      if (d === undefined) {
+        const offsetDays = Math.round((new Date(a.ts).getTime() - firstDayMs) / msPerDay);
+        d = Math.min(lastIdx, Math.max(0, offsetDays));
+      }
+      return {
+        d,
+        type: a.type,
+        title: a.title,
+        severity: normalizeSeverity(a.severity),
+        detail: a.detail ?? '',
+      };
+    });
+  }, [timelineData]);
+
+  const { linePts, areaPath, px, py, min, max } = useMemo(() => buildCurve(data), [data]);
+
+  // Use static events if no real data
+  const useStatic = !timelineData || data.length === 0;
+
+  const yTicks = useStatic ? [] : [
+    { v: min, label: fmtUsd(min) },
+    { v: (min + max) / 2, label: fmtUsd((min + max) / 2) },
+    { v: max, label: fmtUsd(max) },
+  ];
+
+  const selectedAnn = selected !== null ? ANNOTATIONS[selected] : null;
 
   return (
     <div className="card" style={{ padding: '14px 16px' }}>
@@ -112,106 +205,214 @@ export function EventTimelineCard() {
         borderRadius: 'var(--r)',
         padding: '8px 10px 22px',
       }}>
-        <svg
-          viewBox="0 0 600 90"
-          preserveAspectRatio="none"
-          style={{ width: '100%', height: '100%', display: 'block' }}
-        >
-          <defs>
-            <linearGradient id="spendGrad" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#6FA8B3" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#6FA8B3" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {/* Spend area */}
-          <path
-            d={'M 0 90 ' + SPEND.map((v, i) => `L ${(i / 29) * 600} ${90 - (v / SPEND_MAX) * 80}`).join(' ') + ' L 600 90 Z'}
-            fill="url(#spendGrad)"
-          />
-          {/* Spend line */}
-          <path
-            d={'M 0 ' + (90 - (SPEND[0] / SPEND_MAX) * 80) + ' ' + SPEND.map((v, i) => `L ${(i / 29) * 600} ${90 - (v / SPEND_MAX) * 80}`).join(' ')}
-            fill="none"
-            stroke="#6FA8B3"
-            strokeWidth="1.2"
-          />
-        </svg>
+        {!useStatic ? (
+          <svg
+            viewBox="0 0 600 80"
+            preserveAspectRatio="none"
+            style={{ width: '100%', height: '100%', display: 'block' }}
+          >
+            <defs>
+              <linearGradient id="etg" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#6FA8B3" stopOpacity="0.35" />
+                <stop offset="100%" stopColor="#6FA8B3" stopOpacity="0" />
+              </linearGradient>
+            </defs>
 
-        {/* Event pins */}
-        {EVENTS.map(ev => {
-          const x = (ev.d / 29) * 100;
-          const y = 100 - (SPEND[ev.d] / SPEND_MAX) * 88;
-          const sev = getSevKey(ev.severity);
-          const color = SEV_COLOR[sev];
-          const isSel = sel && sel.d === ev.d;
-          return (
-            <div
-              key={ev.d}
-              onClick={() => setSel(ev)}
-              style={{
-                position: 'absolute',
-                left: `calc(${x}% + 10px)`,
-                top: `calc(${y}% - 4px)`,
-                transform: 'translate(-50%,-100%)',
-                cursor: 'pointer',
-                zIndex: isSel ? 3 : 2,
-              }}
+            {/* Grid lines */}
+            {yTicks.map(({ v }, i) => (
+              <line
+                key={`gl-${i}`}
+                x1={PAD.left} y1={py(v)}
+                x2={PAD.left + CHART_W} y2={py(v)}
+                stroke="var(--line)" strokeWidth="1" strokeDasharray="3,3"
+              />
+            ))}
+
+            {/* Y axis labels */}
+            {yTicks.map(({ v, label }, i) => (
+              <text
+                key={`yl-${i}`}
+                x={PAD.left - 6} y={py(v)}
+                textAnchor="end" dominantBaseline="middle"
+                fill="var(--graphite)" fontSize="9"
+                fontFamily="'JetBrains Mono', monospace"
+              >
+                {label}
+              </text>
+            ))}
+
+            {/* X axis labels */}
+            {data.length > 0 && (() => {
+              const n = data.length;
+              const ticks = [0, Math.floor(n * 0.25), Math.floor(n * 0.5), Math.floor(n * 0.75), n - 1];
+              return ticks.map((i, tickIdx) => {
+                const label = timelineData?.daily[i]
+                  ? (lookback === '1H'
+                      ? new Date(timelineData.daily[i].d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : lookback === '24H'
+                      ? new Date(timelineData.daily[i].d).toLocaleTimeString([], { hour: '2-digit' })
+                      : new Date(timelineData.daily[i].d).toLocaleDateString([], { month: 'short', day: 'numeric' }))
+                  : '';
+                return (
+                  <text
+                    key={`xtick-${tickIdx}`}
+                    x={px(i)} y={PAD.top + CHART_H + 14}
+                    textAnchor="middle"
+                    fill="var(--graphite)" fontSize="9"
+                    fontFamily="'JetBrains Mono', monospace"
+                  >
+                    {label}
+                  </text>
+                );
+              });
+            })()}
+
+            {/* Area fill */}
+            <path d={areaPath} fill="url(#etg)" />
+
+            {/* Line */}
+            <path d={linePts} fill="none" stroke="#6FA8B3" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+
+            {/* Annotation pins */}
+            {ANNOTATIONS.map((ann, i) => {
+              const x = px(ann.d);
+              const y = py(data[ann.d]);
+              const color = SEV_COLOR[ann.severity];
+              const isSelected = selected === i;
+
+              return (
+                <g
+                  key={`ann-${i}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setSelected(isSelected ? null : i)}
+                >
+                  <line
+                    x1={x} y1={PAD.top}
+                    x2={x} y2={y - 8}
+                    stroke={color}
+                    strokeWidth={isSelected ? 1.5 : 1}
+                    strokeDasharray="3,2"
+                    opacity={isSelected ? 1 : 0.6}
+                  />
+                  <circle
+                    cx={x} cy={y}
+                    r={isSelected ? 6 : 4}
+                    fill={color}
+                    opacity={isSelected ? 1 : 0.8}
+                    stroke={isSelected ? 'var(--ink)' : 'none'}
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={x} y={PAD.top - 4}
+                    textAnchor="middle"
+                    fill={color}
+                    fontSize="8"
+                    fontFamily="'Space Grotesk', sans-serif"
+                    letterSpacing=".06em"
+                    opacity={isSelected ? 1 : 0.7}
+                  >
+                    {ann.type.toUpperCase()}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        ) : (
+          <>
+            <svg
+              viewBox="0 0 600 90"
+              preserveAspectRatio="none"
+              style={{ width: '100%', height: '100%', display: 'block' }}
             >
-              <div style={{ position: 'relative' }}>
-                <div style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: '12px',
-                  bottom: -60,
-                  width: 1,
-                  background: color,
-                  opacity: isSel ? 0.8 : 0.3,
-                  transform: 'translateX(-50%)',
-                }} />
-                <div style={{
-                  width: isSel ? 20 : 16,
-                  height: isSel ? 20 : 16,
-                  borderRadius: '50%',
-                  background: '#11171B',
-                  border: `1.5px solid ${color}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: color,
-                  fontSize: isSel ? 11 : 9,
-                  fontFamily: 'JetBrains Mono',
-                  fontWeight: 600,
-                  boxShadow: isSel ? `0 0 0 3px ${color}33` : 'none',
-                  transition: 'all 120ms',
-                }}>
-                  {EVENT_GLYPHS[ev.type]}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+              <defs>
+                <linearGradient id="spendGrad" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#6FA8B3" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="#6FA8B3" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+            </svg>
 
-        {/* Day labels */}
-        <div style={{
-          position: 'absolute',
-          left: 10,
-          right: 10,
-          bottom: 4,
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: 9,
-          color: 'var(--graphite)',
-          fontFamily: 'JetBrains Mono',
-        }}>
-          <span>-30d</span>
-          <span>-20d</span>
-          <span>-10d</span>
-          <span>today</span>
-        </div>
+            {/* Event pins */}
+            {EVENTS.map(ev => {
+              const x = (ev.d / 29) * 100;
+              const sev = getSevKey(ev.severity);
+              const color = SEV_COLOR[sev];
+              const isSel = sel && sel.d === ev.d;
+              return (
+                <div
+                  key={ev.d}
+                  onClick={() => setSel(ev)}
+                  style={{
+                    position: 'absolute',
+                    left: `calc(${x}% + 10px)`,
+                    top: `calc(50% - 4px)`,
+                    transform: 'translate(-50%,-100%)',
+                    cursor: 'pointer',
+                    zIndex: isSel ? 3 : 2,
+                  }}
+                >
+                  <div style={{ position: 'relative' }}>
+                    <div style={{
+                      width: isSel ? 20 : 16,
+                      height: isSel ? 20 : 16,
+                      borderRadius: '50%',
+                      background: '#11171B',
+                      border: `1.5px solid ${color}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: color,
+                      fontSize: isSel ? 11 : 9,
+                      fontFamily: 'JetBrains Mono',
+                      fontWeight: 600,
+                      boxShadow: isSel ? `0 0 0 3px ${color}33` : 'none',
+                      transition: 'all 120ms',
+                    }}>
+                      {EVENT_GLYPHS[ev.type]}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Day labels */}
+            <div style={{
+              position: 'absolute',
+              left: 10,
+              right: 10,
+              bottom: 4,
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: 9,
+              color: 'var(--graphite)',
+              fontFamily: 'JetBrains Mono',
+            }}>
+              <span>-30d</span>
+              <span>-20d</span>
+              <span>-10d</span>
+              <span>today</span>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Selected event detail */}
-      {sel && (() => {
+      {/* Selected event detail — real data */}
+      {!useStatic && selectedAnn && (
+        <div style={{
+          marginTop: 10,
+          padding: '10px 12px',
+          background: 'rgba(0,0,0,.2)',
+          border: '1px solid var(--line)',
+          borderLeft: `3px solid ${SEV_COLOR[selectedAnn.severity]}`,
+          borderRadius: 'var(--r)',
+        }}>
+          <div style={{ fontSize: 13, color: 'var(--mist)', marginBottom: 2 }}>{selectedAnn.title}</div>
+          <div className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>{selectedAnn.detail}</div>
+        </div>
+      )}
+
+      {/* Selected event detail — static */}
+      {useStatic && sel && (() => {
         const sev = getSevKey(sel.severity);
         const color = SEV_COLOR[sev];
         return (

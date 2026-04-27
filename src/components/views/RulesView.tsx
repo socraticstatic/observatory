@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import { fmtUsd, fmtMs } from '@/lib/fmt';
-import type { Lookback } from '@/lib/lookback';
+import { type Lookback } from '@/lib/lookback';
 
 type Metric   = 'cost' | 'latency' | 'error_rate' | 'calls';
 type Operator = 'gt' | 'lt';
@@ -66,42 +66,31 @@ const INPUT_STYLE: React.CSSProperties = {
   fontFamily: 'inherit',
 };
 
-export function RulesView() {
+export function RulesView({ provider }: { provider?: string }) {
   const [showForm, setShowForm] = useState(false);
   const [form,     setForm]     = useState<FormState>(BLANK_FORM);
 
-  const utils      = trpc.useUtils();
-  const { data: rulesRaw = [], isLoading: rulesLoading } = trpc.rules.list.useQuery();
-  const rules = rulesRaw as AlertRule[];
-  const upsertRule = trpc.rules.upsert.useMutation({ onSuccess: () => utils.rules.list.invalidate() });
-  const removeRule = trpc.rules.remove.useMutation({ onSuccess: () => utils.rules.list.invalidate() });
+  const { data: rawRules = [], refetch } = trpc.alertRules.list.useQuery();
+  // Cast DB response to local type — metric/lookback/operator are constrained by insert, safe to narrow
+  const rules: AlertRule[] = rawRules.map((r: typeof rawRules[number]) => ({
+    ...r,
+    metric:   r.metric   as Metric,
+    lookback: r.lookback as Lookback,
+    operator: r.operator as Operator,
+  }));
 
-  // One-time localStorage migration
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('observatory-rules');
-      if (!raw) return;
-      const stored = JSON.parse(raw) as AlertRule[];
-      if (stored.length === 0) return;
-      stored.forEach(r => {
-        upsertRule.mutate({
-          id: undefined, name: r.name, metric: r.metric,
-          lookback: r.lookback, operator: r.operator,
-          threshold: r.threshold, enabled: r.enabled,
-        });
-      });
-      localStorage.removeItem('observatory-rules');
-    } catch { /* ignore corrupt storage */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const createRule = trpc.alertRules.create.useMutation({ onSuccess: () => { void refetch(); setShowForm(false); setForm(BLANK_FORM); } });
+  const toggleRule = trpc.alertRules.toggleEnabled.useMutation({ onSuccess: () => refetch() });
+  const deleteRule = trpc.alertRules.delete.useMutation({ onSuccess: () => refetch() });
+
 
   // Always fetch all lookbacks — queries are tiny and rules can span windows
-  const { data: stats1H  } = trpc.pulse.statStrip.useQuery({ lookback: '1H'  });
-  const { data: stats24H } = trpc.pulse.statStrip.useQuery({ lookback: '24H' });
-  const { data: stats30D } = trpc.pulse.statStrip.useQuery({ lookback: '30D' });
-  const { data: cost1H   } = trpc.pulse.overallCost.useQuery({ lookback: '1H'  });
-  const { data: cost24H  } = trpc.pulse.overallCost.useQuery({ lookback: '24H' });
-  const { data: cost30D  } = trpc.pulse.overallCost.useQuery({ lookback: '30D' });
+  const { data: stats1H  } = trpc.pulse.statStrip.useQuery({ lookback: '1H',  provider });
+  const { data: stats24H } = trpc.pulse.statStrip.useQuery({ lookback: '24H', provider });
+  const { data: stats30D } = trpc.pulse.statStrip.useQuery({ lookback: '30D', provider });
+  const { data: cost1H   } = trpc.pulse.overallCost.useQuery({ lookback: '1H',  provider });
+  const { data: cost24H  } = trpc.pulse.overallCost.useQuery({ lookback: '24H', provider });
+  const { data: cost30D  } = trpc.pulse.overallCost.useQuery({ lookback: '30D', provider });
 
   function snapshot(lb: Lookback): Record<Metric, number> | null {
     const s = lb === '1H' ? stats1H  : lb === '24H' ? stats24H : stats30D;
@@ -127,8 +116,7 @@ export function RulesView() {
   function saveRule() {
     const threshold = parseFloat(form.threshold);
     if (!form.name.trim() || isNaN(threshold)) return;
-    upsertRule.mutate({
-      id: undefined,
+    createRule.mutate({
       name:      form.name.trim(),
       metric:    form.metric,
       lookback:  form.lookback,
@@ -136,18 +124,6 @@ export function RulesView() {
       threshold,
       enabled:   true,
     });
-    setForm(BLANK_FORM);
-    setShowForm(false);
-  }
-
-  function toggleRule(id: string) {
-    const rule = rules.find(r => r.id === id);
-    if (!rule) return;
-    upsertRule.mutate({ ...rule, metric: rule.metric as Metric, lookback: rule.lookback as Lookback, operator: rule.operator as Operator, enabled: !rule.enabled });
-  }
-
-  function deleteRule(id: string) {
-    removeRule.mutate({ id });
   }
 
   const firingCount = rules.filter(r => evaluate(r).firing).length;
@@ -266,7 +242,7 @@ export function RulesView() {
       )}
 
       {/* Empty state / loading / table */}
-      {rulesLoading ? (
+      {false ? (
         <div className="card" style={{ padding: '52px 32px', textAlign: 'center' }}>
           <div style={{ fontSize: 11, color: 'var(--graphite)' }}>Loading…</div>
         </div>
@@ -309,7 +285,7 @@ export function RulesView() {
               >
                 {/* Toggle switch */}
                 <button
-                  onClick={() => toggleRule(rule.id)}
+                  onClick={() => toggleRule.mutate({ id: rule.id, enabled: !rule.enabled })}
                   title={rule.enabled ? 'Disable' : 'Enable'}
                   style={{
                     width: 28, height: 16, borderRadius: 8, padding: 0,
@@ -380,7 +356,7 @@ export function RulesView() {
 
                 {/* Delete */}
                 <button
-                  onClick={() => deleteRule(rule.id)}
+                  onClick={() => deleteRule.mutate({ id: rule.id })}
                   title="Remove rule"
                   style={{
                     fontSize: 12, color: 'var(--graphite)',

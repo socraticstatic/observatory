@@ -1,15 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { trpc } from '@/lib/trpc-client';
+import { fmtMs } from '@/lib/fmt';
+import { fmtUnits } from '@/lib/service-registry';
 import type { Lookback } from '@/lib/lookback';
+import { ViewStatusBar } from '@/components/shared/ViewStatusBar';
 
-interface Props { lookback: Lookback; }
+interface Props { lookback: Lookback; provider?: string; }
 
 const WINDOW_MS: Record<Lookback, number> = {
   '1H':  3_600_000,
   '24H': 86_400_000,
   '30D': 30 * 86_400_000,
+  '90D': 90 * 86_400_000,
+  '1Y':  365 * 86_400_000,
 };
 
 function modelColor(model: string): string {
@@ -23,7 +28,8 @@ function modelColor(model: string): string {
 
 function fmtCost(usd: number): string {
   if (usd === 0) return '$0';
-  if (usd < 0.001) return `$${(usd * 1000).toFixed(3)}m`;
+  if (usd < 0.001) return `<$0.001`;
+  if (usd >= 1) return `$${usd.toFixed(2)}`;
   return `$${usd.toFixed(4)}`;
 }
 
@@ -34,13 +40,105 @@ function fmtDuration(ms: number): string {
   return `${Math.floor(ms / 3_600_000)}h ${Math.floor((ms % 3_600_000) / 60_000)}m`;
 }
 
-export function SessionsView({ lookback }: Props) {
+type SessionVerdict = 'ok' | 'watch' | 'act';
+
+function sessionVerdict(s: {
+  callCount: number; errorCount: number; totalCost: number;
+  cacheHitPct: number; tokenGrowthRatio: number;
+}): SessionVerdict {
+  const errorRate   = s.callCount > 0 ? s.errorCount / s.callCount : 0;
+  const costPerCall = s.callCount > 0 ? s.totalCost  / s.callCount : 0;
+  // Runaway: deep session with exploding context, or majority errors
+  if (errorRate > 0.3 || (s.callCount > 8 && s.tokenGrowthRatio > 2.5)) return 'act';
+  // Watch: moderate errors, uncached context, expensive per call
+  if (errorRate > 0.05 || s.cacheHitPct < 20 || costPerCall > 1.0) return 'watch';
+  return 'ok';
+}
+
+const VERDICT_STYLE: Record<SessionVerdict, React.CSSProperties> = {
+  act:   { fontSize: 8, fontWeight: 700, letterSpacing: '.12em', color: 'var(--bad)',  background: 'rgba(184,107,107,.12)', border: '1px solid rgba(184,107,107,.3)', borderRadius: 'var(--r)', padding: '1px 5px' },
+  watch: { fontSize: 8, fontWeight: 700, letterSpacing: '.12em', color: '#C9966B',    background: 'rgba(201,150,107,.1)',   border: '1px solid rgba(201,150,107,.25)', borderRadius: 'var(--r)', padding: '1px 5px' },
+  ok:    {},
+};
+
+function LabelCell({ sessionId }: { sessionId: string }) {
+  const [editing, setEditing] = useState(false);
+  const [draft,   setDraft]   = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const { data: label, refetch } = trpc.sessionLabels.get.useQuery({ sessionId });
+  const setLabel = trpc.sessionLabels.set.useMutation({ onSuccess: () => { refetch(); setEditing(false); } });
+  const delLabel = trpc.sessionLabels.delete.useMutation({ onSuccess: () => { refetch(); } });
+
+  function startEdit(e: React.MouseEvent) {
+    e.stopPropagation();
+    setDraft(label ?? '');
+    setEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 10);
+  }
+
+  function save(e: React.KeyboardEvent | React.FocusEvent) {
+    if ('key' in e && e.key === 'Escape') { setEditing(false); return; }
+    if ('key' in e && e.key !== 'Enter') return;
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      if (label) delLabel.mutate({ sessionId });
+      else setEditing(false);
+    } else {
+      setLabel.mutate({ sessionId, label: trimmed });
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={save}
+        onBlur={save}
+        placeholder="Add label…"
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'rgba(111,168,179,.08)', border: '1px solid rgba(111,168,179,.35)',
+          borderRadius: 'var(--r)', padding: '2px 7px', fontSize: 10,
+          color: 'var(--mist)', outline: 'none', fontFamily: 'inherit', width: 160,
+        }}
+      />
+    );
+  }
+
+  return label ? (
+    <span
+      onClick={startEdit}
+      title="Click to edit label"
+      style={{
+        fontSize: 10, color: 'var(--accent-2)', cursor: 'text',
+        background: 'rgba(111,168,179,.08)', border: '1px solid rgba(111,168,179,.2)',
+        borderRadius: 'var(--r)', padding: '2px 7px',
+      }}
+    >
+      {label}
+    </span>
+  ) : (
+    <span
+      onClick={startEdit}
+      title="Add label"
+      style={{ fontSize: 9, color: 'var(--graphite)', cursor: 'text', letterSpacing: '.06em' }}
+    >
+      + label
+    </span>
+  );
+}
+
+export function SessionsView({ lookback, provider }: Props) {
   const [project,  setProject]  = useState<string | undefined>(undefined);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const { data: sessions, isFetching } = trpc.sessions.list.useQuery({ lookback });
+  const { data: sessionData, isFetching } = trpc.sessions.list.useQuery({ lookback, provider });
+  const sessions = sessionData?.items;
   const { data: expandedEvents } = trpc.sessions.events.useQuery(
-    { sessionId: expanded!, lookback },
+    { sessionId: expanded!, lookback, provider },
     { enabled: !!expanded },
   );
 
@@ -65,7 +163,7 @@ export function SessionsView({ lookback }: Props) {
     return { left: `${leftPct}%`, width: `${Math.min(widPct, 100 - leftPct)}%` };
   }
 
-  if (!sessions && isFetching) {
+  if (!sessionData && isFetching) {
     return (
       <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320 }}>
         <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
@@ -76,6 +174,7 @@ export function SessionsView({ lookback }: Props) {
   return (
     <div className="page">
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ViewStatusBar lookback={lookback} provider={provider} />
 
       {/* Project filter chips */}
       {allProjects.length > 0 && (
@@ -102,6 +201,13 @@ export function SessionsView({ lookback }: Props) {
         </div>
       )}
 
+      {/* Truncation notice */}
+      {sessionData?.truncated && (
+        <div style={{ padding: '6px 12px', background: 'rgba(201,150,107,.07)', border: '1px solid rgba(201,150,107,.2)', borderRadius: 'var(--r)', fontSize: 10, color: 'var(--accent-2)' }}>
+          Showing 500 most recent sessions — narrow your lookback or filter by project to see more.
+        </div>
+      )}
+
       {/* Session rows */}
       {visible.length === 0 ? (
         <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
@@ -110,7 +216,7 @@ export function SessionsView({ lookback }: Props) {
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
           {visible.map((s, idx) => (
-            <div key={s.sessionId}>
+            <div key={s.sessionId === '(no session)' ? `no-session-${idx}` : s.sessionId}>
 
               {/* Session row */}
               <div
@@ -134,12 +240,15 @@ export function SessionsView({ lookback }: Props) {
                   }}>
                     {s.sessionId}
                   </span>
-                  <div style={{ display: 'flex', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
                     {s.project && (
                       <span className="label" style={{ fontSize: 9 }}>{s.project}</span>
                     )}
                     {s.surface && (
                       <span className="label" style={{ fontSize: 9, color: 'var(--steel)' }}>{s.surface}</span>
+                    )}
+                    {s.sessionId !== '(no session)' && (
+                      <LabelCell sessionId={s.sessionId} />
                     )}
                   </div>
                 </div>
@@ -162,6 +271,12 @@ export function SessionsView({ lookback }: Props) {
                   {s.errorCount > 0 && (
                     <span style={{ color: 'var(--bad)' }}>{s.errorCount} err</span>
                   )}
+                  {(() => {
+                    const v = sessionVerdict(s);
+                    return v !== 'ok' ? (
+                      <span style={VERDICT_STYLE[v]}>{v.toUpperCase()}</span>
+                    ) : null;
+                  })()}
                   <span style={{ color: 'var(--steel)', fontSize: 9 }}>
                     {expanded === s.sessionId ? '▲' : '▼'}
                   </span>
@@ -194,11 +309,17 @@ export function SessionsView({ lookback }: Props) {
                               {new Date(e.ts).toLocaleTimeString()}
                             </td>
                             <td className="mono" style={{ padding: '5px 12px', color: 'var(--mist)' }}>{e.model}</td>
-                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>{e.inputTokens.toLocaleString()}</td>
-                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>{e.outputTokens.toLocaleString()}</td>
-                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>{e.cachedTokens.toLocaleString()}</td>
+                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>
+                              {e.billingUnit === 'tokens' ? e.inputTokens.toLocaleString() : fmtUnits(e.inputTokens, e.provider)}
+                            </td>
+                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>
+                              {e.billingUnit === 'tokens' ? e.outputTokens.toLocaleString() : '—'}
+                            </td>
+                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>
+                              {e.billingUnit === 'tokens' ? e.cachedTokens.toLocaleString() : '—'}
+                            </td>
                             <td className="mono" style={{ padding: '5px 12px', color: 'var(--mist)' }}>{fmtCost(e.costUsd)}</td>
-                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>{e.latencyMs}ms</td>
+                            <td className="mono" style={{ padding: '5px 12px', color: 'var(--steel)' }}>{fmtMs(e.latencyMs)}</td>
                             <td className="mono" style={{
                               padding: '5px 12px',
                               color: e.status === 'error' ? 'var(--bad)' : 'var(--good)',

@@ -1,5 +1,9 @@
 // src/lib/ingest.ts
 
+import { createHash } from 'crypto';
+import { calcCost } from './pricing';
+import { getBillingUnit } from './service-registry';
+
 export interface NormalizedEvent {
   provider: string;
   model: string;
@@ -16,43 +20,45 @@ export interface NormalizedEvent {
   region?: string;
   status: string;
   contentType?: string;
+  billingUnit: string;
   qualityScore?: string;
+  eventHash?: string;
   rawPayload: unknown;
 }
 
-// Rate table USD per token (rough estimates - replace with real pricing table)
-const INPUT_RATE: Record<string, number> = {
-  'claude-opus':      0.000015,
-  'claude-sonnet':    0.000003,
-  'claude-haiku':     0.0000008,
-  'gemini-2.5-pro':   0.00000125,
-  'gemini-2.5-flash': 0.00000015,
-  'grok-3':           0.000003,
-  default:            0.000003,
-};
-
-const OUTPUT_RATE: Record<string, number> = {
-  'claude-opus':      0.000075,
-  'claude-sonnet':    0.000015,
-  'claude-haiku':     0.000004,
-  'gemini-2.5-pro':   0.0000100,
-  'gemini-2.5-flash': 0.0000006,
-  'grok-3':           0.000015,
-  default:            0.000015,
-};
-
-function getRate(model: string, table: Record<string, number>): number {
-  for (const key of Object.keys(table)) {
-    if (key !== 'default' && model.includes(key)) return table[key]!;
-  }
-  return table.default!;
+function computeEventHash(model: string, ts: Date, inputTokens: number, outputTokens: number, cachedTokens: number, cacheCreationTokens: number): string {
+  const tsSecond = Math.floor(ts.getTime() / 1000);
+  return createHash('sha256')
+    .update(`${model}:${tsSecond}:${inputTokens}:${outputTokens}:${cachedTokens}:${cacheCreationTokens}`)
+    .digest('hex');
 }
 
-function calcCost(model: string, input: number, output: number, reasoning: number): string {
-  const cost =
-    input * getRate(model, INPUT_RATE) +
-    (output + reasoning) * getRate(model, OUTPUT_RATE);
-  return cost.toFixed(6);
+const CREATIVE_PROVIDERS = new Set(['elevenlabs', 'heygen', 'leonardo', 'stability']);
+
+// Creative service payload format:
+// { provider, service_type, model, units_used, cost_usd, latency_ms, status, metadata }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseCreativePayload(body: any): NormalizedEvent | null {
+  const provider: string = body.provider;
+  if (!CREATIVE_PROVIDERS.has(provider)) return null;
+  return {
+    provider,
+    model:              body.model ?? body.service_type ?? provider,
+    surface:            body.metadata?.surface,
+    sessionId:          body.metadata?.session_id,
+    project:            body.metadata?.project,
+    inputTokens:        Math.round(body.units_used ?? 0),
+    outputTokens:       0,
+    reasoningTokens:    0,
+    cachedTokens:       0,
+    cacheCreationTokens: 0,
+    costUsd:            Number(body.cost_usd ?? 0).toFixed(6),
+    latencyMs:          body.latency_ms ? Math.round(body.latency_ms) : undefined,
+    status:             body.status ?? (body.error ? 'error' : 'ok'),
+    contentType:        body.service_type ?? provider,
+    billingUnit:        getBillingUnit(provider),
+    rawPayload:         body,
+  };
 }
 
 // LiteLLM wraps all providers in a consistent envelope:
@@ -60,6 +66,7 @@ function calcCost(model: string, input: number, output: number, reasoning: numbe
 // The raw vendor response is in `response` field.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parseIngestPayload(body: any): NormalizedEvent | null {
+  if (body?.provider && CREATIVE_PROVIDERS.has(body.provider)) return parseCreativePayload(body);
   if (!body || typeof body !== 'object') return null;
 
   // LiteLLM standard envelope
@@ -70,7 +77,8 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
   const sessionId: string | undefined = body.metadata?.session_id ?? body.metadata?.tags?.session_id;
   const project: string | undefined = body.metadata?.project ?? body.metadata?.tags?.project;
   const surface: string | undefined = body.metadata?.surface ?? body.metadata?.tags?.surface;
-  const status: string = body.response?.choices?.[0]?.finish_reason === 'stop' ? 'ok' : (body.error ? 'error' : 'ok');
+  const status: string = body.error ? 'error' : (body.response?.choices?.[0]?.finish_reason === 'stop' ? 'ok' : 'ok');
+  const contentType: string | undefined = body.content_type ?? undefined;
   // Optional quality score — seeder or caller can pass via metadata
   const qualityRaw = body.metadata?.quality_score ?? body.quality_score;
   const qualityScore: string | undefined = qualityRaw != null ? Number(qualityRaw).toFixed(2) : undefined;
@@ -113,8 +121,11 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
   // Prefer LiteLLM's own cost field over our rate-table estimate
   const litellmCost = body.response_cost ?? body.cost;
   const costUsd = litellmCost != null
-    ? Number(litellmCost).toFixed(6)
-    : calcCost(model, inputTokens, outputTokens, reasoningTokens);
+    ? Number(litellmCost).toFixed(8)
+    : calcCost({ model, inputTokens, outputTokens, reasoningTokens, cachedTokens, cacheCreationTokens });
+
+  const ts = new Date();
+  const eventHash = computeEventHash(model, ts, inputTokens, outputTokens, cachedTokens, cacheCreationTokens);
 
   return {
     provider,
@@ -130,7 +141,10 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
     costUsd,
     latencyMs,
     status,
+    contentType,
+    billingUnit: getBillingUnit(provider),
     qualityScore,
+    eventHash,
     rawPayload: body,
   };
 }

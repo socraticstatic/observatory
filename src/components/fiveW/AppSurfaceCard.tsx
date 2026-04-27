@@ -5,7 +5,13 @@ import { fmt, fmtMs } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 import type { Lookback } from '@/lib/lookback';
 
-const LOOKBACK_MINUTES: Record<Lookback, number> = { '1H': 60, '24H': 1440, '30D': 43200 };
+const LOOKBACK_MINUTES: Record<string, number> = {
+  '1H':  60,
+  '24H': 1440,
+  '30D': 43200,
+  '90D': 129600,
+  '1Y':  525960,
+};
 
 const GLYPH_MAP: Record<string, string> = {
   desktop:    '◼',
@@ -40,10 +46,10 @@ interface Props {
 }
 
 export function AppSurfaceCard({ lookback = '24H', provider }: Props) {
-  const { data: raw } = trpc.surface.appSurface.useQuery({ lookback, provider });
+  const { data: raw, isLoading } = trpc.surface.appSurface.useQuery({ lookback, provider });
   const [hover, setHover] = useState<string | null>(null);
 
-  const minutes = LOOKBACK_MINUTES[lookback];
+  const minutes = LOOKBACK_MINUTES[lookback] ?? 1440;
 
   const enriched = useMemo(() => {
     if (!raw) return [];
@@ -57,10 +63,18 @@ export function AppSurfaceCard({ lookback = '24H', provider }: Props) {
     }));
   }, [raw, minutes]);
 
-  if (!raw) {
+  if (isLoading) {
     return (
       <div className="card" style={{ padding: '14px 16px', minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+      </div>
+    );
+  }
+
+  if (!raw || raw.length === 0) {
+    return (
+      <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+        <span style={{ fontSize: 12, color: 'var(--steel)' }}>No data in this window</span>
       </div>
     );
   }

@@ -53,10 +53,10 @@ interface RegionRow {
   region: string;
   calls: number;
   cost: number;
-  avgLatMs: number;
+  avgLatMs: number | null;
 }
 
-interface TooltipState { x: number; y: number; region: string; city: string; status: Status; lat: number; vol: number }
+interface TooltipState { x: number; y: number; region: string; city: string; status: Status; lat: number | null; vol: number }
 
 interface Props {
   lookback?: Lookback;
@@ -65,7 +65,7 @@ interface Props {
 
 export function WhereCard({ lookback = '24H', provider }: Props) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
-  const { data: raw } = trpc.where.regional.useQuery({ lookback, provider });
+  const { data: raw, isLoading } = trpc.where.regional.useQuery({ lookback, provider });
 
   const rows: (RegionRow & { meta: { city: string; lat: number; lng: number }; vol: number; status: Status })[] = (() => {
     if (!raw || raw.length === 0) return [];
@@ -76,7 +76,7 @@ export function WhereCard({ lookback = '24H', provider }: Props) {
         ...r,
         meta,
         vol: Math.round((r.calls / totalCalls) * 100),
-        status: latencyToStatus(r.avgLatMs),
+        status: r.avgLatMs != null ? latencyToStatus(r.avgLatMs) : ('ok' as Status),
       };
     });
   })();
@@ -84,7 +84,17 @@ export function WhereCard({ lookback = '24H', provider }: Props) {
   return (
     <div className="card">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)', flexWrap: 'wrap', gap: 8 }}>
-        <span className="label">WHERE &middot; Regional Distribution</span>
+        <div>
+          <span className="label">WHERE &middot; Regional Distribution</span>
+          {rows.length > 0 && (() => {
+            const bad  = rows.filter(r => r.status === 'bad');
+            const warn = rows.filter(r => r.status === 'warn');
+            const top  = [...rows].sort((a, b) => b.vol - a.vol)[0];
+            const v    = bad.length > 0 ? 'act' : warn.length > 0 ? 'watch' : 'ok';
+            const line = v === 'act' ? `${bad[0].meta.city}: high latency` : v === 'watch' ? `${warn[0].meta.city}: elevated latency` : `${rows.length} region${rows.length !== 1 ? 's' : ''}, ${top?.meta.city ?? '—'} leads`;
+            return <span style={{ fontSize: 10, display: 'block', marginTop: 3, color: v === 'act' ? 'var(--bad)' : v === 'watch' ? '#C9966B' : 'var(--graphite)' }}>{line}</span>;
+          })()}
+        </div>
         <div style={{ display: 'flex', gap: 12 }}>
           {(['ok', 'warn', 'bad'] as Status[]).map(s => (
             <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -156,9 +166,24 @@ export function WhereCard({ lookback = '24H', provider }: Props) {
           </ZoomableGroup>
         </ComposableMap>
 
-        {rows.length === 0 && (
+        {isLoading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--steel)' }}>No regional data</span>
+            <span style={{ fontSize: 11, color: 'var(--steel)' }}>Loading…</span>
+          </div>
+        )}
+
+        {!isLoading && rows.length === 0 && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <span style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase',
+              color: 'var(--steel)', padding: '2px 8px',
+              background: 'rgba(138,146,151,.08)', borderRadius: 'var(--r)',
+              border: '1px solid rgba(138,146,151,.2)',
+            }}>NO REGION DATA</span>
+            <span style={{ fontSize: 11, color: 'var(--steel)' }}>Region not captured for this traffic</span>
+            <span style={{ fontSize: 10, color: 'var(--graphite)', maxWidth: 260, textAlign: 'center' }}>
+              Tag events with a <span style={{ color: 'var(--fog)', fontFamily: "'JetBrains Mono', monospace" }}>region</span> field via your proxy or ingestion layer
+            </span>
           </div>
         )}
 
@@ -171,7 +196,9 @@ export function WhereCard({ lookback = '24H', provider }: Props) {
             <div style={{ fontSize: 10, color: 'var(--steel)', marginBottom: 4 }}>{tooltip.region}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 3 }}>
               <span style={{ color: 'var(--fog)', fontSize: 11 }}>Avg latency</span>
-              <span className="num" style={{ fontSize: 11 }}>{tooltip.lat}ms</span>
+              <span className="num" style={{ fontSize: 11, color: tooltip.lat == null ? 'var(--graphite)' : undefined }}>
+                {tooltip.lat != null ? `${tooltip.lat}ms` : '—'}
+              </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
               <span style={{ color: 'var(--fog)', fontSize: 11 }}>Traffic share</span>

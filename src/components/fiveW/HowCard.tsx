@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { fmtMs, fmt } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
+import type { Lookback } from '@/lib/lookback';
 
 // Color by content type
 const TYPE_COL: Record<string, string> = {
@@ -38,14 +39,28 @@ function typeCategory(contentType: string): 'input' | 'output' | 'tool' | 'cache
 type FilterType = 'all' | 'input' | 'output' | 'tool' | 'cache';
 
 interface Props {
-  drill?: { type: string; source: string; stepHint?: number; at?: number } | null;
+  drill?: { type: string; source: string; stepHint?: number; at?: number; sessionId?: string } | null;
+  lookback?: Lookback;
+  provider?: string;
 }
 
-export function HowCard({ drill }: Props) {
+export function HowCard({ drill, lookback = '24H', provider }: Props) {
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
 
-  const { data } = trpc.how.latestTrace.useQuery();
+  const targetSessionId = drill?.sessionId ?? null;
+
+  const { data: latestData } = trpc.how.latestTrace.useQuery({ lookback, provider }, {
+    enabled: !targetSessionId,
+  });
+  const { data: specificData } = trpc.how.agentTrace.useQuery(
+    { sessionId: targetSessionId ?? '' },
+    { enabled: !!targetSessionId },
+  );
+
+  const data = targetSessionId
+    ? (specificData ? { sessionId: targetSessionId, events: specificData } : undefined)
+    : latestData;
 
   const events = data?.events ?? [];
   const totalMs = events.length > 0
@@ -85,14 +100,23 @@ export function HowCard({ drill }: Props) {
         gap: 12,
         flexWrap: 'wrap',
       }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flex: 1, minWidth: 0 }}>
-          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--mist)' }}>HOW</span>
-          <span style={{ fontSize: 10, color: 'var(--steel)', letterSpacing: '.08em' }}>Agent Trace Waterfall</span>
-          {data.sessionId && (
-            <span style={{ fontSize: 9, color: 'var(--graphite)', fontFamily: "'JetBrains Mono', monospace" }}>
-              {data.sessionId.slice(0, 8)}…
-            </span>
-          )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--mist)' }}>HOW</span>
+            <span style={{ fontSize: 10, color: 'var(--steel)', letterSpacing: '.08em' }}>Agent Trace Waterfall</span>
+            {data.sessionId && (
+              <span style={{ fontSize: 9, color: targetSessionId ? 'var(--warn)' : 'var(--graphite)', fontFamily: "'JetBrains Mono', monospace" }}>
+                {targetSessionId ? `▶ ${data.sessionId.slice(0, 8)}…` : `${data.sessionId.slice(0, 8)}…`}
+              </span>
+            )}
+          </div>
+          {events.length > 0 && (() => {
+            const errCount = events.filter(e => e.status === 'error').length;
+            const maxLat   = Math.max(...events.map(e => e.latencyMs));
+            const v        = errCount > 0 ? 'act' : maxLat > 5000 ? 'watch' : 'ok';
+            const line     = v === 'act' ? `${errCount} error${errCount > 1 ? 's' : ''} in ${events.length} steps` : v === 'watch' ? `${events.length} steps, slowest ${(maxLat / 1000).toFixed(1)}s` : `${events.length} steps, ${(totalMs / 1000).toFixed(1)}s total`;
+            return <span style={{ fontSize: 10, display: 'block', marginTop: 3, color: v === 'act' ? 'var(--bad)' : v === 'watch' ? '#C9966B' : 'var(--graphite)' }}>{line}</span>;
+          })()}
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
           {filters.map(f => (
@@ -123,11 +147,11 @@ export function HowCard({ drill }: Props) {
       {/* Timeline axis */}
       <div style={{ padding: '12px 18px 4px' }}>
         <div style={{ position: 'relative', height: 14, marginLeft: 200, marginRight: 120 }}>
-          {[0, .25, .5, .75, 1].map(t => {
+          {[0, .25, .5, .75, 1].map((t, ti) => {
             const ms = Math.round(t * totalMs);
             return (
               <div
-                key={t}
+                key={`label-${ti}`}
                 style={{
                   position: 'absolute',
                   left: `${t * 100}%`,
@@ -159,7 +183,7 @@ export function HowCard({ drill }: Props) {
       </div>
 
       {/* Waterfall rows */}
-      <div style={{ padding: '4px 18px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ padding: '4px 18px 14px', display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 440, overflowY: 'auto' }}>
         {visibleSteps.map((step) => {
           const leftPct = totalMs > 0 ? (step.msOffset / totalMs) * 100 : 0;
           const widthPct = totalMs > 0 ? (step.latencyMs / totalMs) * 100 : 1;
@@ -197,7 +221,7 @@ export function HowCard({ drill }: Props) {
             >
               <div style={{ minWidth: 0, overflow: 'hidden' }}>
                 <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--mist)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {step.contentType}
+                  {label}
                 </div>
                 <div style={{ fontSize: 9, color: 'var(--graphite)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {step.model}
@@ -239,7 +263,12 @@ export function HowCard({ drill }: Props) {
                 {tokens > 0 && (
                   <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>{fmt(tokens)} tok</span>
                 )}
-                <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>{fmtMs(step.latencyMs)}</span>
+                {step.latencyMs > 0
+                  ? <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>{fmtMs(step.latencyMs)}</span>
+                  : step.inputTokens > 0
+                  ? <span style={{ fontSize: 9, color: 'var(--accent-2)', letterSpacing: '.08em', fontFamily: "'JetBrains Mono', monospace" }}>cache</span>
+                  : <span className="mono" style={{ fontSize: 10, color: 'var(--graphite)' }}>—</span>
+                }
               </div>
             </div>
           );
@@ -266,6 +295,11 @@ export function HowCard({ drill }: Props) {
         <div style={{ fontSize: 10, color: 'var(--steel)' }}>
           Tokens out: <span className="mono" style={{ color: 'var(--fog)' }}>{fmt(events.reduce((a, e) => a + e.outputTokens, 0))}</span>
         </div>
+        {events.length >= 200 && (
+          <div style={{ fontSize: 9, color: 'var(--graphite)', letterSpacing: '.06em' }}>
+            CAPPED AT 200 STEPS
+          </div>
+        )}
         {drill && (
           <div style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--warn)' }}>
             Drill: {drill.source}

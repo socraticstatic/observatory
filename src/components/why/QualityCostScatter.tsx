@@ -38,7 +38,7 @@ interface Pt {
 const H = 280;
 const PAD = { l: 40, r: 16, t: 14, b: 30 };
 
-export function QualityCostScatter({ lookback }: { lookback: Lookback }) {
+export function QualityCostScatter({ lookback, provider }: { lookback: Lookback; provider?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(520);
   useLayoutEffect(() => {
@@ -52,7 +52,7 @@ export function QualityCostScatter({ lookback }: { lookback: Lookback }) {
 
   const [hover, setHover] = useState<number | null>(null);
 
-  const { data: raw } = trpc.costDrivers.qualityCostByProject.useQuery({ lookback });
+  const { data: raw } = trpc.costDrivers.qualityCostByProject.useQuery({ lookback, provider });
 
   const { points, iw, ih } = useMemo(() => {
     const rows = raw ?? [];
@@ -135,7 +135,7 @@ export function QualityCostScatter({ lookback }: { lookback: Lookback }) {
 
             {/* Grid lines */}
             {[0.25, 0.5, 0.75].map((p, i) => (
-              <Fragment key={i}>
+              <Fragment key={`grid-${i}`}>
                 <line x1={PAD.l} x2={PAD.l+iw} y1={PAD.t+ih*p} y2={PAD.t+ih*p} stroke="rgba(138,146,151,.1)" strokeDasharray="2 3" />
                 <line y1={PAD.t} y2={PAD.t+ih} x1={PAD.l+iw*p} x2={PAD.l+iw*p} stroke="rgba(138,146,151,.1)" strokeDasharray="2 3" />
               </Fragment>

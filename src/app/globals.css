@@ -35,7 +35,7 @@
 html, body {
   background: var(--ink-2);
   color: var(--mist);
-  font-family: '__nextjs-Geist', 'Geist', 'Geist Sans', system-ui, 'Segoe UI', sans-serif;
+  font-family: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
@@ -52,7 +52,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 ::selection { background: rgba(111,168,179,.28); color: var(--mist); }
 
 .mono, .num {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-jetbrains-mono), 'JetBrains Mono', ui-monospace, monospace;
   font-feature-settings: "tnum", "zero";
 }
 
@@ -162,6 +162,7 @@ tbody tr.selected td { background: rgba(111,168,179,.07); box-shadow: inset 2px 
 .tweaks label { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--fog); margin: 8px 0; gap: 10px; }
 .tweaks input[type=range] { accent-color: var(--accent); flex: 1; }
 .tweaks select { background: var(--ink-2); color: var(--mist); border: 1px solid var(--line-2); border-radius: var(--r); padding: 3px 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.card:hover .svc-delete-btn { opacity: 0.7 !important; } .svc-delete-btn:hover { opacity: 1 !important; color: var(--bad) !important; background: rgba(184,107,107,.12) !important; }
 
 /* ticker pause */
 .ticker-paused .ticker-track { animation-play-state: paused; }

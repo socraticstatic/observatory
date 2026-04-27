@@ -21,9 +21,9 @@ function severityFor(bloatRatio: number, type: string): 'bad' | 'warn' | 'info' 
   return 'info';
 }
 
-function fmtRate(costUsd: number, ageMs: number): string {
-  if (ageMs <= 0) return '0 tok/min';
-  const tokPerMin = (costUsd * 1000000 / 10) / (ageMs / 60000);
+function fmtRate(costUsd: number, durationMs: number): string {
+  if (durationMs <= 0) return '—';
+  const tokPerMin = (costUsd * 1_000_000 / 10) / (durationMs / 60_000);
   if (tokPerMin > 1000) return `${(tokPerMin / 1000).toFixed(1)}K tok/min`;
   return `${Math.round(tokPerMin)} tok/min`;
 }
@@ -73,12 +73,21 @@ function ActionButton({ severity, action, onClick }: { severity: Severity; actio
   );
 }
 
-export function ZombieSessionsCard({ provider }: Props = {}) {
-  const [killed, setKilled] = useState<Set<string>>(new Set());
+interface ZombieSessionsCardProps {
+  onReview?: (sessionId: string) => void;
+  provider?: string;
+}
+
+export function ZombieSessionsCard({ onReview, provider }: ZombieSessionsCardProps) {
   const [reviewed, setReviewed] = useState<Set<string>>(new Set());
-  const { data: zombieData } = trpc.insights.zombieSessions.useQuery(
-    provider ? { provider } : undefined
-  );
+  const [killedSessions, setKilledSessions] = useState<Set<string>>(new Set());
+  const { data: zombieData, refetch } = trpc.insights.zombieSessions.useQuery({ provider });
+  const killMutation = trpc.insights.killSession.useMutation({
+    onSuccess: (_data, variables) => {
+      setKilledSessions(prev => new Set([...prev, variables.sessionId]));
+      void refetch();
+    },
+  });
 
   const ZOMBIES = useMemo<readonly Zombie[]>(() => {
     if (!zombieData || zombieData.length === 0) return [];
@@ -86,7 +95,7 @@ export function ZombieSessionsCard({ provider }: Props = {}) {
       id: z.sessionId,
       type: z.type.charAt(0).toUpperCase() + z.type.slice(1),
       steps: z.steps,
-      rate: fmtRate(z.costUsd, z.ageMs),
+      rate: fmtRate(z.costUsd, z.durationMs),
       proj: `$${z.costUsd.toFixed(2)}`,
       costUsd: z.costUsd,
       severity: severityFor(z.bloatRatio, z.type),
@@ -94,15 +103,16 @@ export function ZombieSessionsCard({ provider }: Props = {}) {
   }, [zombieData]);
 
   const handleKill = (id: string) => {
-    setKilled(prev => new Set([...prev, id]));
+    killMutation.mutate({ sessionId: id });
   };
 
   const handleReview = (id: string) => {
     setReviewed(prev => new Set([...prev, id]));
+    onReview?.(id);
   };
 
-  const active = ZOMBIES.filter(z => !killed.has(z.id));
-  const killedCount = killed.size;
+  const active = ZOMBIES.filter(z => !killedSessions.has(z.id));
+  const killedCount = killedSessions.size;
 
   if (!zombieData) return (
     <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 120 }}>
@@ -146,7 +156,7 @@ export function ZombieSessionsCard({ provider }: Props = {}) {
             <th>Type</th>
             <th>Steps</th>
             <th>Token Rate</th>
-            <th>Projected 24h</th>
+            <th>Total Cost</th>
             <th>Action</th>
           </tr>
         </thead>

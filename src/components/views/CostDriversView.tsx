@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import { fmtUsd, fmtMs } from '@/lib/fmt';
 import type { Lookback } from '@/lib/lookback';
+import { ViewStatusBar } from '@/components/shared/ViewStatusBar';
 
-interface Props { lookback: Lookback }
+interface Props { lookback: Lookback; onNavigate?: (view: string) => void; provider?: string; }
 
 const DIMS = [
   { key: 'provider'    as const, label: 'Provider' },
@@ -27,12 +28,15 @@ interface DimItem {
   p95LatMs: number | null;
 }
 
-export function CostDriversView({ lookback }: Props) {
+export function CostDriversView({ lookback, onNavigate, provider }: Props) {
   const [dimIdx, setDimIdx] = useState(0);
   const [sel, setSel] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data, isFetching } = trpc.costDrivers.sixDimension.useQuery({ lookback });
-  const { data: baseline }   = trpc.costDrivers.baseline.useQuery();
+  const { data, isFetching } = trpc.costDrivers.sixDimension.useQuery({ lookback, provider });
+  const { data: baseline }   = trpc.costDrivers.baseline.useQuery({ lookback, provider });
+  const { data: insights }   = trpc.insights.whyInsights.useQuery({ provider });
 
   const dim   = DIMS[dimIdx];
   const items = useMemo<DimItem[]>(() => {
@@ -42,8 +46,16 @@ export function CostDriversView({ lookback }: Props) {
 
   const selItem = items[sel] ?? null;
 
+  const handleRowClick = useCallback((i: number, label: string) => {
+    setSel(i);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(`${label} — drill-down to Sessions view →`);
+    toastTimer.current = setTimeout(() => setToast(null), 2000);
+  }, []);
+
   return (
     <>
+      <ViewStatusBar lookback={lookback} provider={provider} />
       <div className="card" style={{ marginTop: 16, padding: 0 }}>
         {/* Header */}
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -73,11 +85,11 @@ export function CostDriversView({ lookback }: Props) {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)' }}>
             {/* LEFT: treemap bar + table */}
-            <div style={{ borderRight: '1px solid var(--line)' }}>
+            <div style={{ borderRight: '1px solid var(--line)', position: 'relative' }}>
               {/* Treemap bar */}
               <div style={{ padding: '14px 18px 8px', display: 'flex', height: 46, borderBottom: '1px solid var(--line)' }}>
                 {items.map((r, i) => (
-                  <div key={r.label} onClick={() => setSel(i)}
+                  <div key={r.label} onClick={() => handleRowClick(i, r.label)}
                     style={{
                       width: `${r.pct}%`,
                       background: `linear-gradient(180deg,${r.color},${r.color}BB)`,
@@ -111,7 +123,7 @@ export function CostDriversView({ lookback }: Props) {
                 </thead>
                 <tbody>
                   {items.map((r, i) => (
-                    <tr key={r.label} className={sel === i ? 'selected' : ''} onClick={() => setSel(i)}>
+                    <tr key={r.label} className={sel === i ? 'selected' : ''} onClick={() => handleRowClick(i, r.label)}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ width: 8, height: 8, background: r.color, borderRadius: 1, flexShrink: 0 }} />
@@ -144,6 +156,25 @@ export function CostDriversView({ lookback }: Props) {
                   </tr>
                 </tbody>
               </table>
+
+              {/* Toast: appears on row click, fades after 2s */}
+              {toast && (
+                <div style={{
+                  position: 'absolute', bottom: 12, left: 12, right: 12,
+                  padding: '7px 12px',
+                  background: 'rgba(17,23,27,.92)',
+                  border: '1px solid rgba(111,168,179,.4)',
+                  borderRadius: 'var(--r)',
+                  fontSize: 11, color: 'var(--accent-2)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  letterSpacing: '.04em',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  pointerEvents: 'none',
+                  zIndex: 10,
+                }}>
+                  <span>{toast}</span>
+                </div>
+              )}
             </div>
 
             {/* RIGHT: drill detail */}
@@ -189,18 +220,48 @@ export function CostDriversView({ lookback }: Props) {
                   </div>
                 </div>
 
-                {/* Recommendation */}
-                <div style={{ padding: 10, border: '1px solid rgba(111,168,179,.3)', borderRadius: 'var(--r)', background: 'rgba(111,168,179,.04)', marginTop: 'auto' }}>
-                  <div className="label" style={{ color: 'var(--accent-2)' }}>Insight</div>
-                  <div style={{ fontSize: 11, color: 'var(--fog)', marginTop: 4, lineHeight: 1.5 }}>
-                    {selItem.pct > 50
-                      ? `${selItem.label} dominates at ${Math.round(selItem.pct)}% — consider routing optimizations.`
-                      : selItem.p95LatMs && selItem.p95LatMs > 3000
-                        ? `p95 latency of ${fmtMs(selItem.p95LatMs)} is elevated. Check for retries or large contexts.`
-                        : 'Within expected range. No action needed.'}
-                  </div>
-                  <button className="mbtn primary" style={{ marginTop: 8 }}>Open related traces ▸</button>
-                </div>
+                {/* Insight — rule-based, matched to selected item */}
+                {(() => {
+                  const label = selItem.label.toLowerCase();
+                  const matched = (insights ?? []).find(ins =>
+                    ins.title.toLowerCase().includes(label) ||
+                    ins.detail.toLowerCase().includes(label)
+                  );
+                  const latencyFlag = selItem.p95LatMs && selItem.p95LatMs > 3000;
+                  const dominantFlag = selItem.pct > 50;
+
+                  const insightText = matched
+                    ? matched.detail
+                    : dominantFlag
+                      ? `${selItem.label} is ${Math.round(selItem.pct)}% of spend in this window.`
+                      : latencyFlag
+                        ? `p95 latency ${fmtMs(selItem.p95LatMs!)} — check for large contexts or retries.`
+                        : null;
+
+                  const sevColor = matched?.severity === 'warn' ? '#C9966B'
+                    : matched?.severity === 'info' ? 'var(--steel)'
+                    : 'var(--accent-2)';
+
+                  return (
+                    <div style={{ padding: 10, border: `1px solid ${insightText ? 'rgba(201,150,107,.3)' : 'rgba(111,168,179,.2)'}`, borderRadius: 'var(--r)', background: 'rgba(0,0,0,.15)', marginTop: 'auto' }}>
+                      <div className="label" style={{ color: sevColor }}>
+                        {matched ? `${matched.severity.toUpperCase()} · ${matched.title}` : 'Insight'}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--fog)', marginTop: 4, lineHeight: 1.5 }}>
+                        {insightText ?? 'No active findings for this contributor.'}
+                      </div>
+                      {matched?.recommendation && (
+                        <div style={{ fontSize: 10, color: 'var(--graphite)', marginTop: 4 }}>
+                          → {matched.recommendation}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                        <button className="mbtn primary" onClick={() => onNavigate?.('Sessions')}>Sessions ▸</button>
+                        <button className="mbtn" onClick={() => onNavigate?.('Intel')}>Intel ▸</button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

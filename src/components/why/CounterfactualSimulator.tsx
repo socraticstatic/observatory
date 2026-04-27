@@ -1,6 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Fragment } from 'react';
+import { fmtUsd } from '@/lib/fmt';
+import { trpc } from '@/lib/trpc-client';
+import type { Lookback } from '@/lib/lookback';
+
+const EMPTY_BASE = {
+  dailyCostUsd:       0,
+  opusSharePct:       0,
+  cacheDepthPct:      0,
+  reasoningBudgetPct: 0,
+};
+
+interface Base {
+  dailyCostUsd: number;
+  opusSharePct: number;
+  cacheDepthPct: number;
+  reasoningBudgetPct: number;
+}
+
+function derive(base: Base, opusShare: number, cacheDepth: number, reasoningBudget: number) {
+  const b           = Math.max(base.dailyCostUsd, 0.01);
+  const opusDelta   = ((opusShare      - base.opusSharePct)       / 100) * b * 0.655;
+  const cacheDelta  = -((cacheDepth    - base.cacheDepthPct)      / 100) * b * 0.388;
+  const reasonDelta = ((reasoningBudget - base.reasoningBudgetPct) / 100) * b * 0.313;
+  const deltaDaily  = opusDelta + cacheDelta + reasonDelta;
+  const projDaily   = b + deltaDaily;
+
+  return { deltaDaily, projDaily };
+}
 
 interface SliderProps {
   label: string;
@@ -13,44 +41,44 @@ interface SliderProps {
   hint?: string;
 }
 
-export function CounterfactualSimulator() {
-  const [opusShare, setOpusShare] = useState<number>(42);
-  const [sonnetShare, setSonnetShare] = useState<number>(30);
-  const [haikuShare, setHaikuShare] = useState<number>(28);
-  const [cacheBoost, setCacheBoost] = useState<number>(0);
-  const [ctxTrim, setCtxTrim] = useState<number>(0);
+export function CounterfactualSimulator({ lookback, provider }: { lookback?: Lookback; provider?: string }) {
+  const { data: baselineData, isLoading } = trpc.costDrivers.baseline.useQuery({ lookback, provider });
 
-  // normalize so they sum to 100
-  const total = opusShare + sonnetShare + haikuShare;
-  const o = opusShare / total;
-  const s = sonnetShare / total;
-  const h = haikuShare / total;
+  const activeBase: Base = baselineData ?? EMPTY_BASE;
 
-  // baseline spend: $42.18/day
-  const rateOpus = 2.8;
-  const rateSon = 0.84;
-  const rateHaiku = 0.14;
-  const baselineRate = 0.42 * rateOpus + 0.23 * rateSon + 0.05 * rateHaiku + 0.30 * 1.0;
-  const newRate = o * rateOpus + s * rateSon + h * rateHaiku + 0.0 * 1.0;
-  const ratio = newRate / baselineRate;
+  const [opusShare,       setOpusShare]       = useState(EMPTY_BASE.opusSharePct);
+  const [cacheDepth,      setCacheDepth]      = useState(EMPTY_BASE.cacheDepthPct);
+  const [reasoningBudget, setReasoningBudget] = useState(EMPTY_BASE.reasoningBudgetPct);
+  const [seeded,          setSeeded]          = useState(false);
 
-  const cacheFactor = 1 - (cacheBoost / 100) * 0.32;
-  const ctxFactor = 1 - (ctxTrim / 100) * 0.4;
+  // One-time seed from API data
+  useEffect(() => {
+    if (baselineData && !seeded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOpusShare(baselineData.opusSharePct);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCacheDepth(baselineData.cacheDepthPct);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setReasoningBudget(baselineData.reasoningBudgetPct);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSeeded(true);
+    }
+  }, [baselineData, seeded]);
 
-  const projDaily = 42.18 * ratio * cacheFactor * ctxFactor;
-  const deltaDaily = projDaily - 42.18;
+  const noBaseline = !isLoading && (!baselineData || baselineData.dailyCostUsd === 0);
+
+  const { deltaDaily, projDaily } =
+    derive(activeBase, opusShare, cacheDepth, reasoningBudget);
+
+  const baseDaily   = activeBase.dailyCostUsd;
   const projMonthly = projDaily * 30;
+  const projAnnual  = projDaily * 365;
 
-  // quality model
-  const qBlend = o * 98 + s * 94 + h * 82;
-  const qualityNow = 0.42 * 98 + 0.23 * 94 + 0.05 * 82 + 0.30 * 89;
-  const qualityShift = qBlend - ctxTrim * 0.12 + cacheBoost * 0.04 - qualityNow;
-  const qEffective = qualityNow + qualityShift;
-
-  // efficiency
-  const effNow = 42.18 / qualityNow;
-  const effNew = projDaily / qEffective;
-  const effImprove = ((effNow - effNew) / effNow) * 100;
+  const verdict = Math.abs(deltaDaily) < 0.001
+    ? { col: 'var(--steel)',  bg: 'rgba(140,140,140,.05)', border: 'rgba(140,140,140,.15)', icon: '—', text: 'At baseline. Move sliders to simulate a change.' }
+    : deltaDaily < 0
+    ? { col: '#7CA893', bg: 'rgba(122,158,138,.08)', border: 'rgba(122,158,138,.2)',  icon: '✓', text: 'Cost reduction projected at current traffic mix.' }
+    : { col: '#B87070', bg: 'rgba(184,112,112,.08)', border: 'rgba(184,112,112,.2)',  icon: '✗', text: 'This configuration increases cost. Adjust sliders.' };
 
   const Slider = ({ label, value, setValue, min = 0, max = 100, color, unit = '%', hint }: SliderProps) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -85,11 +113,10 @@ export function CounterfactualSimulator() {
           <button
             className="mbtn"
             onClick={() => {
-              setOpusShare(42);
-              setSonnetShare(30);
-              setHaikuShare(28);
-              setCacheBoost(0);
-              setCtxTrim(0);
+              setOpusShare(activeBase.opusSharePct);
+              setCacheDepth(activeBase.cacheDepthPct);
+              setReasoningBudget(activeBase.reasoningBudgetPct);
+              setSeeded(false);
             }}
           >
             Reset
@@ -102,144 +129,76 @@ export function CounterfactualSimulator() {
         {/* LEFT: controls */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <div className="label" style={{ marginBottom: 8 }}>MODEL ROUTING (blended)</div>
-            {/* blended share bar */}
-            <div style={{ height: 18, display: 'flex', borderRadius: 2, overflow: 'hidden', border: '1px solid var(--line-2)', marginBottom: 10 }}>
-              <div style={{ width: (o * 100) + '%', background: '#9BC4CC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#11171B', fontWeight: 600 }}>
-                {Math.round(o * 100)}%
-              </div>
-              <div style={{ width: (s * 100) + '%', background: '#6FA8B3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#11171B', fontWeight: 600 }}>
-                {Math.round(s * 100)}%
-              </div>
-              <div style={{ width: (h * 100) + '%', background: '#4F7B83', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: 'var(--mist)', fontWeight: 600 }}>
-                {Math.round(h * 100)}%
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Slider label="Opus allocation"   value={opusShare}   setValue={setOpusShare}   color="#9BC4CC" hint="premium reasoning · $14.22 baseline" />
-              <Slider label="Sonnet allocation" value={sonnetShare} setValue={setSonnetShare} color="#6FA8B3" hint="balanced · 6× cheaper than Opus" />
-              <Slider label="Haiku allocation"  value={haikuShare}  setValue={setHaikuShare}  color="#4F7B83" hint="fast · 34× cheaper than Opus" />
-            </div>
+            <div className="label" style={{ marginBottom: 8 }}>MODEL ROUTING</div>
+            <Slider label="Opus share"          value={opusShare}       setValue={setOpusShare}       color="#9BC4CC" hint="premium reasoning" />
           </div>
-
           <div style={{ height: 1, background: 'var(--line)' }} />
-
           <div>
             <div className="label" style={{ marginBottom: 8 }}>OPTIMIZATIONS</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Slider label="Cache-hit improvement" value={cacheBoost} setValue={setCacheBoost} color="#7CA893" hint="stable system prompts + prefix-cache" />
-              <Slider label="Context trim"          value={ctxTrim}    setValue={setCtxTrim}    color="#C9B08A" hint="RAG k-reduce + history summarization" />
+              <Slider label="Cache depth"        value={cacheDepth}      setValue={setCacheDepth}      color="#7CA893" hint="stable system prompts + prefix-cache" />
+              <Slider label="Reasoning budget"   value={reasoningBudget} setValue={setReasoningBudget} color="#C9B08A" hint="extended thinking budget %" />
             </div>
           </div>
         </div>
 
         {/* RIGHT: projections */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* daily */}
-          <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,.25)', border: '1px solid var(--line)', borderRadius: 'var(--r)' }}>
-            <div className="label">PROJECTED DAILY</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 4 }}>
-              <span className="mono" style={{ fontSize: 28, color: 'var(--mist)', fontWeight: 600, letterSpacing: '-.02em' }}>
-                ${projDaily.toFixed(2)}
-              </span>
-              <span className="mono" style={{ fontSize: 13, color: deltaDaily < 0 ? 'var(--good)' : deltaDaily > 0 ? 'var(--bad)' : 'var(--steel)', fontWeight: 600 }}>
-                {deltaDaily < 0 ? '↓' : deltaDaily > 0 ? '↑' : '·'} ${Math.abs(deltaDaily).toFixed(2)}
-              </span>
-            </div>
-            <div className="mono" style={{ fontSize: 10, color: 'var(--graphite)', marginTop: 4, letterSpacing: '.08em' }}>
-              vs $42.18 baseline · {((ratio * cacheFactor * ctxFactor - 1) * 100).toFixed(1)}% shift
-            </div>
-            {/* delta bar */}
-            <div style={{ position: 'relative', height: 4, background: 'var(--ink)', borderRadius: 2, marginTop: 10, overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'var(--steel)', zIndex: 2 }} />
-              <div style={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                background: deltaDaily < 0 ? 'var(--good)' : 'var(--bad)',
-                left: deltaDaily < 0 ? `calc(50% - ${Math.min(50, Math.abs(deltaDaily) / 20 * 50)}%)` : '50%',
-                width: `${Math.min(50, Math.abs(deltaDaily) / 20 * 50)}%`,
-              }} />
-            </div>
-          </div>
-
-          {/* monthly + annual */}
-          <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,.15)', border: '1px solid var(--line)', borderRadius: 'var(--r)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <div>
-                <div className="label">MONTHLY PROJECTION</div>
-                <div className="mono" style={{ fontSize: 18, color: 'var(--mist)', marginTop: 2 }}>${projMonthly.toFixed(2)}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div className="label">ANNUAL</div>
-                <div className="mono" style={{ fontSize: 14, color: 'var(--fog)', marginTop: 2 }}>${(projDaily * 365).toFixed(2)}</div>
+        <div style={noBaseline ? { display: 'flex', flexDirection: 'column', justifyContent: 'center' } : undefined}>
+          {noBaseline && (
+            <div style={{ padding: '24px 0', textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: 'var(--steel)', marginBottom: 6 }}>No baseline data</div>
+              <div style={{ fontSize: 11, color: 'var(--graphite)', lineHeight: 1.6 }}>
+                No API calls in the last 24h.<br />Projections will appear once activity is recorded.
               </div>
             </div>
-          </div>
+          )}
 
-          {/* quality */}
-          <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,.15)', border: '1px solid var(--line)', borderRadius: 'var(--r)' }}>
-            <div className="label">QUALITY EXPECTED</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-              <span className="mono" style={{ fontSize: 18, color: qualityShift >= 0 ? 'var(--good)' : qualityShift > -2 ? 'var(--warn)' : 'var(--bad)' }}>
-                {qEffective.toFixed(1)}
-              </span>
-              <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>
-                {qualityShift >= 0 ? '+' : ''}{qualityShift.toFixed(2)} vs baseline
-              </span>
-            </div>
-            {/* q bar */}
-            <div style={{ position: 'relative', height: 6, background: 'var(--ink)', borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
+          {!noBaseline && (
+            <>
+              {/* Spend grid */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--graphite)', marginBottom: 10, fontWeight: 500 }}>
+                  Projected spend
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: '5px 14px', alignItems: 'baseline' }}>
+                  {[
+                    { period: 'Daily',   base: baseDaily,       proj: projDaily },
+                    { period: 'Monthly', base: baseDaily * 30,  proj: projMonthly },
+                    { period: 'Annual',  base: baseDaily * 365, proj: projAnnual },
+                  ].map(row => (
+                    <Fragment key={row.period}>
+                      <span style={{ fontSize: 10, color: 'var(--graphite)' }}>{row.period}</span>
+                      <span className="mono" style={{ fontSize: 10, color: 'rgba(200,185,165,.3)', textDecoration: 'line-through' }}>
+                        {fmtUsd(row.base)}
+                      </span>
+                      <span className="mono" style={{
+                        fontSize: 13, fontWeight: 600,
+                        color: deltaDaily < 0 ? '#7CA893' : '#B87070',
+                      }}>
+                        {fmtUsd(row.proj)}
+                      </span>
+                    </Fragment>
+                  ))}
+                </div>
+              </div>
+
+              {/* Verdict */}
               <div style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: ((qEffective / 100) * 100) + '%',
-                background: qualityShift >= 0 ? 'linear-gradient(90deg,#4F7B83,#7CA893)' : 'linear-gradient(90deg,#C9966B,#B86B6B)',
-              }} />
-              <div style={{ position: 'absolute', left: (qualityNow / 100 * 100) + '%', top: -2, bottom: -2, width: 1, background: 'var(--mist)', opacity: .7 }} />
-            </div>
-            <div className="mono" style={{ fontSize: 9, color: 'var(--graphite)', marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
-              <span>0</span><span>baseline {qualityNow.toFixed(1)}</span><span>100</span>
-            </div>
-          </div>
-
-          {/* efficiency */}
-          <div style={{
-            padding: '10px 14px',
-            background: effImprove > 5 ? 'rgba(124,168,147,.08)' : effImprove < -5 ? 'rgba(184,107,107,.08)' : 'rgba(0,0,0,.15)',
-            border: '1px solid ' + (effImprove > 5 ? 'rgba(124,168,147,.3)' : effImprove < -5 ? 'rgba(184,107,107,.3)' : 'var(--line)'),
-            borderRadius: 'var(--r)',
-          }}>
-            <div className="label" style={{ color: effImprove > 5 ? 'var(--good)' : effImprove < -5 ? 'var(--bad)' : 'var(--steel)' }}>
-              EFFICIENCY · $/QUALITY-POINT
-            </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-              <span className="mono" style={{ fontSize: 18, color: 'var(--mist)' }}>${effNew.toFixed(3)}</span>
-              <span className="mono" style={{ fontSize: 11, color: effImprove > 0 ? 'var(--good)' : 'var(--bad)', fontWeight: 600 }}>
-                {effImprove > 0 ? '↓' : '↑'} {Math.abs(effImprove).toFixed(1)}%
-              </span>
-            </div>
-            <div className="mono" style={{ fontSize: 9, color: 'var(--graphite)', marginTop: 3 }}>
-              was ${effNow.toFixed(3)} · {effImprove > 0 ? 'more' : 'less'} efficient than today
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* verdict */}
-      <div style={{ marginTop: 14, padding: '10px 12px', background: 'rgba(11,17,20,.6)', border: '1px solid var(--line-2)', borderRadius: 'var(--r)', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 16, color: deltaDaily < 0 && qualityShift > -1 ? 'var(--good)' : deltaDaily < 0 ? 'var(--warn)' : 'var(--bad)' }}>
-          {deltaDaily < 0 && qualityShift > -1 ? '✓' : deltaDaily < 0 ? '~' : '✗'}
-        </span>
-        <div style={{ flex: 1, fontSize: 12, color: 'var(--fog)', lineHeight: 1.5 }}>
-          {deltaDaily < 0 && qualityShift > -1
-            ? <>Save <span className="mono" style={{ color: 'var(--good)', fontWeight: 600 }}>${Math.abs(deltaDaily).toFixed(2)}/day</span> with only <span className="mono">{qualityShift.toFixed(2)}</span> quality delta. <span style={{ color: 'var(--accent-2)' }}>Recommended.</span></>
-            : deltaDaily < 0
-              ? <>Saves <span className="mono" style={{ color: 'var(--good)' }}>${Math.abs(deltaDaily).toFixed(2)}/day</span> but drops quality by <span className="mono" style={{ color: 'var(--bad)' }}>{qualityShift.toFixed(2)}</span>. <span style={{ color: 'var(--warn)' }}>Trade-off.</span></>
-              : <>Costs <span className="mono" style={{ color: 'var(--bad)' }}>+${deltaDaily.toFixed(2)}/day</span> for <span className="mono">{qualityShift > 0 ? '+' : ''}{qualityShift.toFixed(2)}</span> quality. Worth it only if quality gains are critical.</>
-          }
+                padding: '8px 12px',
+                background: verdict.bg,
+                border: `1px solid ${verdict.border}`,
+                borderRadius: 'var(--r)',
+                display: 'flex', gap: 9, alignItems: 'flex-start',
+              }}>
+                <span style={{ fontSize: 13, color: verdict.col, lineHeight: 1.2, flexShrink: 0 }}>
+                  {verdict.icon}
+                </span>
+                <span style={{ fontSize: 11, color: verdict.col, lineHeight: 1.5 }}>
+                  {verdict.text}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

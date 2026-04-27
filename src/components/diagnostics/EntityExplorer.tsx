@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { fmt, fmtUsd } from '@/lib/fmt';
+import { fmt, fmtUsd, fmtMs } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 import type { Lookback } from '@/lib/lookback';
 
@@ -39,15 +39,16 @@ function ColHeader({ label }: { label: string }) {
 
 interface Props {
   lookback?: Lookback;
+  provider?: string;
 }
 
-export function EntityExplorer({ lookback = '24H' }: Props) {
+export function EntityExplorer({ lookback = '24H', provider }: Props) {
   const [selProject, setSelProject] = useState<string | null>(null);
   const [selSession, setSelSession] = useState<string | null>(null);
 
-  const { data: projectData } = trpc.entity.projects.useQuery({ lookback });
+  const { data: projectData } = trpc.entity.projects.useQuery({ lookback, provider });
   const { data: sessionData } = trpc.entity.sessions.useQuery(
-    { project: selProject ?? '', lookback },
+    { project: selProject ?? '', lookback, provider },
     { enabled: !!selProject }
   );
   const { data: turnData } = trpc.entity.turns.useQuery(
@@ -68,7 +69,7 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
     ? (sessionData ?? []).map(s => ({
         id: s.sessionId,
         ts: new Date(s.lastTs).toISOString().slice(0, 16).replace('T', ' '),
-        tokens: s.calls,
+        tokens: s.totalTokens,
       }))
     : [];
 
@@ -77,7 +78,7 @@ export function EntityExplorer({ lookback = '24H' }: Props) {
         id: t.id,
         role: t.turn % 2 === 1 ? 'user' : 'assistant',
         tokens: t.inputTokens + t.outputTokens,
-        content: `${t.model} · ${t.status} · ${t.latencyMs}ms`,
+        content: `${t.model} · ${t.status} · ${fmtMs(t.latencyMs)}`,
       }))
     : [];
 

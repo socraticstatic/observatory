@@ -23,9 +23,13 @@ export function OverallCostHero({ lookback, provider }: Props) {
   const { data: chartData } = trpc.pulse.pulseChart.useQuery({ lookback, provider });
   const { data: modelData } = trpc.who.modelAttribution.useQuery({ lookback, provider });
 
-  const total = costData?.totalCostUsd ?? 0;
-  const prior = costData?.priorCostUsd ?? 0;
-  const deltaPct = prior > 0 ? (total - prior) / prior * 100 : null;
+  const total              = costData?.totalCostUsd ?? 0;
+  const inference          = costData?.inferenceCostUsd ?? total;
+  const cacheRead          = costData?.cacheReadCostUsd ?? 0;
+  const prior              = costData?.priorCostUsd ?? 0;
+  const priorInference     = costData?.priorInferenceCostUsd ?? prior;
+  const isSubscription     = costData?.isSubscriptionBilling ?? false;
+  const deltaPct = priorInference > 0 ? (inference - priorInference) / priorInference * 100 : null;
   const dCol = deltaPct == null
     ? 'var(--steel)'
     : deltaPct > 15 ? '#B86B6B'
@@ -52,10 +56,21 @@ export function OverallCostHero({ lookback, provider }: Props) {
 
       {/* Col 1: cost number + delta */}
       <div>
-        <div className="label" style={{ color: 'var(--graphite)' }}>OVERALL COST · {label.toUpperCase()}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div className="label" style={{ color: 'var(--graphite)' }}>
+            {isSubscription ? 'SUBSCRIPTION COST' : 'INFERENCE COST'} · {label.toUpperCase()}
+          </div>
+          {isSubscription && (
+            <span style={{
+              fontSize: 8, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase',
+              color: 'var(--accent-2)', background: 'rgba(111,168,179,.1)',
+              border: '1px solid rgba(111,168,179,.2)', borderRadius: 3, padding: '1px 5px',
+            }}>FLAT</span>
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 4 }}>
           <span className="num" style={{ fontSize: 44, fontWeight: 600, letterSpacing: '-.02em', color: 'var(--mist)' }}>
-            {fmtUsd(total)}
+            {fmtUsd(inference)}
           </span>
           {deltaPct != null && (
             <span className="mono" style={{ fontSize: 12, color: dCol }}>
@@ -63,8 +78,15 @@ export function OverallCostHero({ lookback, provider }: Props) {
             </span>
           )}
         </div>
-        <div className="mono" style={{ fontSize: 11, color: 'var(--steel)', marginTop: 4 }}>
-          vs {fmtUsd(prior)} prior {label.replace('last ', '')}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', marginTop: 4, flexWrap: 'wrap' }}>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--steel)' }}>
+            vs {fmtUsd(priorInference)} prior {label.replace('last ', '')}
+          </span>
+          {!isSubscription && cacheRead > 0 && (
+            <span className="mono" style={{ fontSize: 10, color: 'var(--graphite)' }}>
+              +{fmtUsd(cacheRead)} cache reads
+            </span>
+          )}
         </div>
       </div>
 

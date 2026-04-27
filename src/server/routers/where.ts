@@ -6,6 +6,8 @@ import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
   if (interval === '24 hours') return 86_400_000;
+  if (interval === '90 days')  return 90 * 86_400_000;
+  if (interval === '365 days') return 365 * 86_400_000;
   return 30 * 86_400_000;
 }
 
@@ -17,12 +19,15 @@ export const whereRouter = router({
       const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const rows = await ctx.db.$queryRaw<Array<{ region: string; calls: bigint; cost: unknown; avg_lat: unknown }>>`
         SELECT
-          COALESCE(region, 'unknown') AS region,
+          region,
           COUNT(*) AS calls,
           SUM("costUsd")::float AS cost,
           AVG("latencyMs")::float AS avg_lat
         FROM llm_events
-        WHERE ts >= ${since} ${pfSql}
+        WHERE ts >= ${since}
+          AND region IS NOT NULL
+          AND region <> ''
+          ${pfSql}
         GROUP BY region
         ORDER BY cost DESC
       `;
@@ -30,7 +35,7 @@ export const whereRouter = router({
         region: r.region,
         calls: Number(r.calls),
         cost: Number(r.cost),
-        avgLatMs: Math.round(Number(r.avg_lat) ?? 0),
+        avgLatMs: r.avg_lat != null ? Math.round(Number(r.avg_lat)) : null,
       }));
     }),
 });

@@ -80,6 +80,16 @@ const NAV_ICONS: Record<string, React.ReactNode> = {
       <path d="M6.5,9 L9.5,9" />
     </svg>
   ),
+  Intel: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="2" />
+      <circle cx="2.5" cy="4" r="1" />
+      <circle cx="13.5" cy="4" r="1" />
+      <circle cx="2.5" cy="12" r="1" />
+      <circle cx="13.5" cy="12" r="1" />
+      <path d="M8,6 L3.4,4.7 M8,6 L12.6,4.7 M8,10 L3.4,11.3 M8,10 L12.6,11.3" />
+    </svg>
+  ),
   Collapse: (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
       <path d="M10,4 L6,8 L10,12" />
@@ -93,7 +103,7 @@ const CollapsedIcon = (
   </svg>
 );
 
-const PRIMARY_NAV = ['Pulse', 'Traces', 'Costs', 'Sessions'] as const;
+const PRIMARY_NAV = ['Pulse', 'Traces', 'Costs', 'Intel', 'Sessions'] as const;
 const FIVE_W = ['What', 'Who', 'Where', 'When', 'How'] as const;
 const SECONDARY_NAV = ['Rules', 'Archive'] as const;
 
@@ -103,7 +113,7 @@ export function Sidebar({ view, setView, expanded, setExpanded }: Props) {
     setTimeout(() => {
       const el = document.getElementById(`5w-${label.toLowerCase()}`);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
+    }, 150);
   }
 
   return (

@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
+import { getBillingUnit } from '@/lib/service-registry';
 
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
   if (interval === '24 hours') return 86_400_000;
+  if (interval === '90 days')  return 90 * 86_400_000;
+  if (interval === '365 days') return 365 * 86_400_000;
   return 30 * 86_400_000;
 }
 
@@ -19,17 +22,32 @@ export const tracesRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
-      const whereObj = {
-        ts: {
-          gte: since,
-          ...(input.cursor ? { lt: new Date(input.cursor) } : {}),
-        },
-        ...(input.provider ? { provider: input.provider } : {}),
-        ...(input.status   ? { status: input.status }     : {}),
-      };
+
+      // Composite cursor: { ts, id } prevents skipping events with duplicate timestamps
+      let cursorTs: Date | undefined;
+      let cursorId: string | undefined;
+      if (input.cursor) {
+        try {
+          const parsed = JSON.parse(input.cursor) as { ts: string; id: string };
+          cursorTs = new Date(parsed.ts);
+          cursorId = parsed.id;
+        } catch {
+          cursorTs = new Date(input.cursor); // backward compat with old ts-only cursors
+        }
+      }
+
       const items = await ctx.db.llmEvent.findMany({
-        where: whereObj,
-        orderBy: { ts: 'desc' },
+        where: {
+          ts: { gte: since },
+          ...(cursorTs && cursorId
+            ? { OR: [{ ts: { lt: cursorTs } }, { ts: cursorTs, id: { lt: cursorId } }] }
+            : cursorTs
+              ? { ts: { lt: cursorTs } }
+              : {}),
+          ...(input.provider ? { provider: input.provider } : {}),
+          ...(input.status   ? { status: input.status }     : {}),
+        },
+        orderBy: [{ ts: 'desc' }, { id: 'desc' }],
         take: input.limit + 1,
         select: {
           id: true, ts: true, provider: true, model: true,
@@ -41,6 +59,7 @@ export const tracesRouter = router({
       });
       const hasMore = items.length > input.limit;
       const page    = hasMore ? items.slice(0, -1) : items;
+      const last    = page[page.length - 1];
       return {
         items: page.map(e => ({
           id:              e.id,
@@ -52,15 +71,16 @@ export const tracesRouter = router({
           cachedTokens:    e.cachedTokens,
           reasoningTokens: e.reasoningTokens,
           costUsd:         Number(e.costUsd),
-          latencyMs:       e.latencyMs ?? 0,
+          latencyMs:       e.latencyMs ?? null,
           status:          e.status,
           sessionId:       e.sessionId  ?? null,
           project:         e.project    ?? null,
           surface:         e.surface    ?? null,
           contentType:     e.contentType ?? null,
+          billingUnit:     getBillingUnit(e.provider),
           rawPayload:      e.rawPayload,
         })),
-        nextCursor: hasMore ? page[page.length - 1].ts.toISOString() : null,
+        nextCursor: hasMore && last ? JSON.stringify({ ts: last.ts.toISOString(), id: last.id }) : null,
       };
     }),
 });

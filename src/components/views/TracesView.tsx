@@ -2,19 +2,26 @@
 
 import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc-client';
-import { fmtUsd, fmtMs } from '@/lib/fmt';
+import { fmt, fmtUsd, fmtMs } from '@/lib/fmt';
+import { fmtUnits } from '@/lib/service-registry';
 import type { Lookback } from '@/lib/lookback';
+import { ViewStatusBar } from '@/components/shared/ViewStatusBar';
 
 interface Props {
   lookback: Lookback;
+  provider?: string;
 }
 
-const PROVIDERS = [
-  { id: undefined,    label: 'All' },
-  { id: 'anthropic',  label: 'Claude' },
-  { id: 'google',     label: 'Gemini' },
-  { id: 'xai',        label: 'Grok' },
-];
+const PROVIDER_META: Record<string, { label: string; dot: string }> = {
+  anthropic:  { label: 'Claude',     dot: '#6FA8B3' },
+  google:     { label: 'Gemini',     dot: '#8BA89C' },
+  xai:        { label: 'Grok',       dot: '#B88A8A' },
+  meta:       { label: 'Llama',      dot: '#9BA87C' },
+  ollama:     { label: 'Ollama',     dot: '#A89276' },
+  openai:     { label: 'OpenAI',     dot: '#7CA893' },
+};
+
+const CREATIVE_PROVIDERS = new Set(['heygen', 'elevenlabs', 'leonardo', 'fal', 'replicate', 'stability']);
 
 const STATUS_OPTS: { id: 'ok' | 'error' | undefined; label: string }[] = [
   { id: undefined, label: 'All' },
@@ -23,17 +30,9 @@ const STATUS_OPTS: { id: 'ok' | 'error' | undefined; label: string }[] = [
 ];
 
 function providerDot(p: string): string {
-  if (p === 'anthropic') return '#6FA8B3';
-  if (p === 'google')    return '#8BA89C';
-  if (p === 'xai')       return '#B88A8A';
-  return '#7A7068';
+  return PROVIDER_META[p]?.dot ?? '#7A7068';
 }
 
-function fmt2(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
-  return String(n);
-}
 
 type TraceItem = {
   id: string;
@@ -45,33 +44,58 @@ type TraceItem = {
   cachedTokens: number;
   reasoningTokens: number;
   costUsd: number;
-  latencyMs: number;
+  latencyMs: number | null;
   status: string;
   sessionId: string | null;
   project: string | null;
   surface: string | null;
   contentType: string | null;
+  billingUnit: string;
   rawPayload: unknown;
 };
 
-export function TracesView({ lookback }: Props) {
-  const [provider, setProvider] = useState<string | undefined>(undefined);
+export function TracesView({ lookback, provider: externalProvider }: Props) {
+  const [provider, setProvider] = useState<string | undefined>(externalProvider);
   const [status,   setStatus]   = useState<'ok' | 'error' | undefined>(undefined);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [cursor,   setCursor]   = useState<string | undefined>(undefined);
   const [allItems, setAllItems] = useState<TraceItem[]>([]);
 
+  useEffect(() => {
+    setProvider(externalProvider);
+    setCursor(undefined);
+    setAllItems([]);
+  }, [externalProvider]);
+
   const { data, isFetching } = trpc.traces.list.useQuery(
     { lookback, provider, status, cursor, limit: 50 },
   );
+  const { data: providerData } = trpc.who.providerBreakdown.useQuery({ lookback });
 
-  // Pagination accumulator — intentional direct setState, not a cascade risk
+  const providerOptions = [
+    { id: undefined as string | undefined, label: 'All' },
+    ...(providerData ?? [])
+      .filter(p => !CREATIVE_PROVIDERS.has(p.provider))
+      .map(p => ({
+        id: p.provider,
+        label: PROVIDER_META[p.provider]?.label ?? p.provider,
+      })),
+  ];
+
+  // Pagination accumulator — deduplicate by id to guard against Strict Mode double-invocation
   useEffect(() => {
     if (!data) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!cursor) { setAllItems(data.items); }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    else { setAllItems(prev => [...prev, ...data.items]); }
+    if (!cursor) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAllItems(data.items);
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAllItems(prev => {
+        const seen = new Set(prev.map(i => i.id));
+        const fresh = data.items.filter(i => !seen.has(i.id));
+        return fresh.length ? [...prev, ...fresh] : prev;
+      });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, cursor]);
 
@@ -97,11 +121,12 @@ export function TracesView({ lookback }: Props) {
 
   return (
     <div className="page">
+      <ViewStatusBar lookback={lookback} provider={provider} />
       {/* Filter bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <span className="label">Provider</span>
         <div className="seg">
-          {PROVIDERS.map(p => (
+          {providerOptions.map(p => (
             <button
               key={String(p.id)}
               className={provider === p.id ? 'on' : ''}
@@ -129,13 +154,25 @@ export function TracesView({ lookback }: Props) {
           {items.length} events
           {isFetching && <span style={{ marginLeft: 8, color: 'var(--graphite)' }}>loading…</span>}
         </span>
+        <a
+          href={`/api/export?lookback=${lookback}${provider ? `&provider=${provider}` : ''}`}
+          download
+          style={{
+            padding: '3px 10px', borderRadius: 'var(--r)', fontSize: 9, fontWeight: 600,
+            letterSpacing: '.1em', textTransform: 'uppercase', textDecoration: 'none',
+            border: '1px solid var(--line-2)', color: 'var(--steel)',
+            background: 'transparent', cursor: 'pointer',
+          }}
+        >
+          ↓ CSV
+        </a>
       </div>
 
       {/* Table */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ display: 'grid', gridTemplateColumns: COL, padding: '8px 16px', borderBottom: '1px solid var(--line)', gap: 8 }}>
-          {['Time', 'Model', 'Provider', 'Tokens', 'Cost', 'Latency', 'Status', ''].map(h => (
+          {['Time', 'Model', 'Provider', 'Units', 'Cost', 'Latency', 'Status', ''].map(h => (
             <span key={h} className="label" style={{ fontSize: 9 }}>{h}</span>
           ))}
         </div>
@@ -173,16 +210,20 @@ export function TracesView({ lookback }: Props) {
                 <span style={{ color: 'var(--steel)' }}>{row.provider}</span>
               </span>
               <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
-                {fmt2(row.inputTokens + row.outputTokens)}
-                {row.cachedTokens > 0 && (
-                  <span style={{ color: 'var(--accent-2)', marginLeft: 4 }}>+{fmt2(row.cachedTokens)}c</span>
-                )}
+                {row.billingUnit === 'tokens'
+                  ? <>{fmt(row.inputTokens + row.outputTokens)}{row.cachedTokens > 0 && <span style={{ color: 'var(--accent-2)', marginLeft: 4 }}>+{fmt(row.cachedTokens)}c</span>}</>
+                  : fmtUnits(row.inputTokens, row.provider)
+                }
               </span>
               <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
                 {fmtUsd(row.costUsd)}
               </span>
               <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
-                {row.latencyMs > 0 ? fmtMs(row.latencyMs) : '—'}
+                {(row.latencyMs ?? 0) > 0
+                  ? fmtMs(row.latencyMs)
+                  : row.cachedTokens > 0
+                  ? <span style={{ fontSize: 9, color: 'var(--accent-2)', letterSpacing: '.08em' }}>cache</span>
+                  : '—'}
               </span>
               <span style={{ fontSize: 10, fontWeight: 600, color: row.status === 'error' ? 'var(--bad)' : 'var(--good)' }}>
                 {row.status.toUpperCase()}
@@ -201,10 +242,10 @@ export function TracesView({ lookback }: Props) {
                     { label: 'Project',           val: row.project      ?? '—' },
                     { label: 'Surface',           val: row.surface      ?? '—' },
                     { label: 'Content type',      val: row.contentType  ?? '—' },
-                    { label: 'Input tokens',      val: fmt2(row.inputTokens) },
-                    { label: 'Output tokens',     val: fmt2(row.outputTokens) },
-                    { label: 'Cached tokens',     val: fmt2(row.cachedTokens) },
-                    { label: 'Reasoning tokens',  val: fmt2(row.reasoningTokens) },
+                    { label: row.billingUnit === 'tokens' ? 'Input tokens'  : `Input (${row.billingUnit})`, val: fmt(row.inputTokens) },
+                    { label: row.billingUnit === 'tokens' ? 'Output tokens' : 'Output units',              val: fmt(row.outputTokens) },
+                    { label: 'Cached tokens',     val: fmt(row.cachedTokens) },
+                    { label: 'Reasoning tokens',  val: fmt(row.reasoningTokens) },
                   ].map(({ label, val }) => (
                     <div key={label}>
                       <div className="label" style={{ marginBottom: 2 }}>{label}</div>

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Lookback, LOOKBACKS } from '@/lib/lookback';
+import { trpc } from '@/lib/trpc-client';
 
 interface Props {
   now: Date;
@@ -15,32 +16,28 @@ interface Props {
 
 const LOOKBACK_KEYS = Object.keys(LOOKBACKS) as Lookback[];
 
-const MODEL_TOGGLES: { id: string; label: string; dot: string | null }[] = [
-  { id: 'ALL',       label: 'ALL',    dot: null },
-  { id: 'anthropic', label: 'Claude', dot: '#6FA8B3' },
-  { id: 'google',    label: 'Gemini', dot: '#8BA89C' },
-  { id: 'xai',       label: 'Grok',   dot: '#B88A8A' },
-];
+const PROVIDER_META: Record<string, { label: string; dot: string }> = {
+  anthropic:  { label: 'Claude',      dot: '#6FA8B3' },
+  google:     { label: 'Gemini',      dot: '#8BA89C' },
+  xai:        { label: 'Grok',        dot: '#B88A8A' },
+  meta:       { label: 'Llama',       dot: '#9BA87C' },
+  ollama:     { label: 'Ollama',      dot: '#A89276' },
+  openai:     { label: 'OpenAI',      dot: '#7CA893' },
+  elevenlabs: { label: 'ElevenLabs',  dot: '#C9966B' },
+  leonardo:   { label: 'Leonardo',    dot: '#9B7CA8' },
+  heygen:     { label: 'HeyGen',      dot: '#7C8BA8' },
+};
 
 // --- LiveBar ---
 
-function LiveBar() {
-  const [heights, setHeights] = useState<number[]>(
-    () => Array.from({ length: 14 }, () => 4)
-  );
-
-  useEffect(() => {
-    setHeights(Array.from({ length: 14 }, () => 4 + Math.random() * 14));
-    const id = setInterval(() => {
-      setHeights(Array.from({ length: 14 }, () => 4 + Math.random() * 14));
-    }, 240);
-    return () => clearInterval(id);
-  }, []);
+function LiveBar({ buckets }: { buckets: number[] }) {
+  const max = Math.max(1, ...buckets);
+  const heights = buckets.map(n => 4 + (n / max) * 14);
 
   return (
     <div className="live-bar">
       {heights.map((h, i) => (
-        <span key={i} style={{ height: h }} />
+        <span key={`bar-${i}`} style={{ height: h }} />
       ))}
     </div>
   );
@@ -153,6 +150,31 @@ function Avatar() {
   );
 }
 
+// --- IngestStatus ---
+
+const STATUS_STYLE = {
+  ok:    { color: 'var(--good)',    label: 'OK' },
+  idle:  { color: '#C9966B',        label: 'IDLE' },
+  error: { color: 'var(--bad)',     label: 'NO DATA' },
+} as const;
+
+function IngestStatus({ status, secondsAgo }: { status: 'ok' | 'idle' | 'error'; secondsAgo: number | null }) {
+  const s = STATUS_STYLE[status];
+  const ago = secondsAgo != null
+    ? secondsAgo < 60
+      ? `${secondsAgo}s ago`
+      : `${Math.round(secondsAgo / 60)}m ago`
+    : null;
+  return (
+    <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: s.color, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+      ingest <span style={{ opacity: .7 }}>{s.label}</span>
+      {ago && status !== 'ok' && (
+        <span style={{ color: 'var(--graphite)', marginLeft: 4 }}>{ago}</span>
+      )}
+    </span>
+  );
+}
+
 // --- CommandHeader ---
 
 export function CommandHeader({
@@ -164,6 +186,33 @@ export function CommandHeader({
   onToggleSystemLog,
   systemLogOpen,
 }: Props) {
+  void now;
+
+  const { data: health } = trpc.health.status.useQuery(undefined, {
+    refetchInterval: 15_000,
+  });
+  const { data: providerData } = trpc.who.providerBreakdown.useQuery({ lookback });
+
+  const liveBuckets = health?.liveBuckets ?? Array(14).fill(0) as number[];
+  const status = health?.status ?? 'ok';
+  const secondsAgo = health?.secondsAgo ?? null;
+
+  // Active providers in the current window — used to dim inactive pills
+  const activeProviders = new Set(
+    (providerData ?? []).map(p => p.provider)
+  );
+
+  // Always show all known providers — never collapse to what's active in window
+  const providerToggles = [
+    { id: 'ALL', label: 'ALL', dot: null as string | null, active: true },
+    ...Object.entries(PROVIDER_META).map(([id, meta]) => ({
+      id,
+      label: meta.label,
+      dot: meta.dot,
+      active: activeProviders.has(id),
+    })),
+  ];
+
   return (
     <header className="cmd-header">
       {/* LEFT: live stream + bar + log button */}
@@ -172,7 +221,7 @@ export function CommandHeader({
         <span className="label" style={{ fontSize: 10, letterSpacing: '.14em' }}>
           Live Stream
         </span>
-        <LiveBar />
+        <LiveBar buckets={liveBuckets} />
         <button
           className="mbtn"
           onClick={onToggleSystemLog}
@@ -187,27 +236,18 @@ export function CommandHeader({
         >
           {'{ }'}
         </button>
-        <span
-          style={{
-            fontSize: 9,
-            fontFamily: "'JetBrains Mono', monospace",
-            color: 'var(--good)',
-            letterSpacing: '.08em',
-            textTransform: 'uppercase',
-          }}
-        >
-          ingest <span style={{ opacity: .7 }}>OK</span>
-        </span>
+        <IngestStatus status={status} secondsAgo={secondsAgo} />
       </div>
 
-      {/* CENTER: model toggle */}
+      {/* CENTER: provider toggle */}
       <div className="cmd-cell" style={{ justifyContent: 'center' }}>
         <div className="model-toggle">
-          {MODEL_TOGGLES.map(({ id, label, dot }) => (
+          {providerToggles.map(({ id, label, dot, active }) => (
             <button
               key={id}
               className={(id === 'ALL' ? providerFilter === null : providerFilter === id) ? 'on' : ''}
               onClick={() => setProviderFilter(id === 'ALL' ? null : id)}
+              style={{ opacity: (id === 'ALL' ? providerFilter === null : providerFilter === id) || active ? 1 : 0.35 }}
             >
               {dot && (
                 <span

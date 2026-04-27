@@ -68,11 +68,9 @@ function normalizeSev(s: string): 'bad' | 'warn' | 'info' {
   return 'info';
 }
 
-export function WhyInsightsCard({ provider }: Props = {}) {
+export function WhyInsightsCard({ provider }: { provider?: string }) {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const { data: insightData, isLoading } = trpc.insights.whyInsights.useQuery(
-    provider ? { provider } : undefined
-  );
+  const { data: insightData, isLoading } = trpc.insights.whyInsights.useQuery({ provider });
 
   const insights = useMemo<Insight[]>(() => {
     if (!insightData) return [];

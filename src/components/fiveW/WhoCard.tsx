@@ -6,7 +6,7 @@ import { type Lookback } from '@/lib/lookback';
 import { Sparkline } from '@/components/shared/Sparkline';
 import { trpc } from '@/lib/trpc-client';
 
-type SortKey = 'tpm' | 'p50' | 'cost';
+type SortKey = 'tpm' | 'p50' | 'cost' | 'eff';
 
 interface ModelRow {
   id: string;
@@ -14,11 +14,12 @@ interface ModelRow {
   vendor: string;
   share: number;
   tpm: number;
-  p50: number;
-  p95: number;
+  p50: number | null;
+  p95: number | null;
   cost: number;
   err: number;
   col: string;
+  eff: number; // output tokens per $0.001
 }
 
 function modelColor(model: string): string {
@@ -36,15 +37,16 @@ interface WhoCardProps {
   selected: string | null;
   setSelected: (id: string | null) => void;
   lookback: Lookback;
-  providerFilter?: string;
+  provider?: string;
   onDrill?: (m: ModelRow) => void;
 }
 
-export function WhoCard({ selected, setSelected, lookback, providerFilter, onDrill }: WhoCardProps) {
+export function WhoCard({ selected, setSelected, lookback, provider, onDrill }: WhoCardProps) {
   const [simOn, setSimOn] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('tpm');
 
-  const { data: modelData } = trpc.who.modelAttribution.useQuery({ lookback, provider: providerFilter });
+  const { data: modelData, isLoading } = trpc.who.modelAttribution.useQuery({ lookback, provider });
+  const { data: trendData } = trpc.who.trendByModel.useQuery({ lookback, provider });
 
   const models: ModelRow[] = useMemo(() => {
     if (!modelData || modelData.length === 0) return [];
@@ -59,23 +61,45 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
       cost: m.cost,
       err: m.errorRatePct,
       col: modelColor(m.model),
+      eff: m.cost > 0 ? m.outputTokens / m.cost / 1000 : 0,
     }));
   }, [modelData]);
 
   const sorted = useMemo(() => {
     return [...models].sort((a, b) => {
       if (sortKey === 'tpm')  return b.tpm - a.tpm;
-      if (sortKey === 'p50')  return a.p50 - b.p50;
+      if (sortKey === 'p50')  return (a.p50 ?? Infinity) - (b.p50 ?? Infinity);
       if (sortKey === 'cost') return b.cost - a.cost;
+      if (sortKey === 'eff')  return b.eff - a.eff;
       return 0;
     });
   }, [sortKey, models]);
 
   const totalTPM = models.reduce((s, m) => s + m.tpm, 0);
 
-  if (!models.length) return (
+  const totalCost   = models.reduce((s, m) => s + m.cost, 0);
+  const topByCost   = [...models].sort((a, b) => b.cost - a.cost)[0];
+  const topShare    = totalCost > 0 && topByCost ? (topByCost.cost / totalCost * 100) : 0;
+  const maxErr      = models.length > 0 ? Math.max(...models.map(m => m.err)) : 0;
+  const highErrMdl  = models.find(m => m.err === maxErr);
+  const whoVerdict  = topShare > 70 || maxErr > 20 ? 'act' : topShare > 50 || maxErr > 5 ? 'watch' : 'ok';
+  const whoBriefing = whoVerdict === 'act' && maxErr > 20
+    ? `${highErrMdl?.name ?? 'a model'}: ${maxErr.toFixed(0)}% error rate`
+    : whoVerdict === 'act'
+    ? `${topByCost?.name ?? '—'} is ${topShare.toFixed(0)}% of spend`
+    : whoVerdict === 'watch'
+    ? `${topByCost?.name ?? '—'} ${topShare.toFixed(0)}% of spend — ${maxErr.toFixed(1)}% max error`
+    : `${models.length} model${models.length !== 1 ? 's' : ''} active`;
+
+  if (isLoading) return (
     <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
       <span style={{ fontSize: 12, color: 'var(--steel)' }}>Loading…</span>
+    </div>
+  );
+
+  if (!models.length) return (
+    <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+      <span style={{ fontSize: 12, color: 'var(--steel)' }}>No models in this window</span>
     </div>
   );
 
@@ -92,13 +116,20 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
     <div className="card">
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="label">WHO &middot; Model Attribution</span>
-          <span className="chip">{models.length} active</span>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="label">WHO &middot; Model Attribution</span>
+            <span className="chip">{models.length} active</span>
+          </div>
+          <span style={{ fontSize: 10, display: 'block', marginTop: 3, color: whoVerdict === 'act' ? 'var(--bad)' : whoVerdict === 'watch' ? '#C9966B' : 'var(--graphite)' }}>
+            {whoBriefing}
+          </span>
         </div>
-        <button className={`mbtn${simOn ? ' primary' : ''}`} onClick={() => setSimOn(s => !s)}>
-          &#8651; Simulate Switch
-        </button>
+        {models.some(m => m.id.toLowerCase().includes('opus')) && (
+          <button className={`mbtn${simOn ? ' primary' : ''}`} onClick={() => setSimOn(s => !s)}>
+            &#8651; Simulate Switch
+          </button>
+        )}
       </div>
 
       {/* Simulation panel */}
@@ -168,7 +199,7 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
       </div>
 
       {/* Table */}
-      <div style={{ overflowX: 'auto' }}>
+      <div style={{ overflowX: 'auto', maxHeight: 360, overflowY: 'auto' }}>
         <table>
           <thead>
             <tr>
@@ -183,6 +214,9 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
               <th style={{ cursor: 'pointer', color: sortKey === 'cost' ? 'var(--accent)' : undefined }} onClick={() => setSortKey('cost')}>
                 Cost/d {sortKey === 'cost' ? '▼' : ''}
               </th>
+              <th style={{ cursor: 'pointer', color: sortKey === 'eff' ? 'var(--accent)' : undefined }} onClick={() => setSortKey('eff')} title="Output tokens per $0.001 — higher is more efficient">
+                Eff {sortKey === 'eff' ? '▼' : ''}
+              </th>
               <th>Trend</th>
             </tr>
           </thead>
@@ -190,7 +224,7 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
             {sorted.map(m => {
               const isOpus = m.id.toLowerCase().includes('opus');
               const scaledCost = m.cost;
-              const trend: number[] = [];
+              const trend: number[] = trendData?.[m.id] ?? [];
               const isSelected = selected === m.id;
               return (
                 <tr
@@ -209,8 +243,8 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
                     <div style={{ fontSize: 10, color: 'var(--steel)', marginLeft: 15 }}>{m.vendor}</div>
                   </td>
                   <td className="num">{fmt(m.tpm)}</td>
-                  <td className="num">{fmtMs(m.p50)}</td>
-                  <td className="num">{fmtMs(m.p95)}</td>
+                  <td className="num">{m.p50 != null ? fmtMs(m.p50) : '—'}</td>
+                  <td className="num">{m.p95 != null ? fmtMs(m.p95) : '—'}</td>
                   <td>
                     {simOn && isOpus ? (
                       <div>
@@ -222,8 +256,17 @@ export function WhoCard({ selected, setSelected, lookback, providerFilter, onDri
                         </span>
                       </div>
                     ) : (
-                      <span className="num">{scaledCost > 0 ? `$${scaledCost.toFixed(2)}` : <span style={{ color: 'var(--steel)' }}>free</span>}</span>
+                      <span className="num">{scaledCost > 0 ? (scaledCost < 0.01 ? '<$0.01' : `$${scaledCost.toFixed(2)}`) : <span style={{ color: 'var(--steel)' }}>—</span>}</span>
                     )}
+                  </td>
+                  <td>
+                    <span
+                      className="num"
+                      title="Output tokens per $0.001"
+                      style={{ fontSize: 10, color: m.eff > 0 ? 'var(--fog)' : 'var(--graphite)' }}
+                    >
+                      {m.eff > 0 ? `${m.eff.toFixed(0)}k` : '—'}
+                    </span>
                   </td>
                   <td>
                     <Sparkline data={trend} color={m.col} h={28} w={80} />

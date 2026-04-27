@@ -66,7 +66,7 @@ describe('tracesRouter.list', () => {
     const caller = createCaller(createContext());
     const result = await caller.list({ lookback: '24H', limit: 1 });
     expect(result.items).toHaveLength(1);
-    expect(result.nextCursor).toBe('2026-04-19T12:00:00.000Z');
+    expect(JSON.parse(result.nextCursor!)).toEqual({ ts: '2026-04-19T12:00:00.000Z', id: 'evt-001' });
   });
 
   it('passes provider filter to db when provided', async () => {

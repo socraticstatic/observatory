@@ -6,6 +6,8 @@ import { LookbackSchema, lookbackToInterval } from '@/lib/lookback';
 function msSince(interval: string): number {
   if (interval === '1 hour') return 3_600_000;
   if (interval === '24 hours') return 86_400_000;
+  if (interval === '90 days')  return 90 * 86_400_000;
+  if (interval === '365 days') return 365 * 86_400_000;
   return 30 * 86_400_000;
 }
 
@@ -25,6 +27,7 @@ export const contentRouter = router({
           AVG("qualityScore")::float AS avg_quality
         FROM llm_events
         WHERE ts >= ${since} ${pfSql}
+          AND ("contentType" NOT IN ('tts', 'video', 'image') OR "contentType" IS NULL)
         GROUP BY "contentType"
         ORDER BY cost DESC
       `;
@@ -35,7 +38,7 @@ export const contentRouter = router({
         inputTokens: Number(r.input),
         outputTokens: Number(r.output),
         costUsd: Number(r.cost),
-        avgQuality: Number(r.avg_quality ?? 0),
+        avgQuality: r.avg_quality != null ? Number(r.avg_quality) : null,
       }));
     }),
 });
