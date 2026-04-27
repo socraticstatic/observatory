@@ -80,11 +80,11 @@ function StatCell({ label, value, col, delta, sparkline, sparklineColor = 'var(-
 
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 
-const LABELS = ['Total Calls', 'Cache Hit', 'Efficiency', 'Error Rate', 'Sessions', 'Latency'];
+const LABELS = ['Total Calls', 'Cache Hit', 'Efficiency', 'Error Rate', 'Sessions', 'p50', 'p95', 'p99'];
 
 function LoadingStrip() {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8, marginBottom: 12 }}>
       {LABELS.map(label => (
         <div key={label} className="card" style={{ padding: '12px 14px' }}>
           <div className="label" style={{ marginBottom: 6 }}>{label}</div>
@@ -115,7 +115,6 @@ export function StatStrip({ lookback = '24H', provider }: Props) {
   const cacheDelta  = fmtHitDelta(data.cacheHitPct, data.prevCacheHitPct);
 
   const efficiencyVal = data.efficiency > 0 ? `${data.efficiency.toFixed(1)}×` : '—';
-  const latencyVal    = data.avgLatencyMs > 0 ? fmtMs(data.avgLatencyMs) : '—';
   const errorColor    = data.errorRatePct > 1 ? 'var(--warn)' : 'var(--good)';
 
   const cacheSignal: 'act' | 'warn' | undefined =
@@ -124,13 +123,15 @@ export function StatStrip({ lookback = '24H', provider }: Props) {
     data.errorRatePct > 5 ? 'act' : data.errorRatePct > 1 ? 'warn' : undefined;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8, marginBottom: 12 }}>
       <StatCell label="Total Calls"  value={data.totalCalls.toLocaleString()} col="var(--mist)"    delta={callDelta} />
       <StatCell label="Cache Hit"    value={`${data.cacheHitPct.toFixed(1)}%`} col="var(--accent-2)" delta={cacheDelta} sparkline={sparkPoints} sparklineColor="var(--accent-2)" signal={cacheSignal} />
       <StatCell label="Efficiency"   value={efficiencyVal}                     col="var(--fog)" />
       <StatCell label="Error Rate"   value={`${data.errorRatePct.toFixed(1)}%`} col={errorColor}   signal={errorSignal} />
       <StatCell label="Sessions"     value={String(data.activeSessions)}       col="var(--mist)" />
-      <StatCell label="Latency"      value={latencyVal}                        col="var(--fog)" />
+      <StatCell label="p50 Latency"  value={data.p50LatMs > 0 ? fmtMs(data.p50LatMs) : '—'}  col="var(--fog)" />
+      <StatCell label="p95 Latency"  value={data.p95LatMs > 0 ? fmtMs(data.p95LatMs) : '—'}  col={data.p95LatMs > data.p50LatMs * 5 ? 'var(--warn)' : 'var(--fog)'} signal={data.p95LatMs > data.p50LatMs * 7 ? 'act' : data.p95LatMs > data.p50LatMs * 4 ? 'warn' : undefined} />
+      <StatCell label="p99 Latency"  value={data.p99LatMs > 0 ? fmtMs(data.p99LatMs) : '—'}  col="var(--steel)" />
     </div>
   );
 }

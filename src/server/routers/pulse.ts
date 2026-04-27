@@ -230,9 +230,10 @@ export const pulseRouter = router({
           _sum: { cachedTokens: true, inputTokens: true },
           _avg: { latencyMs: true },
         }),
-        ctx.db.$queryRaw<Array<{ p50: unknown; p99: unknown; avg_lat: unknown; prev_avg_lat: unknown; llm_input: unknown; llm_output: unknown }>>`
+        ctx.db.$queryRaw<Array<{ p50: unknown; p95: unknown; p99: unknown; avg_lat: unknown; prev_avg_lat: unknown; llm_input: unknown; llm_output: unknown }>>`
           SELECT
             PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY "latencyMs") FILTER (WHERE ts >= ${since}) AS p50,
+            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs") FILTER (WHERE ts >= ${since}) AS p95,
             PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY "latencyMs") FILTER (WHERE ts >= ${since}) AS p99,
             AVG("latencyMs") FILTER (WHERE ts >= ${since}) AS avg_lat,
             AVG("latencyMs") FILTER (WHERE ts >= ${prevSince} AND ts < ${since}) AS prev_avg_lat,
@@ -260,6 +261,7 @@ export const pulseRouter = router({
         avgLatencyMs:     avgLat,
         prevAvgLatencyMs: prevAvgLat,
         p50LatMs:         latPct[0]?.p50 != null ? Math.round(Number(latPct[0].p50)) : 0,
+        p95LatMs:         latPct[0]?.p95 != null ? Math.round(Number(latPct[0].p95)) : 0,
         p99LatMs:         latPct[0]?.p99 != null ? Math.round(Number(latPct[0].p99)) : 0,
         avgQuality:       Number(agg._avg.qualityScore ?? 0),
         errorRatePct:     total > 0 ? (errors / total) * 100 : 0,

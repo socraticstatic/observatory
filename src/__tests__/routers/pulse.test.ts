@@ -47,3 +47,27 @@ describe('pulseRouter.overallCost', () => {
     expect(result.totalCostUsd).toBeCloseTo(21.72);
   });
 });
+
+describe('pulseRouter.statStrip', () => {
+  it('statStrip includes p50, p95, and p99 latency percentiles', async () => {
+    mockQueryRaw.mockReset();
+    mockQueryRaw.mockResolvedValue([{
+      p50: 350, p95: 1200, p99: 2100,
+      avg_lat: 400, prev_avg_lat: 380,
+      llm_input: BigInt(50000), llm_output: BigInt(12000),
+    }]);
+    mockAggregate.mockResolvedValue({
+      _count: { id: 10 }, _avg: { latencyMs: 400, qualityScore: null },
+      _sum: { cachedTokens: 5000, inputTokens: 50000, outputTokens: 12000 },
+    });
+    mockCount.mockResolvedValue(0);
+    mockFindMany.mockResolvedValue([]);
+
+    const caller = createCaller(createContext());
+    const result = await caller.statStrip({ lookback: '24H' });
+
+    expect(result.p50LatMs).toBe(350);
+    expect(result.p95LatMs).toBe(1200);
+    expect(result.p99LatMs).toBe(2100);
+  });
+});
