@@ -7,6 +7,7 @@ import { fmtUnits } from '@/lib/service-registry';
 import type { Lookback } from '@/lib/lookback';
 import { ViewStatusBar } from '@/components/shared/ViewStatusBar';
 import { TraceTreeRow } from '@/components/traces/TraceTreeRow';
+import { StarRating } from '@/components/traces/StarRating';
 
 interface Props {
   lookback: Lookback;
@@ -54,6 +55,67 @@ type TraceItem = {
   billingUnit: string;
   rawPayload: unknown;
 };
+
+function ExpandedRow({ row, fmt, fmtUsd, fmtMs, fmtUnits }: {
+  row: TraceItem;
+  fmt: (n: number) => string;
+  fmtUsd: (n: number) => string;
+  fmtMs: (n: number | null) => string;
+  fmtUnits: (n: number, provider: string) => string;
+}) {
+  const utils = trpc.useUtils();
+  const { data: annotation } = trpc.annotation.get.useQuery({ traceId: row.id });
+  const rateMutation = trpc.annotation.rate.useMutation({
+    onSuccess: (_, vars) => utils.annotation.get.invalidate({ traceId: vars.traceId }),
+  });
+
+  return (
+    <div style={{ padding: '12px 16px 16px', borderBottom: '1px solid var(--line)', background: 'rgba(11,16,20,.4)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px 16px', marginBottom: 12 }}>
+        {[
+          { label: 'Session',          val: row.sessionId    ?? '—' },
+          { label: 'Project',           val: row.project      ?? '—' },
+          { label: 'Surface',           val: row.surface      ?? '—' },
+          { label: 'Content type',      val: row.contentType  ?? '—' },
+          { label: row.billingUnit === 'tokens' ? 'Input tokens'  : `Input (${row.billingUnit})`, val: fmt(row.inputTokens) },
+          { label: row.billingUnit === 'tokens' ? 'Output tokens' : 'Output units',              val: fmt(row.outputTokens) },
+          { label: 'Cached tokens',     val: fmt(row.cachedTokens) },
+          { label: 'Reasoning tokens',  val: fmt(row.reasoningTokens) },
+        ].map(({ label, val }) => (
+          <div key={label}>
+            <div className="label" style={{ marginBottom: 2 }}>{label}</div>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--fog)', wordBreak: 'break-all' }}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Quality rating */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--line-2)' }}>
+        <span className="label" style={{ fontSize: 9 }}>QUALITY</span>
+        <StarRating
+          value={annotation?.score ?? null}
+          disabled={rateMutation.isPending}
+          onChange={score => rateMutation.mutate({ traceId: row.id, score })}
+        />
+      </div>
+
+      <div className="label" style={{ marginBottom: 6 }}>Raw payload</div>
+      <pre style={{
+        margin: 0,
+        padding: '8px 10px',
+        background: 'rgba(0,0,0,.3)',
+        borderRadius: 'var(--r)',
+        fontSize: 10,
+        color: 'var(--steel)',
+        overflow: 'auto',
+        maxHeight: 240,
+        lineHeight: 1.5,
+      }}>
+        {JSON.stringify(row.rawPayload, null, 2)}
+      </pre>
+    </div>
+  );
+}
 
 export function TracesView({ lookback, provider: externalProvider }: Props) {
   const [provider, setProvider] = useState<string | undefined>(externalProvider);
@@ -282,39 +344,13 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
 
                 {/* Expanded detail */}
                 {expanded === row.id && (
-                  <div style={{ padding: '12px 16px 16px', borderBottom: '1px solid var(--line)', background: 'rgba(11,16,20,.4)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px 16px', marginBottom: 12 }}>
-                      {[
-                        { label: 'Session',          val: row.sessionId    ?? '—' },
-                        { label: 'Project',           val: row.project      ?? '—' },
-                        { label: 'Surface',           val: row.surface      ?? '—' },
-                        { label: 'Content type',      val: row.contentType  ?? '—' },
-                        { label: row.billingUnit === 'tokens' ? 'Input tokens'  : `Input (${row.billingUnit})`, val: fmt(row.inputTokens) },
-                        { label: row.billingUnit === 'tokens' ? 'Output tokens' : 'Output units',              val: fmt(row.outputTokens) },
-                        { label: 'Cached tokens',     val: fmt(row.cachedTokens) },
-                        { label: 'Reasoning tokens',  val: fmt(row.reasoningTokens) },
-                      ].map(({ label, val }) => (
-                        <div key={label}>
-                          <div className="label" style={{ marginBottom: 2 }}>{label}</div>
-                          <div className="mono" style={{ fontSize: 11, color: 'var(--fog)', wordBreak: 'break-all' }}>{val}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="label" style={{ marginBottom: 6 }}>Raw payload</div>
-                    <pre style={{
-                      margin: 0,
-                      padding: '8px 10px',
-                      background: 'rgba(0,0,0,.3)',
-                      borderRadius: 'var(--r)',
-                      fontSize: 10,
-                      color: 'var(--steel)',
-                      overflow: 'auto',
-                      maxHeight: 240,
-                      lineHeight: 1.5,
-                    }}>
-                      {JSON.stringify(row.rawPayload, null, 2)}
-                    </pre>
-                  </div>
+                  <ExpandedRow
+                    row={row}
+                    fmt={fmt}
+                    fmtUsd={fmtUsd}
+                    fmtMs={fmtMs}
+                    fmtUnits={fmtUnits}
+                  />
                 )}
               </div>
             ))}
