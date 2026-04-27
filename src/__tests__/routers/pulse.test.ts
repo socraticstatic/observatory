@@ -1,14 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockAggregate, mockFindMany, mockCount } = vi.hoisted(() => ({
+const { mockAggregate, mockFindMany, mockCount, mockQueryRaw, mockRegisteredService } = vi.hoisted(() => ({
   mockAggregate: vi.fn(),
   mockFindMany: vi.fn(),
   mockCount: vi.fn().mockResolvedValue(0),
+  mockQueryRaw: vi.fn(),
+  mockRegisteredService: vi.fn(),
 }));
 
 vi.mock('@/server/db', () => ({
   db: {
     llmEvent: { aggregate: mockAggregate, findMany: mockFindMany, count: mockCount },
+    $queryRaw: mockQueryRaw,
+    registeredService: { findMany: mockRegisteredService },
   },
 }));
 
@@ -22,6 +26,15 @@ beforeEach(() => {
     _avg: { latencyMs: 850, qualityScore: '87.3' },
   });
   mockFindMany.mockResolvedValue([]);
+  mockRegisteredService.mockResolvedValue([]);
+  // $queryRaw call order for overallCost:
+  //   1+2: cacheReadCostSql (current, prev)
+  //   3+4: providerCosts, prevProviderCosts
+  mockQueryRaw
+    .mockResolvedValueOnce([{ cache_read_cost: 0 }])
+    .mockResolvedValueOnce([{ cache_read_cost: 0 }])
+    .mockResolvedValueOnce([{ provider: 'anthropic', cost: 21.72 }])
+    .mockResolvedValueOnce([]);
 });
 
 const createCaller = createCallerFactory(pulseRouter);

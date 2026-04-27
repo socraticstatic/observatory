@@ -113,10 +113,10 @@ describe('entityRouter.turns', () => {
     expect(result[0].outputTokens).toBe(250);
   });
 
-  it('defaults null latencyMs to 0', async () => {
+  it('defaults null latencyMs to null', async () => {
     mockDb.llmEvent.findMany.mockResolvedValue([{ ...MOCK_EVENT, latencyMs: null }]);
     const result = await caller.turns({ sessionId: 'sess-abc' });
-    expect(result[0].latencyMs).toBe(0);
+    expect(result[0].latencyMs).toBeNull();
   });
 
   it('orders events by ts ascending', async () => {

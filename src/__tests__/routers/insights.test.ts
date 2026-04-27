@@ -26,7 +26,8 @@ const ZOMBIE_ROW = {
   surface: 'api',
   steps: 80n,
   cost: 0.45,
-  last_ts: new Date('2020-01-01T10:00:00Z'), // very old => ageMs >> 5min
+  first_ts: new Date('2019-12-31T10:00:00Z'),
+  last_ts: new Date('2020-01-01T10:00:00Z'), // very old => ageMs >> 10min
   first_input: 1000n,
   last_input: 50000n,
 };
@@ -135,14 +136,16 @@ describe('insightsRouter.zombieSessions', () => {
   });
 
   it('filters out active sessions (type=active is excluded)', async () => {
-    // steps <= 12, bloatRatio <= 1.8, ageMs <= 30min => type='active' => filtered
+    // steps <= 10, bloatRatio <= 1.5, ageMs <= 30min => type='active' => filtered
+    const now = new Date();
     const activeRow = {
       session_id: 'sess-active',
       project: 'proj',
       surface: 'api',
       steps: 3n,
       cost: 0.01,
-      last_ts: new Date(), // recent => ageMs ~ 0
+      first_ts: now,
+      last_ts: now, // recent => ageMs ~ 0
       first_input: 1000n,
       last_input: 1100n,   // bloatRatio = 1.1
     };
