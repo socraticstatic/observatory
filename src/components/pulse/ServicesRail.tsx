@@ -41,12 +41,18 @@ export function ServicesRail({ lookback, providerFilter, onSelect }: ServicesRai
   const [selected,   setSelected]   = useState<Set<string>>(new Set());
   const [confirm,    setConfirm]    = useState<string | null>(null); // provider to confirm single-delete
 
-  const { data: liveData, refetch } = trpc.who.providerBreakdown.useQuery({ lookback });
-  const { data: registered }        = trpc.services.list.useQuery();
+  const utils = trpc.useUtils();
+  const { data: liveData }  = trpc.who.providerBreakdown.useQuery({ lookback });
+  const { data: registered } = trpc.services.list.useQuery();
 
-  const deleteOne  = trpc.services.delete.useMutation({ onSuccess: () => refetch() });
+  function invalidateAll() {
+    void utils.who.providerBreakdown.invalidate();
+    void utils.services.list.invalidate();
+  }
+
+  const deleteOne  = trpc.services.delete.useMutation({ onSuccess: invalidateAll });
   const deleteMany = trpc.services.deleteMany.useMutation({
-    onSuccess: () => { void refetch(); setSelected(new Set()); setSelectMode(false); },
+    onSuccess: () => { invalidateAll(); setSelected(new Set()); setSelectMode(false); },
   });
 
   const toggleSelect = useCallback((provider: string) => {
@@ -251,13 +257,18 @@ export function ServicesRail({ lookback, providerFilter, onSelect }: ServicesRai
             +
           </div>
           <span className="label" style={{ color: 'var(--graphite)', fontSize: 9 }}>Add service</span>
+          {(registered ?? []).length > 0 && (
+            <span className="mono" style={{ fontSize: 9, color: 'var(--steel)' }}>
+              {(registered ?? []).length} registered
+            </span>
+          )}
         </div>
       </div>
 
       {showModal && (
         <AddServiceModal
           onClose={() => setShowModal(false)}
-          onSaved={() => { refetch(); }}
+          onSaved={() => invalidateAll()}
         />
       )}
 
