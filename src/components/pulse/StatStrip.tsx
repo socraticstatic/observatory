@@ -130,7 +130,7 @@ export function StatStrip({ lookback = '24H', provider }: Props) {
       <StatCell label="Error Rate"   value={`${data.errorRatePct.toFixed(1)}%`} col={errorColor}   signal={errorSignal} />
       <StatCell label="Sessions"     value={String(data.activeSessions)}       col="var(--mist)" />
       <StatCell label="p50 Latency"  value={data.p50LatMs > 0 ? fmtMs(data.p50LatMs) : '—'}  col="var(--fog)" />
-      <StatCell label="p95 Latency"  value={data.p95LatMs > 0 ? fmtMs(data.p95LatMs) : '—'}  col={data.p95LatMs > data.p50LatMs * 5 ? 'var(--warn)' : 'var(--fog)'} signal={data.p95LatMs > data.p50LatMs * 7 ? 'act' : data.p95LatMs > data.p50LatMs * 4 ? 'warn' : undefined} />
+      <StatCell label="p95 Latency"  value={data.p95LatMs > 0 ? fmtMs(data.p95LatMs) : '—'}  col={data.p50LatMs > 0 && data.p95LatMs > data.p50LatMs * 5 ? 'var(--warn)' : data.p95LatMs > 3000 ? 'var(--warn)' : 'var(--fog)'} signal={data.p50LatMs > 0 && data.p95LatMs > data.p50LatMs * 7 ? 'act' : data.p50LatMs > 0 && data.p95LatMs > data.p50LatMs * 4 ? 'warn' : data.p95LatMs > 5000 ? 'act' : data.p95LatMs > 2000 ? 'warn' : undefined} />
       <StatCell label="p99 Latency"  value={data.p99LatMs > 0 ? fmtMs(data.p99LatMs) : '—'}  col="var(--steel)" />
     </div>
   );

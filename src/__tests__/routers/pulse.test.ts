@@ -51,6 +51,7 @@ describe('pulseRouter.overallCost', () => {
 describe('pulseRouter.statStrip', () => {
   it('statStrip includes p50, p95, and p99 latency percentiles', async () => {
     mockQueryRaw.mockReset();
+    mockAggregate.mockReset();
     mockQueryRaw.mockResolvedValue([{
       p50: 350, p95: 1200, p99: 2100,
       avg_lat: 400, prev_avg_lat: 380,
