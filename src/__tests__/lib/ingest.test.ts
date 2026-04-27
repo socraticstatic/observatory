@@ -42,3 +42,37 @@ describe('parseIngestPayload — userId extraction', () => {
     expect(result?.userId).toBeUndefined();
   });
 });
+
+describe('parseIngestPayload — span fields', () => {
+  it('extracts spanId from body.id', () => {
+    const result = parseIngestPayload({
+      model: 'claude-sonnet-4-6',
+      custom_llm_provider: 'anthropic',
+      id: 'span-abc-001',
+      usage: { input_tokens: 100, output_tokens: 50 },
+    });
+    expect(result?.spanId).toBe('span-abc-001');
+  });
+
+  it('extracts parentSpanId from body.parent_id', () => {
+    const result = parseIngestPayload({
+      model: 'claude-sonnet-4-6',
+      custom_llm_provider: 'anthropic',
+      id: 'span-child',
+      parent_id: 'span-root',
+      usage: { input_tokens: 100, output_tokens: 50 },
+    });
+    expect(result?.spanId).toBe('span-child');
+    expect(result?.parentSpanId).toBe('span-root');
+  });
+
+  it('returns undefined for spanId when not provided', () => {
+    const result = parseIngestPayload({
+      model: 'claude-sonnet-4-6',
+      custom_llm_provider: 'anthropic',
+      usage: { input_tokens: 100, output_tokens: 50 },
+    });
+    expect(result?.spanId).toBeUndefined();
+    expect(result?.parentSpanId).toBeUndefined();
+  });
+});
