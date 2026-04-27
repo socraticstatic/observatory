@@ -88,6 +88,39 @@ export function OverallCostHero({ lookback, provider }: Props) {
             </span>
           )}
         </div>
+
+        {/* Projection badge */}
+        {costData?.projectedMonthUsd != null && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            marginTop: 8, padding: '4px 10px',
+            borderRadius: 4,
+            background: costData.projectionTrend === 'over'
+              ? 'rgba(184,107,107,.12)' : 'rgba(76,91,97,.15)',
+            border: `1px solid ${costData.projectionTrend === 'over' ? 'rgba(184,107,107,.3)' : 'var(--line-2)'}`,
+          }}>
+            <span className="mono" style={{
+              fontSize: 10, letterSpacing: '.08em',
+              color: costData.projectionTrend === 'over' ? '#B86B6B' : 'var(--graphite)',
+            }}>
+              PROJECTED
+            </span>
+            <span className="mono" style={{
+              fontSize: 12, fontWeight: 600,
+              color: costData.projectionTrend === 'over' ? '#B86B6B' : 'var(--fog)',
+            }}>
+              {fmtUsd(costData.projectedMonthUsd)}
+            </span>
+            <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>
+              this month · {costData.daysRemainingInMonth}d left
+            </span>
+            {costData.projectionTrend === 'over' && costData.monthlyBudget != null && (
+              <span className="mono" style={{ fontSize: 10, color: '#B86B6B' }}>
+                ▲ over {fmtUsd(costData.monthlyBudget)} budget
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Col 2: spend curve SVG */}
