@@ -52,7 +52,7 @@ export const rulesRouter = router({
 
       const row = existing && input.id
         ? await ctx.db.alertRule.update({ where: { id: input.id }, data })
-        : await ctx.db.alertRule.create({ data });
+        : await ctx.db.alertRule.create({ data: { ...data, id: crypto.randomUUID() } });
 
       return normalize(row);
     }),

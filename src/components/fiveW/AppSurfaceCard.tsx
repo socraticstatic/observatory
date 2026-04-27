@@ -5,9 +5,7 @@ import { fmt, fmtMs } from '@/lib/fmt';
 import { trpc } from '@/lib/trpc-client';
 import type { Lookback } from '@/lib/lookback';
 
-const LOOKBACK_MINUTES: Record<Lookback, number> = { '1H': 60, '24H': 1440, '30D': 43200 };
-
-const LOOKBACK_MINUTES_EXT: Record<string, number> = {
+const LOOKBACK_MINUTES: Record<string, number> = {
   '1H':  60,
   '24H': 1440,
   '30D': 43200,
@@ -51,7 +49,7 @@ export function AppSurfaceCard({ lookback = '24H', provider }: Props) {
   const { data: raw, isLoading } = trpc.surface.appSurface.useQuery({ lookback, provider });
   const [hover, setHover] = useState<string | null>(null);
 
-  const minutes = (LOOKBACK_MINUTES_EXT[lookback] ?? LOOKBACK_MINUTES[lookback]) || 1440;
+  const minutes = LOOKBACK_MINUTES[lookback] ?? 1440;
 
   const enriched = useMemo(() => {
     if (!raw) return [];

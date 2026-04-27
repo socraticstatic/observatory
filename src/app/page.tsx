@@ -82,10 +82,9 @@ export default function App() {
 
   const { data: health } = trpc.health.status.useQuery(undefined, { refetchInterval: 30_000 });
 
-  // CommandHeader model toggle acts as a provider filter — merge with ServicesRail selection.
-  // CommandHeader wins when it's not ALL; ServicesRail wins otherwise.
+  // Effective provider: header model filter wins when set, ServicesRail selection otherwise
   const effectiveProvider = useMemo(
-    () => (modelFilter !== 'ALL' ? modelFilter : (providerFilter ?? undefined)),
+    () => modelFilter !== 'ALL' ? modelFilter : (providerFilter ?? undefined),
     [modelFilter, providerFilter],
   );
 
@@ -103,8 +102,11 @@ export default function App() {
           now={now}
           lookback={lookback}
           setLookback={setLookback}
-          modelFilter={modelFilter}
-          setModelFilter={(m) => { setModelFilter(m); if (m !== 'ALL') setProviderFilter(null); }}
+          providerFilter={modelFilter === 'ALL' ? providerFilter : modelFilter}
+          setProviderFilter={(p) => {
+            if (p === null) { setModelFilter('ALL'); setProviderFilter(null); }
+            else { setModelFilter(p); setProviderFilter(null); }
+          }}
           onToggleSystemLog={() => setSystemLogOpen(v => !v)}
           systemLogOpen={systemLogOpen}
         />
