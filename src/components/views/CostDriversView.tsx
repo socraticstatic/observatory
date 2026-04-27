@@ -16,6 +16,7 @@ const DIMS = [
   { key: 'contentType' as const, label: 'Content' },
   { key: 'region'      as const, label: 'Region' },
   { key: 'user'        as const, label: 'User' },
+  { key: 'prompt'      as const, label: 'Prompt' },
 ];
 
 interface DimItem {

@@ -76,3 +76,38 @@ describe('parseIngestPayload — span fields', () => {
     expect(result?.parentSpanId).toBeUndefined();
   });
 });
+
+describe('parseIngestPayload — promptHash', () => {
+  it('computes a 12-char hex hash of the system prompt', () => {
+    const result = parseIngestPayload({
+      model: 'claude-sonnet-4-6',
+      custom_llm_provider: 'anthropic',
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user',   content: 'Hello' },
+      ],
+      usage: { input_tokens: 100, output_tokens: 50 },
+    });
+    expect(result?.promptHash).toMatch(/^[0-9a-f]{12}$/);
+  });
+
+  it('returns undefined promptHash when no messages present', () => {
+    const result = parseIngestPayload({
+      model: 'claude-sonnet-4-6',
+      custom_llm_provider: 'anthropic',
+      usage: { input_tokens: 100, output_tokens: 50 },
+    });
+    expect(result?.promptHash).toBeUndefined();
+  });
+
+  it('returns same hash for the same system prompt', () => {
+    const payload = {
+      model: 'claude-sonnet-4-6', custom_llm_provider: 'anthropic',
+      messages: [{ role: 'system', content: 'My system prompt.' }],
+      usage: { input_tokens: 10, output_tokens: 5 },
+    };
+    const r1 = parseIngestPayload(payload);
+    const r2 = parseIngestPayload(payload);
+    expect(r1?.promptHash).toBe(r2?.promptHash);
+  });
+});

@@ -32,8 +32,10 @@ describe('costDriversRouter.sixDimension', () => {
 
   const USER_ROW_DEFAULT = { label: 'user-alice', cost: 3.0, calls: BigInt(10), sessions: BigInt(2), avg_lat_ms: 300, p95_lat_ms: 600 };
 
+  const PROMPT_ROW_DEFAULT = { label: 'abc123def456', cost: 2.0, calls: BigInt(5), sessions: BigInt(1), avg_lat_ms: 200, p95_lat_ms: 400 };
+
   beforeEach(() => {
-    // Promise.all fires 7 $queryRaw calls in order: provider, model, surface, project, contentType, region, user
+    // Promise.all fires 8 $queryRaw calls in order: provider, model, surface, project, contentType, region, user, prompt
     mockQueryRaw
       .mockResolvedValueOnce([PROVIDER_ROW])
       .mockResolvedValueOnce([MODEL_ROW])
@@ -41,10 +43,11 @@ describe('costDriversRouter.sixDimension', () => {
       .mockResolvedValueOnce([PROJECT_ROW])
       .mockResolvedValueOnce([CONTENT_ROW])
       .mockResolvedValueOnce([REGION_ROW])
-      .mockResolvedValueOnce([USER_ROW_DEFAULT]);
+      .mockResolvedValueOnce([USER_ROW_DEFAULT])
+      .mockResolvedValueOnce([PROMPT_ROW_DEFAULT]);
   });
 
-  it('returns all 6 dimension keys plus user', async () => {
+  it('returns all 6 dimension keys plus user and prompt', async () => {
     const caller = createCaller(createContext());
     const result = await caller.sixDimension({ lookback: '24H' });
     expect(result).toHaveProperty('provider');
@@ -54,6 +57,7 @@ describe('costDriversRouter.sixDimension', () => {
     expect(result).toHaveProperty('contentType');
     expect(result).toHaveProperty('region');
     expect(result).toHaveProperty('user');
+    expect(result).toHaveProperty('prompt');
   });
 
   it('returns a user dimension alongside provider/model/etc', async () => {
@@ -70,7 +74,8 @@ describe('costDriversRouter.sixDimension', () => {
       .mockResolvedValueOnce([PROJECT_ROW])
       .mockResolvedValueOnce([CONTENT_ROW])
       .mockResolvedValueOnce([REGION_ROW])
-      .mockResolvedValueOnce([USER_ROW]);
+      .mockResolvedValueOnce([USER_ROW])
+      .mockResolvedValueOnce([]);
     const caller = createCaller(createContext());
     const result = await caller.sixDimension({ lookback: '30D' });
     expect(result).toHaveProperty('user');
@@ -101,6 +106,7 @@ describe('costDriversRouter.sixDimension', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
     const caller = createCaller(createContext());
     const result = await caller.sixDimension({ lookback: '24H' });
@@ -109,7 +115,7 @@ describe('costDriversRouter.sixDimension', () => {
 
   it('returns empty arrays when no rows', async () => {
     mockQueryRaw.mockReset();
-    for (let i = 0; i < 7; i++) mockQueryRaw.mockResolvedValueOnce([]);
+    for (let i = 0; i < 8; i++) mockQueryRaw.mockResolvedValueOnce([]);
     const caller = createCaller(createContext());
     const result = await caller.sixDimension({ lookback: '24H' });
     expect(result.provider).toHaveLength(0);
@@ -129,6 +135,7 @@ describe('costDriversRouter.sixDimension', () => {
         { label: 'anthropic', cost: 15.0 },
         { label: 'google',    cost: 5.0 },
       ])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])

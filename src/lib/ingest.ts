@@ -26,6 +26,7 @@ export interface NormalizedEvent {
   billingUnit: string;
   qualityScore?: string;
   eventHash?: string;
+  promptHash?: string;
   rawPayload: unknown;
 }
 
@@ -133,6 +134,12 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
   const ts = new Date();
   const eventHash = computeEventHash(model, ts, inputTokens, outputTokens, cachedTokens, cacheCreationTokens);
 
+  const systemMsg = (body.messages as Array<{ role: string; content: unknown }> | undefined)
+    ?.find(m => m.role === 'system');
+  const promptHash: string | undefined = systemMsg?.content
+    ? createHash('sha256').update(String(systemMsg.content)).digest('hex').slice(0, 12)
+    : undefined;
+
   return {
     provider,
     model,
@@ -154,6 +161,7 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
     billingUnit: getBillingUnit(provider),
     qualityScore,
     eventHash,
+    promptHash,
     rawPayload: body,
   };
 }
