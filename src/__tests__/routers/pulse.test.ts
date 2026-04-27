@@ -50,9 +50,18 @@ describe('pulseRouter.overallCost', () => {
 
 describe('pulse.overallCost — projection', () => {
   it('returns projectedMonthUsd, daysRemainingInMonth, projectionTrend, monthlyBudget', async () => {
-    // beforeEach sets mockAggregate default to { _sum: { costUsd: '21.72', ... }, _count: { id: 14284 } }
-    // overallCost makes 2 aggregate calls (current + prev) then 2 more for avg7d + mtd
-    // The default mockResolvedValue covers all 4 calls.
+    mockQueryRaw.mockReset();
+    mockAggregate.mockReset();
+
+    // Catch-all for all 4 aggregate calls: agg, prevAgg, avg7dAgg, mtdAgg
+    mockAggregate.mockResolvedValue({
+      _sum: { costUsd: '7.00', inputTokens: 1000, outputTokens: 500, cachedTokens: 200, reasoningTokens: 0 },
+      _count: { id: 100 },
+    });
+
+    // Catch-all for all 4 queryRaw calls: cacheRows, prevCacheRows, providerCosts, prevProviderCosts
+    mockQueryRaw.mockResolvedValue([]);
+
     const caller = createCaller(createContext());
     const result = await caller.overallCost({ lookback: '30D' });
 
