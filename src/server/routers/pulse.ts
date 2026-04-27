@@ -85,7 +85,15 @@ export const pulseRouter = router({
       const pf = input.provider ? { provider: input.provider } : {};
       const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
 
-      const [agg, prevAgg, cacheRows, prevCacheRows, providerCosts, prevProviderCosts] = await Promise.all([
+      // Projected monthly cost — calendar anchors computed before the big Promise.all
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const since7d = new Date(Date.now() - 7 * 86_400_000);
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const daysElapsed = now.getDate();
+      const daysRemaining = daysInMonth - daysElapsed;
+
+      const [agg, prevAgg, cacheRows, prevCacheRows, providerCosts, prevProviderCosts, avg7dAgg, mtdAgg] = await Promise.all([
         ctx.db.llmEvent.aggregate({
           where: { ts: { gte: since }, status: 'ok', ...pf },
           _sum: { costUsd: true, inputTokens: true, outputTokens: true, cachedTokens: true, reasoningTokens: true },
@@ -107,6 +115,14 @@ export const pulseRouter = router({
           FROM llm_events WHERE ts >= ${prevSince} AND ts < ${since} AND status = 'ok' ${pfSql}
           GROUP BY provider
         `,
+        ctx.db.llmEvent.aggregate({
+          where: { ts: { gte: since7d }, status: 'ok', ...pf },
+          _sum: { costUsd: true },
+        }),
+        ctx.db.llmEvent.aggregate({
+          where: { ts: { gte: monthStart }, status: 'ok', ...pf },
+          _sum: { costUsd: true },
+        }),
       ]);
 
       const rawCostMap     = new Map(providerCosts.map(r => [r.provider, Number(r.cost)]));
@@ -125,6 +141,15 @@ export const pulseRouter = router({
       // Effective cost uses billing-plan-adjusted value; cache split applies only to API-billed portion
       const effectiveCacheRead = billing.isAllSubscription ? 0 : cacheReadCostUsd;
 
+      // Projected monthly cost
+      const avgDailyCost = Number(avg7dAgg._sum.costUsd ?? 0) / 7;
+      const spentThisMonth = Number(mtdAgg._sum.costUsd ?? 0);
+      const projectedMonthUsd = spentThisMonth + avgDailyCost * daysRemaining;
+      const monthlyBudget = Number(process.env.MONTHLY_BUDGET_USD ?? 200);
+      const projectionTrend: 'over' | 'under' | 'on-track' =
+        projectedMonthUsd > monthlyBudget * 1.1 ? 'over' :
+        projectedMonthUsd < monthlyBudget * 0.9 ? 'under' : 'on-track';
+
       return {
         totalCostUsd:          billing.adjusted,
         inferenceCostUsd:      billing.adjusted - effectiveCacheRead,
@@ -137,6 +162,10 @@ export const pulseRouter = router({
         totalCachedTokens:     Number(agg._sum.cachedTokens ?? 0),
         totalReasoningTokens:  Number(agg._sum.reasoningTokens ?? 0),
         totalCalls:            Number(agg._count.id ?? 0),
+        projectedMonthUsd,
+        daysRemainingInMonth:  daysRemaining,
+        projectionTrend,
+        monthlyBudget,
       };
     }),
 

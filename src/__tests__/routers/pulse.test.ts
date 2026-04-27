@@ -48,6 +48,26 @@ describe('pulseRouter.overallCost', () => {
   });
 });
 
+describe('pulse.overallCost — projection', () => {
+  it('returns projectedMonthUsd, daysRemainingInMonth, projectionTrend, monthlyBudget', async () => {
+    // beforeEach sets mockAggregate default to { _sum: { costUsd: '21.72', ... }, _count: { id: 14284 } }
+    // overallCost makes 2 aggregate calls (current + prev) then 2 more for avg7d + mtd
+    // The default mockResolvedValue covers all 4 calls.
+    const caller = createCaller(createContext());
+    const result = await caller.overallCost({ lookback: '30D' });
+
+    expect(result).toHaveProperty('projectedMonthUsd');
+    expect(typeof result.projectedMonthUsd).toBe('number');
+    expect(result.projectedMonthUsd).toBeGreaterThanOrEqual(0);
+    expect(result).toHaveProperty('projectionTrend');
+    expect(['over', 'under', 'on-track']).toContain(result.projectionTrend);
+    expect(result).toHaveProperty('daysRemainingInMonth');
+    expect(typeof result.daysRemainingInMonth).toBe('number');
+    expect(result).toHaveProperty('monthlyBudget');
+    expect(typeof result.monthlyBudget).toBe('number');
+  });
+});
+
 describe('pulseRouter.statStrip', () => {
   it('statStrip includes p50, p95, and p99 latency percentiles', async () => {
     mockQueryRaw.mockReset();
