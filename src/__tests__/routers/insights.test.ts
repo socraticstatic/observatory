@@ -278,3 +278,21 @@ describe('insightsRouter.sessionAnomalies', () => {
     expect(result.riskScore).toBeGreaterThan(0);
   });
 });
+
+describe('insightsRouter.whyInsights — provider filter', () => {
+  it('accepts optional provider without throwing', async () => {
+    mockDb.$queryRaw
+      .mockResolvedValueOnce([{ hit_ratio: 85 }])
+      .mockResolvedValueOnce([{ hit_ratio: 90 }])
+      .mockResolvedValueOnce([]);
+
+    await expect(caller.whyInsights({ provider: 'anthropic' })).resolves.not.toThrow();
+  });
+});
+
+describe('insightsRouter.zombieSessions — provider filter', () => {
+  it('accepts optional provider without throwing', async () => {
+    mockDb.$queryRaw.mockResolvedValue([]);
+    await expect(caller.zombieSessions({ provider: 'anthropic' })).resolves.not.toThrow();
+  });
+});

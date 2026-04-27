@@ -33,49 +33,12 @@ function derive(base: Base, opusShare: number, cacheDepth: number, reasoningBudg
 interface SliderProps {
   label: string;
   value: number;
-  min: number;
-  max: number;
-  onChange: (v: number) => void;
-}
-
-function Slider({ label, value, min, max, onChange }: SliderProps) {
-  const pct = ((value - min) / (max - min)) * 100;
-  return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
-        <span style={{ fontSize: 11, color: 'var(--steel)' }}>{label}</span>
-        <span className="mono" style={{ fontSize: 12, color: '#E8D5C0', fontWeight: 500 }}>{value}%</span>
-      </div>
-      <div style={{ position: 'relative' }}>
-        <div style={{
-          position: 'absolute', top: '50%', left: 0, right: 0,
-          transform: 'translateY(-50%)', height: 3,
-          background: 'rgba(255,255,255,.06)', borderRadius: 2,
-        }} />
-        <div style={{
-          position: 'absolute', top: '50%', left: 0,
-          transform: 'translateY(-50%)', height: 3,
-          width: `${pct}%`,
-          background: 'linear-gradient(90deg, rgba(111,168,179,.4), #6FA8B3)',
-          borderRadius: 2,
-        }} />
-        <input
-          type="range" min={min} max={max} value={value}
-          onChange={e => onChange(Number(e.target.value))}
-          style={{
-            position: 'relative', width: '100%',
-            appearance: 'none', background: 'transparent',
-            height: 20, cursor: 'pointer',
-            accentColor: '#6FA8B3',
-          }}
-        />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-        <span className="mono" style={{ fontSize: 9, color: 'rgba(200,185,165,.3)' }}>{min}%</span>
-        <span className="mono" style={{ fontSize: 9, color: 'rgba(200,185,165,.3)' }}>{max}%</span>
-      </div>
-    </div>
-  );
+  setValue: (v: number) => void;
+  min?: number;
+  max?: number;
+  color?: string;
+  unit?: string;
+  hint?: string;
 }
 
 export function CounterfactualSimulator({ lookback, provider }: { lookback?: Lookback; provider?: string }) {
@@ -88,7 +51,7 @@ export function CounterfactualSimulator({ lookback, provider }: { lookback?: Loo
   const [reasoningBudget, setReasoningBudget] = useState(EMPTY_BASE.reasoningBudgetPct);
   const [seeded,          setSeeded]          = useState(false);
 
-  // One-time seed from API data — intentional, not a cascade risk
+  // One-time seed from API data
   useEffect(() => {
     if (baselineData && !seeded) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -117,48 +80,69 @@ export function CounterfactualSimulator({ lookback, provider }: { lookback?: Loo
     ? { col: '#7CA893', bg: 'rgba(122,158,138,.08)', border: 'rgba(122,158,138,.2)',  icon: '✓', text: 'Cost reduction projected at current traffic mix.' }
     : { col: '#B87070', bg: 'rgba(184,112,112,.08)', border: 'rgba(184,112,112,.2)',  icon: '✗', text: 'This configuration increases cost. Adjust sliders.' };
 
+  const Slider = ({ label, value, setValue, min = 0, max = 100, color, unit = '%', hint }: SliderProps) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 11, color: 'var(--fog)' }}>{label}</span>
+        <span className="mono" style={{ fontSize: 12, color: color || 'var(--mist)', fontWeight: 600 }}>{value}{unit}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={e => setValue(+e.target.value)}
+        style={{ width: '100%', accentColor: color || 'var(--accent)' }}
+      />
+      {hint && (
+        <div className="mono" style={{ fontSize: 9, color: 'var(--graphite)', letterSpacing: '.1em' }}>{hint}</div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="card" style={{ padding: '20px 24px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fog)', letterSpacing: '-.01em', lineHeight: 1.2 }}>
-          Counterfactual Simulator
+    <div className="card" style={{ padding: '14px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div>
+          <div className="label">WHY · COUNTERFACTUAL</div>
+          <div style={{ fontSize: 13, color: 'var(--fog)', marginTop: 3 }}>
+            what <em style={{ color: 'var(--mist)', fontStyle: 'normal' }}>would</em> change cost &middot; live projection
+          </div>
         </div>
-        <div style={{ fontSize: 10, color: 'var(--graphite)', marginTop: 3, letterSpacing: '.08em' }}>
-          what if you changed your routing?
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            className="mbtn"
+            onClick={() => {
+              setOpusShare(activeBase.opusSharePct);
+              setCacheDepth(activeBase.cacheDepthPct);
+              setReasoningBudget(activeBase.reasoningBudgetPct);
+              setSeeded(false);
+            }}
+          >
+            Reset
+          </button>
+          <button className="mbtn primary">Apply as rule</button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
-        {/* Sliders */}
-        <div>
-          <Slider label="Model mix · Opus share"        value={opusShare}       min={0} max={100} onChange={setOpusShare} />
-          <Slider label="Cache depth · context reuse"   value={cacheDepth}      min={0} max={100} onChange={setCacheDepth} />
-          <Slider label="Reasoning budget · think tokens" value={reasoningBudget} min={0} max={100} onChange={setReasoningBudget} />
-
-          {baselineData && (
-            <button
-              onClick={() => {
-                setOpusShare(baselineData.opusSharePct);
-                setCacheDepth(baselineData.cacheDepthPct);
-                setReasoningBudget(baselineData.reasoningBudgetPct);
-              }}
-              style={{
-                marginTop: 4, padding: '4px 12px',
-                fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 600,
-                border: '1px solid rgba(111,168,179,.25)',
-                borderRadius: 'var(--r)',
-                color: '#6FA8B3',
-                background: 'rgba(111,168,179,.06)',
-                cursor: 'pointer',
-              }}
-            >
-              Reset to actual
-            </button>
-          )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        {/* LEFT: controls */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <div className="label" style={{ marginBottom: 8 }}>MODEL ROUTING</div>
+            <Slider label="Opus share"          value={opusShare}       setValue={setOpusShare}       color="#9BC4CC" hint="premium reasoning" />
+          </div>
+          <div style={{ height: 1, background: 'var(--line)' }} />
+          <div>
+            <div className="label" style={{ marginBottom: 8 }}>OPTIMIZATIONS</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Slider label="Cache depth"        value={cacheDepth}      setValue={setCacheDepth}      color="#7CA893" hint="stable system prompts + prefix-cache" />
+              <Slider label="Reasoning budget"   value={reasoningBudget} setValue={setReasoningBudget} color="#C9B08A" hint="extended thinking budget %" />
+            </div>
+          </div>
         </div>
 
-        {/* Projections */}
+        {/* RIGHT: projections */}
         <div style={noBaseline ? { display: 'flex', flexDirection: 'column', justifyContent: 'center' } : undefined}>
           {noBaseline && (
             <div style={{ padding: '24px 0', textAlign: 'center' }}>

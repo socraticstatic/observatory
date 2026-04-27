@@ -43,9 +43,9 @@ export default function App() {
   const [now, setNow] = useState(new Date());
   const [view, setView] = useState('Pulse');
   const [lookback, setLookback] = useState<Lookback>('24H');
-  const [modelFilter, setModelFilter] = useState('ALL');
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
+  const [modelFilter, setModelFilter] = useState<string>('ALL');
   const [railExpanded, setRailExpanded] = useState(false);
   const [systemLogOpen, setSystemLogOpen] = useState(false);
   const [tweaksOpen, setTweaksOpen] = useState(false);
@@ -95,7 +95,7 @@ export default function App() {
   };
 
   return (
-    <div className={`shell${railExpanded ? ' expanded' : ''}`}>
+    <div className={`shell${railExpanded ? ' expanded' : ''}${!showTicker ? ' ticker-paused' : ''}`}>
       <Sidebar view={view} setView={setView} expanded={railExpanded} setExpanded={setRailExpanded} />
 
       <div className="shell-main">

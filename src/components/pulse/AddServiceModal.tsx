@@ -136,7 +136,8 @@ export function AddServiceModal({ onClose, onSaved }: Props) {
         {category === 'creative' && (
           <div style={{
             fontSize: 10, color: 'var(--steel)', lineHeight: 1.6,
-            borderLeft: '2px solid var(--accent)', paddingLeft: 10,
+            background: 'rgba(111,168,179,.06)', border: '1px solid var(--line-2)',
+            borderRadius: 'var(--r)', padding: '7px 10px',
             fontFamily: "'JetBrains Mono', monospace",
           }}>
             Creative APIs are registered and key-stored only. Cost tracking requires manual entry or future ingest integration.

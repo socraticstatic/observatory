@@ -83,6 +83,7 @@ export function RulesView({ provider }: { provider?: string }) {
   const toggleRule = trpc.alertRules.toggleEnabled.useMutation({ onSuccess: () => refetch() });
   const deleteRule = trpc.alertRules.delete.useMutation({ onSuccess: () => refetch() });
 
+
   // Always fetch all lookbacks — queries are tiny and rules can span windows
   const { data: stats1H  } = trpc.pulse.statStrip.useQuery({ lookback: '1H',  provider });
   const { data: stats24H } = trpc.pulse.statStrip.useQuery({ lookback: '24H', provider });
@@ -240,8 +241,12 @@ export function RulesView({ provider }: { provider?: string }) {
         </div>
       )}
 
-      {/* Empty state */}
-      {rules.length === 0 ? (
+      {/* Empty state / loading / table */}
+      {false ? (
+        <div className="card" style={{ padding: '52px 32px', textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--graphite)' }}>Loading…</div>
+        </div>
+      ) : rules.length === 0 ? (
         <div className="card" style={{ padding: '52px 32px', textAlign: 'center' }}>
           <div style={{ fontSize: 12, color: 'var(--steel)', marginBottom: 6 }}>No alert rules yet</div>
           <div style={{ fontSize: 11, color: 'var(--graphite)' }}>

@@ -36,6 +36,10 @@ const SEV_COLOR = {
 
 type Severity = 'bad' | 'warn' | 'info';
 
+interface Props {
+  provider?: string;
+}
+
 function ActionButton({ severity, action, onClick }: { severity: Severity; action: 'Kill' | 'Review'; onClick: () => void }) {
   const isKill = action === 'Kill';
   return (

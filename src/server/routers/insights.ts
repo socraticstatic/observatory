@@ -8,6 +8,8 @@ const LOOKBACK_MS: Record<string, number> = {
   '30D': 30 * 86_400_000, '90D': 90 * 86_400_000, '1Y': 365 * 86_400_000,
 };
 
+const providerInput = z.object({ provider: z.string().optional() }).optional();
+
 export const insightsRouter = router({
   whyInsights: publicProcedure
     .input(z.object({ provider: z.string().optional() }).optional())

@@ -31,6 +31,10 @@ const SEV_BG = {
   info: 'rgba(135,134,127,.04)',
 } as const;
 
+interface Props {
+  provider?: string;
+}
+
 function AttributionBar({ bars }: { bars: Attribution[] }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
