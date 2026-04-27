@@ -101,6 +101,8 @@ model LlmDailyRollup {
   p50Ms               Float?   @map("p50_ms")
   p95Ms               Float?   @map("p95_ms")
   p99Ms               Float?   @map("p99_ms")
+  cacheHits           Int      @default(0) @map("cache_hits")
+  cacheAttempts       Int      @default(0) @map("cache_attempts")
   archivedRawCount    Int      @default(0) @map("archived_raw_count")
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
 
