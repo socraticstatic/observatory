@@ -20,6 +20,7 @@ import { healthRouter } from './health';
 import { sessionLabelsRouter } from './sessionLabels';
 import { alertRulesRouter } from './alertRules';
 import { budgetsRouter } from './budgets';
+import { annotationRouter } from './annotation';
 
 export const appRouter = router({
   pulse:        pulseRouter,
@@ -42,6 +43,7 @@ export const appRouter = router({
   sessionLabels: sessionLabelsRouter,
   alertRules:    alertRulesRouter,
   budgets:       budgetsRouter,
+  annotation:    annotationRouter,
 });
 
 export type AppRouter = typeof appRouter;
