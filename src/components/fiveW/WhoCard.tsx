@@ -6,7 +6,7 @@ import { type Lookback } from '@/lib/lookback';
 import { Sparkline } from '@/components/shared/Sparkline';
 import { trpc } from '@/lib/trpc-client';
 
-type SortKey = 'tpm' | 'p50' | 'cost';
+type SortKey = 'tpm' | 'p50' | 'cost' | 'eff';
 
 interface ModelRow {
   id: string;
@@ -19,6 +19,7 @@ interface ModelRow {
   cost: number;
   err: number;
   col: string;
+  eff: number; // output tokens per $0.001
 }
 
 function modelColor(model: string): string {
@@ -60,6 +61,7 @@ export function WhoCard({ selected, setSelected, lookback, provider, onDrill }: 
       cost: m.cost,
       err: m.errorRatePct,
       col: modelColor(m.model),
+      eff: m.cost > 0 ? m.outputTokens / m.cost / 1000 : 0,
     }));
   }, [modelData]);
 
@@ -68,11 +70,26 @@ export function WhoCard({ selected, setSelected, lookback, provider, onDrill }: 
       if (sortKey === 'tpm')  return b.tpm - a.tpm;
       if (sortKey === 'p50')  return (a.p50 ?? Infinity) - (b.p50 ?? Infinity);
       if (sortKey === 'cost') return b.cost - a.cost;
+      if (sortKey === 'eff')  return b.eff - a.eff;
       return 0;
     });
   }, [sortKey, models]);
 
   const totalTPM = models.reduce((s, m) => s + m.tpm, 0);
+
+  const totalCost   = models.reduce((s, m) => s + m.cost, 0);
+  const topByCost   = [...models].sort((a, b) => b.cost - a.cost)[0];
+  const topShare    = totalCost > 0 && topByCost ? (topByCost.cost / totalCost * 100) : 0;
+  const maxErr      = models.length > 0 ? Math.max(...models.map(m => m.err)) : 0;
+  const highErrMdl  = models.find(m => m.err === maxErr);
+  const whoVerdict  = topShare > 70 || maxErr > 20 ? 'act' : topShare > 50 || maxErr > 5 ? 'watch' : 'ok';
+  const whoBriefing = whoVerdict === 'act' && maxErr > 20
+    ? `${highErrMdl?.name ?? 'a model'}: ${maxErr.toFixed(0)}% error rate`
+    : whoVerdict === 'act'
+    ? `${topByCost?.name ?? '—'} is ${topShare.toFixed(0)}% of spend`
+    : whoVerdict === 'watch'
+    ? `${topByCost?.name ?? '—'} ${topShare.toFixed(0)}% of spend — ${maxErr.toFixed(1)}% max error`
+    : `${models.length} model${models.length !== 1 ? 's' : ''} active`;
 
   if (isLoading) return (
     <div className="card" style={{ padding: '40px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
@@ -99,9 +116,14 @@ export function WhoCard({ selected, setSelected, lookback, provider, onDrill }: 
     <div className="card">
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="label">WHO &middot; Model Attribution</span>
-          <span className="chip">{models.length} active</span>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="label">WHO &middot; Model Attribution</span>
+            <span className="chip">{models.length} active</span>
+          </div>
+          <span style={{ fontSize: 10, display: 'block', marginTop: 3, color: whoVerdict === 'act' ? 'var(--bad)' : whoVerdict === 'watch' ? '#C9966B' : 'var(--graphite)' }}>
+            {whoBriefing}
+          </span>
         </div>
         {models.some(m => m.id.toLowerCase().includes('opus')) && (
           <button className={`mbtn${simOn ? ' primary' : ''}`} onClick={() => setSimOn(s => !s)}>
@@ -192,6 +214,9 @@ export function WhoCard({ selected, setSelected, lookback, provider, onDrill }: 
               <th style={{ cursor: 'pointer', color: sortKey === 'cost' ? 'var(--accent)' : undefined }} onClick={() => setSortKey('cost')}>
                 Cost/d {sortKey === 'cost' ? '▼' : ''}
               </th>
+              <th style={{ cursor: 'pointer', color: sortKey === 'eff' ? 'var(--accent)' : undefined }} onClick={() => setSortKey('eff')} title="Output tokens per $0.001 — higher is more efficient">
+                Eff {sortKey === 'eff' ? '▼' : ''}
+              </th>
               <th>Trend</th>
             </tr>
           </thead>
@@ -233,6 +258,15 @@ export function WhoCard({ selected, setSelected, lookback, provider, onDrill }: 
                     ) : (
                       <span className="num">{scaledCost > 0 ? (scaledCost < 0.01 ? '<$0.01' : `$${scaledCost.toFixed(2)}`) : <span style={{ color: 'var(--steel)' }}>—</span>}</span>
                     )}
+                  </td>
+                  <td>
+                    <span
+                      className="num"
+                      title="Output tokens per $0.001"
+                      style={{ fontSize: 10, color: m.eff > 0 ? 'var(--fog)' : 'var(--graphite)' }}
+                    >
+                      {m.eff > 0 ? `${m.eff.toFixed(0)}k` : '—'}
+                    </span>
                   </td>
                   <td>
                     <Sparkline data={trend} color={m.col} h={28} w={80} />

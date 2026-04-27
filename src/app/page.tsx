@@ -9,6 +9,8 @@ import { OverallCostHero } from '@/components/pulse/OverallCostHero';
 import { PulseBar } from '@/components/pulse/PulseBar';
 import { BurnRateRail } from '@/components/pulse/BurnRateRail';
 import { StatStrip } from '@/components/pulse/StatStrip';
+import { FindingsStrip } from '@/components/pulse/FindingsStrip';
+import { ProjectCostRail } from '@/components/pulse/ProjectCostRail';
 import { WhyInsightsCard } from '@/components/why/WhyInsightsCard';
 import { ZombieSessionsCard } from '@/components/why/ZombieSessionsCard';
 import { EntityExplorer } from '@/components/diagnostics/EntityExplorer';
@@ -130,7 +132,9 @@ export default function App() {
               />
 
               <BurnRateRail lookback={lookback} provider={effectiveProvider} />
+              <FindingsStrip lookback={lookback} provider={effectiveProvider} onNavigate={setView} />
               <StatStrip lookback={lookback} provider={effectiveProvider} />
+              <ProjectCostRail lookback={lookback} provider={effectiveProvider} />
 
               {/* DIAGNOSTICS divider */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 24, marginBottom: 12 }}>

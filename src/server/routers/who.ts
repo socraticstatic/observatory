@@ -53,13 +53,14 @@ export const whoRouter = router({
       const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
       const rows = await ctx.db.$queryRaw<Array<{
         model: string; provider: string; calls: bigint; cost: unknown;
-        avg_lat: unknown; p95_lat: unknown; error_rate: unknown;
+        output_tokens: unknown; avg_lat: unknown; p95_lat: unknown; error_rate: unknown;
       }>>`
         SELECT
           model,
           provider,
           COUNT(*) AS calls,
           SUM("costUsd")::float AS cost,
+          SUM("outputTokens")::float AS output_tokens,
           AVG("latencyMs")::float AS avg_lat,
           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs") AS p95_lat,
           (COUNT(*) FILTER (WHERE status = 'error'))::float / COUNT(*) * 100 AS error_rate
@@ -75,6 +76,7 @@ export const whoRouter = router({
         provider: r.provider,
         calls: Number(r.calls),
         cost: Number(r.cost),
+        outputTokens: Number(r.output_tokens ?? 0),
         share: totalCost > 0 ? (Number(r.cost) / totalCost) * 100 : 0,
         avgLatMs: r.avg_lat != null ? Math.round(Number(r.avg_lat)) : null,
         p95LatMs: r.p95_lat != null ? Math.round(Number(r.p95_lat)) : null,
