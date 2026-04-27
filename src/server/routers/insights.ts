@@ -482,7 +482,7 @@ export const insightsRouter = router({
 
       const rows = await ctx.db.$queryRaw<Array<{
         session_id: string; project: string; surface: string;
-        steps: bigint; cost: unknown; last_ts: Date;
+        steps: bigint; cost: unknown; first_ts: Date; last_ts: Date;
         first_input: bigint; last_input: bigint;
       }>>`
         SELECT
@@ -491,9 +491,10 @@ export const insightsRouter = router({
           MODE() WITHIN GROUP (ORDER BY surface) AS surface,
           COUNT(*) AS steps,
           SUM("costUsd")::float AS cost,
+          MIN(ts) AS first_ts,
           MAX(ts) AS last_ts,
-          (ARRAY_AGG("inputTokens" ORDER BY ts ASC))[1] AS first_input,
-          (ARRAY_AGG("inputTokens" ORDER BY ts DESC))[1] AS last_input
+          (ARRAY_AGG("inputTokens" + "cachedTokens" ORDER BY ts ASC))[1]  AS first_input,
+          (ARRAY_AGG("inputTokens" + "cachedTokens" ORDER BY ts DESC))[1] AS last_input
         FROM llm_events
         WHERE ts >= ${since24h} AND "sessionId" IS NOT NULL ${pfSql}
         GROUP BY "sessionId"
@@ -504,6 +505,7 @@ export const insightsRouter = router({
       const now = Date.now();
       return rows.map(r => {
         const ageMs = now - r.last_ts.getTime();
+        const durationMs = r.last_ts.getTime() - r.first_ts.getTime();
         const steps = Number(r.steps);
         const bloatRatio = Number(r.first_input) > 0 ? Number(r.last_input) / Number(r.first_input) : 1;
         let type = 'active';
@@ -519,6 +521,7 @@ export const insightsRouter = router({
           costUsd: Number(r.cost),
           lastTs: r.last_ts.toISOString(),
           ageMs,
+          durationMs,
           type,
           bloatRatio: Math.round(bloatRatio * 100) / 100,
         };

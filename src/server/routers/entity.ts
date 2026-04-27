@@ -41,11 +41,12 @@ export const entityRouter = router({
         ? Prisma.sql`AND project IS NULL`
         : Prisma.sql`AND project = ${input.project}`;
       const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
-      const rows = await ctx.db.$queryRaw<Array<{ session_id: string; calls: bigint; cost: unknown; first_ts: Date; last_ts: Date }>>`
+      const rows = await ctx.db.$queryRaw<Array<{ session_id: string; calls: bigint; cost: unknown; total_tokens: unknown; first_ts: Date; last_ts: Date }>>`
         SELECT
           "sessionId" AS session_id,
           COUNT(*) AS calls,
           SUM("costUsd")::float AS cost,
+          COALESCE(SUM("inputTokens" + "outputTokens"), 0)::float AS total_tokens,
           MIN(ts) AS first_ts,
           MAX(ts) AS last_ts
         FROM llm_events
@@ -57,6 +58,7 @@ export const entityRouter = router({
         sessionId: r.session_id,
         calls: Number(r.calls),
         costUsd: Number(r.cost),
+        totalTokens: Number(r.total_tokens),
         firstTs: r.first_ts.toISOString(),
         lastTs: r.last_ts.toISOString(),
       }));

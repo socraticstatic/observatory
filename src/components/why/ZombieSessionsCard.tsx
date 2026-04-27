@@ -21,9 +21,9 @@ function severityFor(bloatRatio: number, type: string): 'bad' | 'warn' | 'info' 
   return 'info';
 }
 
-function fmtRate(costUsd: number, ageMs: number): string {
-  if (ageMs <= 0) return '0 tok/min';
-  const tokPerMin = (costUsd * 1000000 / 10) / (ageMs / 60000);
+function fmtRate(costUsd: number, durationMs: number): string {
+  if (durationMs <= 0) return '—';
+  const tokPerMin = (costUsd * 1_000_000 / 10) / (durationMs / 60_000);
   if (tokPerMin > 1000) return `${(tokPerMin / 1000).toFixed(1)}K tok/min`;
   return `${Math.round(tokPerMin)} tok/min`;
 }
@@ -91,7 +91,7 @@ export function ZombieSessionsCard({ onReview, provider }: ZombieSessionsCardPro
       id: z.sessionId,
       type: z.type.charAt(0).toUpperCase() + z.type.slice(1),
       steps: z.steps,
-      rate: fmtRate(z.costUsd, z.ageMs),
+      rate: fmtRate(z.costUsd, z.durationMs),
       proj: `$${z.costUsd.toFixed(2)}`,
       costUsd: z.costUsd,
       severity: severityFor(z.bloatRatio, z.type),
@@ -152,7 +152,7 @@ export function ZombieSessionsCard({ onReview, provider }: ZombieSessionsCardPro
             <th>Type</th>
             <th>Steps</th>
             <th>Token Rate</th>
-            <th>Projected 24h</th>
+            <th>Total Cost</th>
             <th>Action</th>
           </tr>
         </thead>

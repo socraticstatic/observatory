@@ -84,7 +84,17 @@ export function WhereCard({ lookback = '24H', provider }: Props) {
   return (
     <div className="card">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)', flexWrap: 'wrap', gap: 8 }}>
-        <span className="label">WHERE &middot; Regional Distribution</span>
+        <div>
+          <span className="label">WHERE &middot; Regional Distribution</span>
+          {rows.length > 0 && (() => {
+            const bad  = rows.filter(r => r.status === 'bad');
+            const warn = rows.filter(r => r.status === 'warn');
+            const top  = [...rows].sort((a, b) => b.vol - a.vol)[0];
+            const v    = bad.length > 0 ? 'act' : warn.length > 0 ? 'watch' : 'ok';
+            const line = v === 'act' ? `${bad[0].meta.city}: high latency` : v === 'watch' ? `${warn[0].meta.city}: elevated latency` : `${rows.length} region${rows.length !== 1 ? 's' : ''}, ${top?.meta.city ?? '—'} leads`;
+            return <span style={{ fontSize: 10, display: 'block', marginTop: 3, color: v === 'act' ? 'var(--bad)' : v === 'watch' ? '#C9966B' : 'var(--graphite)' }}>{line}</span>;
+          })()}
+        </div>
         <div style={{ display: 'flex', gap: 12 }}>
           {(['ok', 'warn', 'bad'] as Status[]).map(s => (
             <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>

@@ -69,7 +69,7 @@ export function EntityExplorer({ lookback = '24H', provider }: Props) {
     ? (sessionData ?? []).map(s => ({
         id: s.sessionId,
         ts: new Date(s.lastTs).toISOString().slice(0, 16).replace('T', ' '),
-        tokens: s.calls,
+        tokens: s.totalTokens,
       }))
     : [];
 

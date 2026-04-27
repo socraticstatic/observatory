@@ -82,13 +82,20 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
       })),
   ];
 
-  // Pagination accumulator — intentional direct setState, not a cascade risk
+  // Pagination accumulator — deduplicate by id to guard against Strict Mode double-invocation
   useEffect(() => {
     if (!data) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!cursor) { setAllItems(data.items); }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    else { setAllItems(prev => [...prev, ...data.items]); }
+    if (!cursor) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAllItems(data.items);
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAllItems(prev => {
+        const seen = new Set(prev.map(i => i.id));
+        const fresh = data.items.filter(i => !seen.has(i.id));
+        return fresh.length ? [...prev, ...fresh] : prev;
+      });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, cursor]);
 

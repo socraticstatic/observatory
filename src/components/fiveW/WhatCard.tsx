@@ -351,9 +351,14 @@ export function WhatCard({ lookback, provider, onDrill }: WhatCardProps) {
             <span style={{ width: 14, height: 1, background: 'var(--line-2)' }} />
             <span style={{ fontSize: 13, fontWeight: 500, letterSpacing: '.02em' }}>Token Lifecycle</span>
           </div>
-          <div className="label" style={{ marginTop: 4, color: 'var(--graphite)' }}>
-            Input · Output · Reasoning · Cached · {LOOKBACKS[lookback].label.toLowerCase()} rolling · click bar to drill →
-          </div>
+          {(() => {
+            const tot = data.reduce((acc, b) => ({ cached: acc.cached + b.cached, cacheCreation: acc.cacheCreation + b.cacheCreation, input: acc.input + b.input, output: acc.output + b.output, reasoning: acc.reasoning + b.reasoning }), { cached: 0, cacheCreation: 0, input: 0, output: 0, reasoning: 0 });
+            const grand = tot.cached + tot.cacheCreation + tot.input + tot.output + tot.reasoning;
+            const hitPct = grand > 0 ? Math.round((tot.cached + tot.cacheCreation) / grand * 100) : 0;
+            const v = hitPct < 15 && grand > 50_000 ? 'act' : hitPct < 35 ? 'watch' : 'ok';
+            const line = v === 'act' ? `cache hit ${hitPct}% — context not reused` : v === 'watch' ? `cache hit ${hitPct}% — room to improve` : `${(grand / 1e6).toFixed(1)}M tokens, ${hitPct}% cache hit`;
+            return <span style={{ fontSize: 10, display: 'block', marginTop: 3, color: v === 'act' ? 'var(--bad)' : v === 'watch' ? '#C9966B' : 'var(--graphite)' }}>{line}</span>;
+          })()}
         </div>
         <div className="seg">
           {(['stacked', 'grouped', 'flow'] as ViewMode[]).map(m => (

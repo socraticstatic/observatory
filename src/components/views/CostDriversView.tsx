@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useRef } from 'react';
 import { trpc } from '@/lib/trpc-client';
 import { fmtUsd, fmtMs } from '@/lib/fmt';
 import type { Lookback } from '@/lib/lookback';
+import { ViewStatusBar } from '@/components/shared/ViewStatusBar';
 
 interface Props { lookback: Lookback; onNavigate?: (view: string) => void; provider?: string; }
 
@@ -54,6 +55,7 @@ export function CostDriversView({ lookback, onNavigate, provider }: Props) {
 
   return (
     <>
+      <ViewStatusBar lookback={lookback} provider={provider} />
       <div className="card" style={{ marginTop: 16, padding: 0 }}>
         {/* Header */}
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc-client';
 import { fmtMs } from '@/lib/fmt';
 import { fmtUnits } from '@/lib/service-registry';
 import type { Lookback } from '@/lib/lookback';
+import { ViewStatusBar } from '@/components/shared/ViewStatusBar';
 
 interface Props { lookback: Lookback; provider?: string; }
 
@@ -173,6 +174,7 @@ export function SessionsView({ lookback, provider }: Props) {
   return (
     <div className="page">
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ViewStatusBar lookback={lookback} provider={provider} />
 
       {/* Project filter chips */}
       {allProjects.length > 0 && (

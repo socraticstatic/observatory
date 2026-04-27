@@ -16,6 +16,19 @@ SET event_hash = encode(
 )
 WHERE event_hash IS NULL;
 
--- Unique index — prevents duplicate firings from being stored
+-- Remove duplicates — keep the oldest row for each hash.
+-- Real duplicates come from double-fired LiteLLM callbacks; oldest is canonical.
+DELETE FROM llm_events
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id,
+           ROW_NUMBER() OVER (PARTITION BY event_hash ORDER BY ts ASC) AS rn
+    FROM llm_events
+    WHERE event_hash IS NOT NULL
+  ) ranked
+  WHERE rn > 1
+);
+
+-- Unique index — prevents duplicate firings from being stored going forward
 CREATE UNIQUE INDEX IF NOT EXISTS llm_events_event_hash_idx ON llm_events (event_hash)
 WHERE event_hash IS NOT NULL;

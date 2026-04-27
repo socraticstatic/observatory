@@ -3,6 +3,7 @@
 import { trpc } from '@/lib/trpc-client';
 import { fmtMs, fmtUsd } from '@/lib/fmt';
 import type { Lookback } from '@/lib/lookback';
+import { ViewStatusBar } from '@/components/shared/ViewStatusBar';
 
 interface Props { lookback: Lookback; provider?: string; onNavigate?: (view: string) => void; }
 
@@ -110,6 +111,7 @@ export function InsightsView({ lookback, provider, onNavigate }: Props) {
 
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <ViewStatusBar lookback={lookback} provider={provider} />
 
       {/* Token Journey */}
       <div className="card" style={{ padding: '16px 20px' }}>

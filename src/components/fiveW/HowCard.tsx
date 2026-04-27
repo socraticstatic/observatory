@@ -100,14 +100,23 @@ export function HowCard({ drill, lookback = '24H', provider }: Props) {
         gap: 12,
         flexWrap: 'wrap',
       }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flex: 1, minWidth: 0 }}>
-          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--mist)' }}>HOW</span>
-          <span style={{ fontSize: 10, color: 'var(--steel)', letterSpacing: '.08em' }}>Agent Trace Waterfall</span>
-          {data.sessionId && (
-            <span style={{ fontSize: 9, color: targetSessionId ? 'var(--warn)' : 'var(--graphite)', fontFamily: "'JetBrains Mono', monospace" }}>
-              {targetSessionId ? `▶ ${data.sessionId.slice(0, 8)}…` : `${data.sessionId.slice(0, 8)}…`}
-            </span>
-          )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--mist)' }}>HOW</span>
+            <span style={{ fontSize: 10, color: 'var(--steel)', letterSpacing: '.08em' }}>Agent Trace Waterfall</span>
+            {data.sessionId && (
+              <span style={{ fontSize: 9, color: targetSessionId ? 'var(--warn)' : 'var(--graphite)', fontFamily: "'JetBrains Mono', monospace" }}>
+                {targetSessionId ? `▶ ${data.sessionId.slice(0, 8)}…` : `${data.sessionId.slice(0, 8)}…`}
+              </span>
+            )}
+          </div>
+          {events.length > 0 && (() => {
+            const errCount = events.filter(e => e.status === 'error').length;
+            const maxLat   = Math.max(...events.map(e => e.latencyMs));
+            const v        = errCount > 0 ? 'act' : maxLat > 5000 ? 'watch' : 'ok';
+            const line     = v === 'act' ? `${errCount} error${errCount > 1 ? 's' : ''} in ${events.length} steps` : v === 'watch' ? `${events.length} steps, slowest ${(maxLat / 1000).toFixed(1)}s` : `${events.length} steps, ${(totalMs / 1000).toFixed(1)}s total`;
+            return <span style={{ fontSize: 10, display: 'block', marginTop: 3, color: v === 'act' ? 'var(--bad)' : v === 'watch' ? '#C9966B' : 'var(--graphite)' }}>{line}</span>;
+          })()}
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
           {filters.map(f => (

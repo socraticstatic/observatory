@@ -82,7 +82,20 @@ export function WhenCard({ onDrill, provider, lookback = '30D' }: WhenCardProps)
   return (
     <div className="card">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
-        <span className="label">WHEN &middot; Activity Heatmap · {lookbackLabel} × 24h</span>
+        <div>
+          <span className="label">WHEN &middot; Activity Heatmap · {lookbackLabel} × 24h</span>
+          {heatData && heatData.length > 0 && (() => {
+            const maxVal = Math.max(...heatData.map(c => c.value), 1);
+            const avgVal = heatData.reduce((s, c) => s + c.value, 0) / heatData.length;
+            const peak   = heatData.reduce((mx, c) => c.value > mx.value ? c : mx, heatData[0]);
+            const burst  = avgVal > 0 ? peak.value / avgVal : 1;
+            const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const peakDay = new Date(Date.now() - peak.days_ago * 86_400_000).getDay();
+            const v = burst > 6 ? 'act' : burst > 3 ? 'watch' : 'ok';
+            const line = v === 'act' ? `burst ${DAY_LABELS[peakDay]} ${peak.h}:00 — ${burst.toFixed(0)}× baseline` : v === 'watch' ? `peak ${DAY_LABELS[peakDay]} ${peak.h}:00 — ${burst.toFixed(1)}× avg` : `steady cadence, peak ${DAY_LABELS[peakDay]} ${peak.h}:00`;
+            return <span style={{ fontSize: 10, display: 'block', marginTop: 3, color: v === 'act' ? 'var(--bad)' : v === 'watch' ? '#C9966B' : 'var(--graphite)' }}>{line}</span>;
+          })()}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 10, color: 'var(--steel)' }}>quiet</span>
           <div style={{ width: 80, height: 8, borderRadius: 3, background: `linear-gradient(90deg, ${lerpColor(0)}, ${lerpColor(.4)}, ${lerpColor(1)})`, border: '1px solid var(--line)' }} />
