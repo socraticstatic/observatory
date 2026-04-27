@@ -122,3 +122,16 @@ model AlertRule {
 
   @@map("alert_rules")
 }
+
+model Budget {
+  id        String   @id @default(uuid())
+  project   String?
+  provider  String?
+  limitUsd  Decimal  @db.Decimal(12, 4)
+  period    String   @default("30D")
+  alertPct  Int      @default(80)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("budgets")
+}

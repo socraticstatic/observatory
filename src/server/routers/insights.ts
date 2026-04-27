@@ -450,6 +450,65 @@ export const insightsRouter = router({
         });
       }
 
+      // Cache underutilization: low overall rate (distinct from cache-decay which detects a drop)
+      const windowHit = Number(cache1d[0]?.hit_ratio ?? 0);
+      const hasSessions = totalSessions > 20;
+      if (hasSessions && windowHit < 15 && weekHit < 15) {
+        findings.push({
+          id: 'cache-underutilized', category: 'efficiency',
+          severity:   'info',
+          title:      'Cache utilization is low',
+          detail:     `Cache hit rate is ${windowHit.toFixed(1)}% (7-day: ${weekHit.toFixed(1)}%). Prompt caching can reduce input token costs by 60-90% for stable context.`,
+          impact:     'Uncached repeated context pays full input token price on every call',
+          action:     'Add cache_control: ephemeral to system prompts and stable context blocks',
+          confidence: 'medium',
+        });
+      }
+
+      // Budget findings: check if any enabled budget is at alert or exceeded threshold
+      const budgets = await ctx.db.budget.findMany({ where: { enabled: true } });
+      if (budgets.length > 0) {
+        const BUDGET_PERIOD_MS: Record<string, number> = {
+          '1H': 3_600_000, '24H': 86_400_000, '30D': 30 * 86_400_000,
+          '90D': 90 * 86_400_000, '1Y': 365 * 86_400_000,
+        };
+        await Promise.all(budgets.map(async b => {
+          const periodMs = BUDGET_PERIOD_MS[b.period] ?? BUDGET_PERIOD_MS['30D'];
+          const bSince   = new Date(Date.now() - periodMs);
+          const pSql     = b.provider ? Prisma.sql`AND provider = ${b.provider}` : Prisma.empty;
+          const prjSql   = b.project  ? Prisma.sql`AND project  = ${b.project}`  : Prisma.empty;
+          const rows = await ctx.db.$queryRaw<[{ spend: number }]>`
+            SELECT COALESCE(SUM("costUsd"), 0)::float AS spend
+            FROM llm_events WHERE ts >= ${bSince} ${pSql} ${prjSql}
+          `;
+          const spend    = Number(rows[0]?.spend ?? 0);
+          const limitUsd = Number(b.limitUsd);
+          const pct      = limitUsd > 0 ? (spend / limitUsd) * 100 : 0;
+          const scope    = [b.project, b.provider].filter(Boolean).join('/') || 'global';
+          if (pct >= 100) {
+            findings.push({
+              id: `budget-exceeded-${b.id}`, category: 'cost',
+              severity: 'act',
+              title:    `Budget exceeded — ${scope}`,
+              detail:   `Spent $${spend.toFixed(2)} of $${limitUsd.toFixed(2)} limit (${pct.toFixed(0)}%) in the last ${b.period}.`,
+              impact:   `$${(spend - limitUsd).toFixed(2)} over limit`,
+              action:   'Review spending in Rules view and adjust budget or throttle requests',
+              confidence: 'high',
+            });
+          } else if (pct >= b.alertPct) {
+            findings.push({
+              id: `budget-alert-${b.id}`, category: 'cost',
+              severity: 'warn',
+              title:    `Budget approaching — ${scope}`,
+              detail:   `Spent $${spend.toFixed(2)} of $${limitUsd.toFixed(2)} limit (${pct.toFixed(0)}%) in the last ${b.period}. Alert threshold: ${b.alertPct}%.`,
+              impact:   `$${(limitUsd - spend).toFixed(2)} remaining`,
+              action:   'Monitor spend rate — review in Rules view',
+              confidence: 'high',
+            });
+          }
+        }));
+      }
+
       const SEV_ORDER: Record<Sev, number> = { act: 0, warn: 1, info: 2 };
       findings.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
       return findings;
