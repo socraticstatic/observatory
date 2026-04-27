@@ -114,14 +114,15 @@ model SessionLabel {
 }
 
 model AlertRule {
-  id        String   @id
-  name      String
-  metric    String
-  lookback  String
-  operator  String
-  threshold Decimal  @db.Decimal(12, 4)
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id         String   @id
+  name       String
+  metric     String
+  lookback   String
+  operator   String
+  threshold  Decimal  @db.Decimal(12, 4)
+  enabled    Boolean  @default(true)
+  webhookUrl String?  @map("webhook_url")
+  createdAt  DateTime @default(now())
 
   @@map("alert_rules")
 }
