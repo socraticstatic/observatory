@@ -31,6 +31,7 @@ model LlmEvent {
   billingUnit          String   @default("tokens") @map("billing_unit")
   rawPayload           Json
   eventHash            String?  @unique @map("event_hash")
+  promptHash           String?  @map("prompt_hash") @db.VarChar(16)
 
   @@index([ts(sort: Desc)])
   @@index([provider, ts(sort: Desc)])
@@ -38,6 +39,7 @@ model LlmEvent {
   @@index([userId])
   @@index([parentSpanId])
   @@index([project])
+  @@index([promptHash])
   @@map("llm_events")
 }
 
@@ -61,8 +63,11 @@ model Annotation {
   detail   String?
   impact   String?
   severity String
+  score    Int?
+  traceId  String?  @map("trace_id")
 
   @@index([ts(sort: Desc)])
+  @@index([traceId])
   @@map("annotations")
 }
 
@@ -145,4 +150,25 @@ model Budget {
   createdAt DateTime @default(now())
 
   @@map("budgets")
+}
+
+model EvalDataset {
+  id        String            @id @default(uuid())
+  name      String
+  createdAt DateTime          @default(now()) @map("created_at")
+  items     EvalDatasetItem[]
+
+  @@map("eval_datasets")
+}
+
+model EvalDatasetItem {
+  id        String      @id @default(uuid())
+  datasetId String      @map("dataset_id")
+  eventId   String      @map("event_id")
+  note      String?
+  addedAt   DateTime    @default(now()) @map("added_at")
+  dataset   EvalDataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@unique([datasetId, eventId])
+  @@map("eval_dataset_items")
 }
