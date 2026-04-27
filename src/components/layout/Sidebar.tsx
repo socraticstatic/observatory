@@ -80,6 +80,13 @@ const NAV_ICONS: Record<string, React.ReactNode> = {
       <path d="M6.5,9 L9.5,9" />
     </svg>
   ),
+  Datasets: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="8" cy="4" rx="5" ry="2" />
+      <path d="M3,4 L3,12 C3,13.1 5.2,14 8,14 C10.8,14 13,13.1 13,12 L13,4" />
+      <path d="M3,8 C3,9.1 5.2,10 8,10 C10.8,10 13,9.1 13,8" />
+    </svg>
+  ),
   Intel: (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="8" cy="8" r="2" />
@@ -105,7 +112,7 @@ const CollapsedIcon = (
 
 const PRIMARY_NAV = ['Pulse', 'Traces', 'Costs', 'Intel', 'Sessions'] as const;
 const FIVE_W = ['What', 'Who', 'Where', 'When', 'How'] as const;
-const SECONDARY_NAV = ['Rules', 'Archive'] as const;
+const SECONDARY_NAV = ['Rules', 'Archive', 'Datasets'] as const;
 
 export function Sidebar({ view, setView, expanded, setExpanded }: Props) {
   function handleFiveW(label: string) {

@@ -33,6 +33,7 @@ import { CostDriversView } from '@/components/views/CostDriversView';
 import { SessionsView } from '@/components/views/SessionsView';
 import { RulesView } from '@/components/views/RulesView';
 import { ArchiveView } from '@/components/views/ArchiveView';
+import { DatasetsView } from '@/components/views/DatasetsView';
 import { InsightsView } from '@/components/views/InsightsView';
 import { PulseSummaryVerdict } from '@/components/pulse/PulseSummaryVerdict';
 import type { Lookback } from '@/lib/lookback';
@@ -118,6 +119,7 @@ export default function App() {
           {view === 'Sessions' && <SessionsView lookback={lookback} provider={effectiveProvider} />}
           {view === 'Rules'    && <RulesView provider={effectiveProvider} />}
           {view === 'Archive'  && <ArchiveView provider={effectiveProvider} />}
+          {view === 'Datasets' && <DatasetsView />}
 
           {view === 'Pulse' && (
             <>
