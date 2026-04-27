@@ -511,6 +511,42 @@ export const insightsRouter = router({
 
       const SEV_ORDER: Record<Sev, number> = { act: 0, warn: 1, info: 2 };
       findings.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
+
+      // Webhook delivery -- fire-and-forget, best-effort
+      const webhookRules = await ctx.db.alertRule.findMany({
+        where: { enabled: true, webhookUrl: { not: null } },
+      });
+      if (webhookRules.length > 0) {
+        const firedAt = new Date().toISOString();
+        const deliveries = webhookRules.flatMap(rule =>
+          findings
+            .filter(f =>
+              f.id === rule.metric ||
+              f.category === rule.metric ||
+              f.id.startsWith(rule.metric)
+            )
+            .map(f => ({ rule, finding: f }))
+        );
+        for (const { rule, finding } of deliveries) {
+          fetch(rule.webhookUrl!, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id:       finding.id,
+              category: finding.category,
+              severity: finding.severity,
+              title:    finding.title,
+              detail:   finding.detail,
+              action:   finding.action,
+              firedAt,
+              rule:     rule.name,
+            }),
+          }).catch((err: Error) => {
+            console.warn(`[observatory] webhook delivery failed for rule "${rule.name}": ${err.message}`);
+          });
+        }
+      }
+
       return findings;
     }),
 
