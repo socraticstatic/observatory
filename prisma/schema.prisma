@@ -14,6 +14,8 @@ model LlmEvent {
   surface              String?
   sessionId            String?
   userId               String?  @map("user_id") @db.VarChar(255)
+  spanId               String?  @map("span_id")
+  parentSpanId         String?  @map("parent_span_id")
   project              String?
   inputTokens          Int
   outputTokens         Int
@@ -34,6 +36,7 @@ model LlmEvent {
   @@index([provider, ts(sort: Desc)])
   @@index([sessionId, ts])
   @@index([userId])
+  @@index([parentSpanId])
   @@index([project])
   @@map("llm_events")
 }

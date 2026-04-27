@@ -6,6 +6,7 @@ import { fmt, fmtUsd, fmtMs } from '@/lib/fmt';
 import { fmtUnits } from '@/lib/service-registry';
 import type { Lookback } from '@/lib/lookback';
 import { ViewStatusBar } from '@/components/shared/ViewStatusBar';
+import { TraceTreeRow } from '@/components/traces/TraceTreeRow';
 
 interface Props {
   lookback: Lookback;
@@ -60,6 +61,7 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [cursor,   setCursor]   = useState<string | undefined>(undefined);
   const [allItems, setAllItems] = useState<TraceItem[]>([]);
+  const [treeMode, setTreeMode] = useState(false);
 
   useEffect(() => {
     setProvider(externalProvider);
@@ -71,6 +73,10 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
     { lookback, provider, status, cursor, limit: 50 },
   );
   const { data: providerData } = trpc.who.providerBreakdown.useQuery({ lookback });
+  const { data: treeData } = trpc.traces.listTree.useQuery(
+    { lookback, ...(provider ? { provider } : {}) },
+    { enabled: treeMode },
+  );
 
   const providerOptions = [
     { id: undefined as string | undefined, label: 'All' },
@@ -150,7 +156,27 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
           ))}
         </div>
 
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--steel)' }}>
+        {/* Flat / Tree toggle */}
+        <div style={{ display: 'flex', gap: 0, marginLeft: 'auto' }}>
+          {(['Flat', 'Tree'] as const).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setTreeMode(mode === 'Tree')}
+              style={{
+                fontSize: 10, padding: '4px 10px',
+                background: (treeMode === (mode === 'Tree')) ? 'var(--bg-3)' : 'var(--bg-2)',
+                border: '1px solid var(--line-2)',
+                borderRadius: mode === 'Flat' ? '4px 0 0 4px' : '0 4px 4px 0',
+                color: (treeMode === (mode === 'Tree')) ? 'var(--fog)' : 'var(--steel)',
+                cursor: 'pointer',
+              }}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+
+        <span style={{ fontSize: 11, color: 'var(--steel)' }}>
           {items.length} events
           {isFetching && <span style={{ marginLeft: 8, color: 'var(--graphite)' }}>loading…</span>}
         </span>
@@ -170,115 +196,138 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
 
       {/* Table */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        {/* Header */}
-        <div style={{ display: 'grid', gridTemplateColumns: COL, padding: '8px 16px', borderBottom: '1px solid var(--line)', gap: 8 }}>
-          {['Time', 'Model', 'Provider', 'Units', 'Cost', 'Latency', 'Status', ''].map(h => (
-            <span key={h} className="label" style={{ fontSize: 9 }}>{h}</span>
-          ))}
-        </div>
-
-        {/* Empty state */}
-        {items.length === 0 && !isFetching && (
-          <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--steel)', fontSize: 12 }}>
-            No events in this window
-          </div>
-        )}
-
-        {/* Rows */}
-        {items.map(row => (
-          <div key={row.id}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: COL,
-                padding: '8px 16px',
-                gap: 8,
-                borderBottom: '1px solid var(--line)',
-                cursor: 'pointer',
-                background: expanded === row.id ? 'rgba(111,168,179,.04)' : 'transparent',
-              }}
-              onClick={() => setExpanded(expanded === row.id ? null : row.id)}
-            >
-              <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>
-                {new Date(row.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--fog)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {row.model}
-              </span>
-              <span style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: providerDot(row.provider), flexShrink: 0 }} />
-                <span style={{ color: 'var(--steel)' }}>{row.provider}</span>
-              </span>
-              <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
-                {row.billingUnit === 'tokens'
-                  ? <>{fmt(row.inputTokens + row.outputTokens)}{row.cachedTokens > 0 && <span style={{ color: 'var(--accent-2)', marginLeft: 4 }}>+{fmt(row.cachedTokens)}c</span>}</>
-                  : fmtUnits(row.inputTokens, row.provider)
-                }
-              </span>
-              <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
-                {fmtUsd(row.costUsd)}
-              </span>
-              <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
-                {(row.latencyMs ?? 0) > 0
-                  ? fmtMs(row.latencyMs)
-                  : row.cachedTokens > 0
-                  ? <span style={{ fontSize: 9, color: 'var(--accent-2)', letterSpacing: '.08em' }}>cache</span>
-                  : '—'}
-              </span>
-              <span style={{ fontSize: 10, fontWeight: 600, color: row.status === 'error' ? 'var(--bad)' : 'var(--good)' }}>
-                {row.status.toUpperCase()}
-              </span>
-              <span style={{ fontSize: 10, color: 'var(--graphite)', textAlign: 'right' }}>
-                {expanded === row.id ? '▲' : '▼'}
-              </span>
+        {treeMode ? (
+          /* Tree mode */
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--line-2)' }}>
+                <th className="label" style={{ textAlign: 'left', padding: '6px 12px', fontWeight: 400, width: '30%' }}>MODEL · PROJECT</th>
+                <th className="label" style={{ textAlign: 'left', padding: '6px 0', fontWeight: 400, width: '25%' }}>LATENCY</th>
+                <th className="label" style={{ textAlign: 'left', padding: '6px 0', fontWeight: 400, width: '25%' }}>TOKENS</th>
+                <th className="label" style={{ textAlign: 'right', padding: '6px 12px', fontWeight: 400 }}>COST</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(treeData ?? []).map(root => {
+                const maxLat = Math.max(1, root.latencyMs ?? 1, ...root.children.map(c => c.latencyMs ?? 0));
+                return <TraceTreeRow key={root.id} node={root} depth={0} maxLatMs={maxLat} />;
+              })}
+            </tbody>
+          </table>
+        ) : (
+          /* Flat mode — the existing trace table, completely unchanged */
+          <>
+            {/* Header */}
+            <div style={{ display: 'grid', gridTemplateColumns: COL, padding: '8px 16px', borderBottom: '1px solid var(--line)', gap: 8 }}>
+              {['Time', 'Model', 'Provider', 'Units', 'Cost', 'Latency', 'Status', ''].map(h => (
+                <span key={h} className="label" style={{ fontSize: 9 }}>{h}</span>
+              ))}
             </div>
 
-            {/* Expanded detail */}
-            {expanded === row.id && (
-              <div style={{ padding: '12px 16px 16px', borderBottom: '1px solid var(--line)', background: 'rgba(11,16,20,.4)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px 16px', marginBottom: 12 }}>
-                  {[
-                    { label: 'Session',          val: row.sessionId    ?? '—' },
-                    { label: 'Project',           val: row.project      ?? '—' },
-                    { label: 'Surface',           val: row.surface      ?? '—' },
-                    { label: 'Content type',      val: row.contentType  ?? '—' },
-                    { label: row.billingUnit === 'tokens' ? 'Input tokens'  : `Input (${row.billingUnit})`, val: fmt(row.inputTokens) },
-                    { label: row.billingUnit === 'tokens' ? 'Output tokens' : 'Output units',              val: fmt(row.outputTokens) },
-                    { label: 'Cached tokens',     val: fmt(row.cachedTokens) },
-                    { label: 'Reasoning tokens',  val: fmt(row.reasoningTokens) },
-                  ].map(({ label, val }) => (
-                    <div key={label}>
-                      <div className="label" style={{ marginBottom: 2 }}>{label}</div>
-                      <div className="mono" style={{ fontSize: 11, color: 'var(--fog)', wordBreak: 'break-all' }}>{val}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="label" style={{ marginBottom: 6 }}>Raw payload</div>
-                <pre style={{
-                  margin: 0,
-                  padding: '8px 10px',
-                  background: 'rgba(0,0,0,.3)',
-                  borderRadius: 'var(--r)',
-                  fontSize: 10,
-                  color: 'var(--steel)',
-                  overflow: 'auto',
-                  maxHeight: 240,
-                  lineHeight: 1.5,
-                }}>
-                  {JSON.stringify(row.rawPayload, null, 2)}
-                </pre>
+            {/* Empty state */}
+            {items.length === 0 && !isFetching && (
+              <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--steel)', fontSize: 12 }}>
+                No events in this window
               </div>
             )}
-          </div>
-        ))}
 
-        {/* Load more */}
-        {data?.nextCursor && (
-          <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'center', borderTop: '1px solid var(--line)' }}>
-            <button className="mbtn" onClick={loadMore} disabled={isFetching} style={{ opacity: isFetching ? 0.5 : 1 }}>
-              {isFetching ? 'Loading…' : 'Load more'}
-            </button>
-          </div>
+            {/* Rows */}
+            {items.map(row => (
+              <div key={row.id}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: COL,
+                    padding: '8px 16px',
+                    gap: 8,
+                    borderBottom: '1px solid var(--line)',
+                    cursor: 'pointer',
+                    background: expanded === row.id ? 'rgba(111,168,179,.04)' : 'transparent',
+                  }}
+                  onClick={() => setExpanded(expanded === row.id ? null : row.id)}
+                >
+                  <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>
+                    {new Date(row.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--fog)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {row.model}
+                  </span>
+                  <span style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: providerDot(row.provider), flexShrink: 0 }} />
+                    <span style={{ color: 'var(--steel)' }}>{row.provider}</span>
+                  </span>
+                  <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
+                    {row.billingUnit === 'tokens'
+                      ? <>{fmt(row.inputTokens + row.outputTokens)}{row.cachedTokens > 0 && <span style={{ color: 'var(--accent-2)', marginLeft: 4 }}>+{fmt(row.cachedTokens)}c</span>}</>
+                      : fmtUnits(row.inputTokens, row.provider)
+                    }
+                  </span>
+                  <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
+                    {fmtUsd(row.costUsd)}
+                  </span>
+                  <span className="mono" style={{ fontSize: 10, color: 'var(--fog)' }}>
+                    {(row.latencyMs ?? 0) > 0
+                      ? fmtMs(row.latencyMs)
+                      : row.cachedTokens > 0
+                      ? <span style={{ fontSize: 9, color: 'var(--accent-2)', letterSpacing: '.08em' }}>cache</span>
+                      : '—'}
+                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: row.status === 'error' ? 'var(--bad)' : 'var(--good)' }}>
+                    {row.status.toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--graphite)', textAlign: 'right' }}>
+                    {expanded === row.id ? '▲' : '▼'}
+                  </span>
+                </div>
+
+                {/* Expanded detail */}
+                {expanded === row.id && (
+                  <div style={{ padding: '12px 16px 16px', borderBottom: '1px solid var(--line)', background: 'rgba(11,16,20,.4)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px 16px', marginBottom: 12 }}>
+                      {[
+                        { label: 'Session',          val: row.sessionId    ?? '—' },
+                        { label: 'Project',           val: row.project      ?? '—' },
+                        { label: 'Surface',           val: row.surface      ?? '—' },
+                        { label: 'Content type',      val: row.contentType  ?? '—' },
+                        { label: row.billingUnit === 'tokens' ? 'Input tokens'  : `Input (${row.billingUnit})`, val: fmt(row.inputTokens) },
+                        { label: row.billingUnit === 'tokens' ? 'Output tokens' : 'Output units',              val: fmt(row.outputTokens) },
+                        { label: 'Cached tokens',     val: fmt(row.cachedTokens) },
+                        { label: 'Reasoning tokens',  val: fmt(row.reasoningTokens) },
+                      ].map(({ label, val }) => (
+                        <div key={label}>
+                          <div className="label" style={{ marginBottom: 2 }}>{label}</div>
+                          <div className="mono" style={{ fontSize: 11, color: 'var(--fog)', wordBreak: 'break-all' }}>{val}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="label" style={{ marginBottom: 6 }}>Raw payload</div>
+                    <pre style={{
+                      margin: 0,
+                      padding: '8px 10px',
+                      background: 'rgba(0,0,0,.3)',
+                      borderRadius: 'var(--r)',
+                      fontSize: 10,
+                      color: 'var(--steel)',
+                      overflow: 'auto',
+                      maxHeight: 240,
+                      lineHeight: 1.5,
+                    }}>
+                      {JSON.stringify(row.rawPayload, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Load more */}
+            {data?.nextCursor && (
+              <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'center', borderTop: '1px solid var(--line)' }}>
+                <button className="mbtn" onClick={loadMore} disabled={isFetching} style={{ opacity: isFetching ? 0.5 : 1 }}>
+                  {isFetching ? 'Loading…' : 'Load more'}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

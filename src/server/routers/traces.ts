@@ -11,6 +11,74 @@ function msSince(interval: string): number {
   return 30 * 86_400_000;
 }
 
+interface TraceNode {
+  id: string;
+  ts: string;
+  provider: string;
+  model: string;
+  spanId: string | null;
+  parentSpanId: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  reasoningTokens: number;
+  costUsd: number;
+  latencyMs: number | null;
+  status: string;
+  surface: string | null;
+  project: string | null;
+  sessionId: string | null;
+  userId: string | null;
+  children: TraceNode[];
+}
+
+function isDescendant(node: TraceNode, target: TraceNode): boolean {
+  for (const child of node.children) {
+    if (child === target || isDescendant(child, target)) return true;
+  }
+  return false;
+}
+
+function assembleTree(events: Array<{
+  id: string; ts: Date; provider: string; model: string;
+  spanId: string | null; parentSpanId: string | null;
+  inputTokens: number; outputTokens: number; cachedTokens: number; reasoningTokens: number;
+  costUsd: unknown; latencyMs: number | null; status: string;
+  surface: string | null; project: string | null; sessionId: string | null; userId: string | null;
+}>): TraceNode[] {
+  const nodeMap = new Map<string, TraceNode>();
+  const roots: TraceNode[] = [];
+
+  for (const e of events) {
+    const node: TraceNode = {
+      id: e.id, ts: e.ts.toISOString(),
+      provider: e.provider, model: e.model,
+      spanId: e.spanId, parentSpanId: e.parentSpanId,
+      inputTokens: e.inputTokens, outputTokens: e.outputTokens,
+      cachedTokens: e.cachedTokens, reasoningTokens: e.reasoningTokens,
+      costUsd: Number(e.costUsd), latencyMs: e.latencyMs,
+      status: e.status, surface: e.surface, project: e.project,
+      sessionId: e.sessionId, userId: e.userId,
+      children: [],
+    };
+    nodeMap.set(e.id, node);
+    if (e.spanId) nodeMap.set(e.spanId, node);
+  }
+
+  for (const e of events) {
+    const node = nodeMap.get(e.id)!;
+    const parent = e.parentSpanId ? nodeMap.get(e.parentSpanId) : null;
+
+    if (parent && parent !== node && !isDescendant(node, parent)) {
+      parent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  return roots;
+}
+
 export const tracesRouter = router({
   list: publicProcedure
     .input(z.object({
@@ -82,5 +150,33 @@ export const tracesRouter = router({
         })),
         nextCursor: hasMore && last ? JSON.stringify({ ts: last.ts.toISOString(), id: last.id }) : null,
       };
+    }),
+
+  listTree: publicProcedure
+    .input(z.object({
+      lookback: LookbackSchema,
+      provider: z.string().optional(),
+      project:  z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
+      const where = {
+        ts: { gte: since },
+        ...(input.provider ? { provider: input.provider } : {}),
+        ...(input.project  ? { project:  input.project  } : {}),
+      };
+      const events = await ctx.db.llmEvent.findMany({
+        where,
+        orderBy: { ts: 'asc' },
+        take: 500,
+        select: {
+          id: true, ts: true, provider: true, model: true,
+          spanId: true, parentSpanId: true,
+          inputTokens: true, outputTokens: true, cachedTokens: true, reasoningTokens: true,
+          costUsd: true, latencyMs: true, status: true,
+          surface: true, project: true, sessionId: true, userId: true,
+        },
+      });
+      return assembleTree(events);
     }),
 });
