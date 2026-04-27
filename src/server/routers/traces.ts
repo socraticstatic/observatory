@@ -32,6 +32,13 @@ interface TraceNode {
   children: TraceNode[];
 }
 
+function isDescendant(node: TraceNode, target: TraceNode): boolean {
+  for (const child of node.children) {
+    if (child === target || isDescendant(child, target)) return true;
+  }
+  return false;
+}
+
 function assembleTree(events: Array<{
   id: string; ts: Date; provider: string; model: string;
   spanId: string | null; parentSpanId: string | null;
@@ -61,7 +68,8 @@ function assembleTree(events: Array<{
   for (const e of events) {
     const node = nodeMap.get(e.id)!;
     const parent = e.parentSpanId ? nodeMap.get(e.parentSpanId) : null;
-    if (parent && parent !== node) {
+
+    if (parent && parent !== node && !isDescendant(node, parent)) {
       parent.children.push(node);
     } else {
       roots.push(node);

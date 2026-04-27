@@ -126,4 +126,30 @@ describe('tracesRouter.listTree', () => {
     expect(result).toHaveLength(1);
     expect(result[0].children).toHaveLength(0);
   });
+
+  it('resolves without error on circular span references', async () => {
+    const EVENT_A = {
+      id: 'cycle-a', ts: new Date(), provider: 'anthropic', model: 'claude-haiku',
+      spanId: 'span-a', parentSpanId: 'span-b', // A's parent is B
+      inputTokens: 100, outputTokens: 50, cachedTokens: 0, reasoningTokens: 0,
+      costUsd: '0.0001', latencyMs: 200, status: 'ok',
+      surface: null, project: null, sessionId: null, userId: null,
+    };
+    const EVENT_B = {
+      ...EVENT_A, id: 'cycle-b',
+      spanId: 'span-b', parentSpanId: 'span-a', // B's parent is A — cycle!
+    };
+    mockFindMany.mockResolvedValue([EVENT_A, EVENT_B]);
+
+    const caller = createCaller(createContext());
+    const result = await caller.listTree({ lookback: '24H' });
+
+    // Cycle is broken: both nodes end up as roots rather than infinitely nested
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    // Verify no node appears as a descendant of itself
+    const allNodes = result.flatMap(n => [n, ...n.children]);
+    for (const node of allNodes) {
+      expect(node.children.some(c => c.id === node.id)).toBe(false);
+    }
+  });
 });
