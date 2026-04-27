@@ -34,6 +34,7 @@ import { SessionsView } from '@/components/views/SessionsView';
 import { RulesView } from '@/components/views/RulesView';
 import { ArchiveView } from '@/components/views/ArchiveView';
 import { InsightsView } from '@/components/views/InsightsView';
+import { PulseSummaryVerdict } from '@/components/pulse/PulseSummaryVerdict';
 import type { Lookback } from '@/lib/lookback';
 
 type Density = 'comfortable' | 'compact' | 'dense';
@@ -118,6 +119,7 @@ export default function App() {
 
           {view === 'Pulse' && (
             <>
+              <PulseSummaryVerdict lookback={lookback} provider={effectiveProvider} onNavigate={setView} />
               <ServicesRail
                 lookback={lookback}
                 providerFilter={providerFilter}

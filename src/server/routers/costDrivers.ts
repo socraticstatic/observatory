@@ -204,9 +204,16 @@ export const costDriversRouter = router({
         }),
         ctx.db.$queryRaw<[{ cache_read_cost: number }]>`
           SELECT COALESCE(SUM(
-            CASE WHEN model ILIKE '%opus%'
-              THEN "cachedTokens"::numeric * 0.0000015
-              ELSE "cachedTokens"::numeric * 0.0000003
+            CASE
+              WHEN model ILIKE '%claude-opus%'           THEN "cachedTokens"::numeric * 0.0000015
+              WHEN model ILIKE '%claude-sonnet%'         THEN "cachedTokens"::numeric * 0.0000003
+              WHEN model ILIKE '%claude-haiku%'          THEN "cachedTokens"::numeric * 0.00000008
+              WHEN model ILIKE '%gpt-4o-mini%'           THEN "cachedTokens"::numeric * 0.000000075
+              WHEN model ILIKE '%gpt-4o%'                THEN "cachedTokens"::numeric * 0.00000125
+              WHEN model ILIKE '%gemini-2.5-flash%'      THEN "cachedTokens"::numeric * 0.0000000375
+              WHEN model ILIKE '%gemini-2.0-flash%'      THEN "cachedTokens"::numeric * 0.000000025
+              WHEN model ILIKE '%gemini%'                THEN "cachedTokens"::numeric * 0.0000003125
+              ELSE                                            "cachedTokens"::numeric * 0.0000003
             END
           ), 0)::float AS cache_read_cost
           FROM llm_events

@@ -16,14 +16,14 @@ export const insightsRouter = router({
       const since1d = new Date(Date.now() - 86_400_000);
       const pfSql = input?.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
 
-      // Cache decay detector
+      // Cache decay detector — use aggregate ratio (not per-event average) to avoid small-event bias
       const [cacheToday, cache7d] = await Promise.all([
         ctx.db.$queryRaw<Array<{ hit_ratio: unknown }>>`
-          SELECT AVG("cachedTokens"::float / NULLIF("inputTokens" + "cachedTokens", 0)) * 100 AS hit_ratio
+          SELECT SUM("cachedTokens")::float / NULLIF(SUM("inputTokens" + "cachedTokens"), 0) * 100 AS hit_ratio
           FROM llm_events WHERE ts >= ${since1d} ${pfSql}
         `,
         ctx.db.$queryRaw<Array<{ hit_ratio: unknown }>>`
-          SELECT AVG("cachedTokens"::float / NULLIF("inputTokens" + "cachedTokens", 0)) * 100 AS hit_ratio
+          SELECT SUM("cachedTokens")::float / NULLIF(SUM("inputTokens" + "cachedTokens"), 0) * 100 AS hit_ratio
           FROM llm_events WHERE ts >= ${since7d} AND ts < ${since1d} ${pfSql}
         `,
       ]);
@@ -288,9 +288,16 @@ export const insightsRouter = router({
         `,
         ctx.db.$queryRaw<[{ cache_writes: number; cache_reads: number; write_cost: number }]>`
           SELECT
-            COALESCE(SUM("cacheCreationTokens"), 0)::float            AS cache_writes,
-            COALESCE(SUM("cachedTokens"),         0)::float            AS cache_reads,
-            COALESCE(SUM("cacheCreationTokens" * 0.00000025), 0)::float AS write_cost
+            COALESCE(SUM("cacheCreationTokens"), 0)::float AS cache_writes,
+            COALESCE(SUM("cachedTokens"),         0)::float AS cache_reads,
+            COALESCE(SUM(
+              CASE
+                WHEN model ILIKE '%claude-opus%'   THEN "cacheCreationTokens"::numeric * 0.00001875
+                WHEN model ILIKE '%claude-haiku%'  THEN "cacheCreationTokens"::numeric * 0.000001
+                WHEN model ILIKE '%claude-sonnet%' THEN "cacheCreationTokens"::numeric * 0.00000375
+                ELSE                                    "cacheCreationTokens"::numeric * 0.00000375
+              END
+            ), 0)::float AS write_cost
           FROM llm_events WHERE ts >= ${since} ${pfSql}
         `,
         ctx.db.$queryRaw<[{ max_error_rate: number }]>`
@@ -303,15 +310,15 @@ export const insightsRouter = router({
           ) h
         `,
         ctx.db.$queryRaw<[{ hit_ratio: number }]>`
-          SELECT AVG("cachedTokens"::float / NULLIF("inputTokens" + "cachedTokens", 0)) * 100 AS hit_ratio
+          SELECT SUM("cachedTokens")::float / NULLIF(SUM("inputTokens" + "cachedTokens"), 0) * 100 AS hit_ratio
           FROM llm_events WHERE ts >= ${since1d} ${pfSql}
         `,
         ctx.db.$queryRaw<[{ hit_ratio: number }]>`
-          SELECT AVG("cachedTokens"::float / NULLIF("inputTokens" + "cachedTokens", 0)) * 100 AS hit_ratio
+          SELECT SUM("cachedTokens")::float / NULLIF(SUM("inputTokens" + "cachedTokens"), 0) * 100 AS hit_ratio
           FROM llm_events WHERE ts >= ${since7d} AND ts < ${since1d} ${pfSql}
         `,
         ctx.db.llmEvent.aggregate({
-          where: { ts: { gte: since }, ...pfFilter },
+          where: { ts: { gte: since }, sessionId: { not: null }, ...pfFilter },
           _sum: { costUsd: true },
         }),
       ]);
@@ -355,7 +362,7 @@ export const insightsRouter = router({
 
       const reasoningCount = Number(reasoning[0]?.count ?? 0);
       const reasoningCost  = Number(reasoning[0]?.total_cost ?? 0);
-      if (reasoningCount > 5) {
+      if (reasoningCount > 20) {
         findings.push({
           id: 'reasoning-overkill', category: 'cost',
           severity:   'warn',
@@ -370,7 +377,7 @@ export const insightsRouter = router({
       const singleCount   = Number(sprawl[0]?.single_count ?? 0);
       const totalSessions = Number(sprawl[0]?.total_count ?? 0);
       const sprawlPct     = totalSessions > 0 ? singleCount / totalSessions * 100 : 0;
-      if (sprawlPct > 70 && totalSessions > 20) {
+      if (sprawlPct > 70 && totalSessions > 50) {
         findings.push({
           id: 'session-sprawl', category: 'efficiency',
           severity:   'info',
@@ -480,7 +487,7 @@ export const insightsRouter = router({
       }>>`
         SELECT
           "sessionId" AS session_id,
-          project,
+          MODE() WITHIN GROUP (ORDER BY project) AS project,
           MODE() WITHIN GROUP (ORDER BY surface) AS surface,
           COUNT(*) AS steps,
           SUM("costUsd")::float AS cost,
@@ -489,7 +496,7 @@ export const insightsRouter = router({
           (ARRAY_AGG("inputTokens" ORDER BY ts DESC))[1] AS last_input
         FROM llm_events
         WHERE ts >= ${since24h} AND "sessionId" IS NOT NULL ${pfSql}
-        GROUP BY "sessionId", project
+        GROUP BY "sessionId"
         HAVING COUNT(*) >= 2
         ORDER BY cost DESC
         LIMIT 20
@@ -500,10 +507,10 @@ export const insightsRouter = router({
         const steps = Number(r.steps);
         const bloatRatio = Number(r.first_input) > 0 ? Number(r.last_input) / Number(r.first_input) : 1;
         let type = 'active';
-        if (steps > 8 && ageMs > 3 * 60_000) type = 'loop';
-        else if (bloatRatio > 1.5) type = 'bloat';
-        else if (ageMs > 5 * 60_000) type = 'abandoned';
-        else if (Number(r.cost) > 5 && r.surface === 'automation') type = 'runaway';
+        if (Number(r.cost) > 5 && r.surface === 'automation') type = 'runaway';
+        else if (steps > 10 && ageMs > 10 * 60_000) type = 'loop';
+        else if (bloatRatio > 1.5 && ageMs < 60 * 60_000) type = 'bloat';
+        else if (ageMs > 30 * 60_000) type = 'abandoned';
         return {
           sessionId: r.session_id,
           project: r.project,

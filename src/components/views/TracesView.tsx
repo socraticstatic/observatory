@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc-client';
 import { fmt, fmtUsd, fmtMs } from '@/lib/fmt';
 import { fmtUnits } from '@/lib/service-registry';
 import type { Lookback } from '@/lib/lookback';
+import { ViewStatusBar } from '@/components/shared/ViewStatusBar';
 
 interface Props {
   lookback: Lookback;
@@ -113,6 +114,7 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
 
   return (
     <div className="page">
+      <ViewStatusBar lookback={lookback} provider={provider} />
       {/* Filter bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <span className="label">Provider</span>
@@ -145,6 +147,18 @@ export function TracesView({ lookback, provider: externalProvider }: Props) {
           {items.length} events
           {isFetching && <span style={{ marginLeft: 8, color: 'var(--graphite)' }}>loading…</span>}
         </span>
+        <a
+          href={`/api/export?lookback=${lookback}${provider ? `&provider=${provider}` : ''}`}
+          download
+          style={{
+            padding: '3px 10px', borderRadius: 'var(--r)', fontSize: 9, fontWeight: 600,
+            letterSpacing: '.1em', textTransform: 'uppercase', textDecoration: 'none',
+            border: '1px solid var(--line-2)', color: 'var(--steel)',
+            background: 'transparent', cursor: 'pointer',
+          }}
+        >
+          ↓ CSV
+        </a>
       </div>
 
       {/* Table */}

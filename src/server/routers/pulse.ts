@@ -13,14 +13,24 @@ function msSince(interval: string): number {
   return 30 * 86_400_000;
 }
 
-// Cache-read cost = cachedTokens × input_rate × 0.10 (model-aware)
+// Cache-read cost per provider tier, aligned with src/lib/pricing.ts
+// Anthropic: cacheReadMult=0.10; OpenAI gpt-4o/o*: mult=0.50; Gemini: mult=0.25
 function cacheReadCostSql(since: Date, until: Date | null, pfSql: Prisma.Sql) {
   const untilClause = until ? Prisma.sql`AND ts < ${until}` : Prisma.empty;
   return Prisma.sql`
     SELECT COALESCE(SUM(
-      CASE WHEN model ILIKE '%opus%'
-        THEN "cachedTokens"::numeric * 0.0000015
-        ELSE "cachedTokens"::numeric * 0.0000003
+      CASE
+        WHEN model ILIKE '%claude-opus%'           THEN "cachedTokens"::numeric * 0.0000015
+        WHEN model ILIKE '%claude-sonnet%'         THEN "cachedTokens"::numeric * 0.0000003
+        WHEN model ILIKE '%claude-haiku%'          THEN "cachedTokens"::numeric * 0.00000008
+        WHEN model ILIKE '%gpt-4o-mini%'           THEN "cachedTokens"::numeric * 0.000000075
+        WHEN model ILIKE '%gpt-4o%'                THEN "cachedTokens"::numeric * 0.00000125
+        WHEN model ILIKE '%o3-mini%' OR model ILIKE '%o1-mini%' THEN "cachedTokens"::numeric * 0.00000055
+        WHEN model ILIKE '%o3%' OR model ILIKE '%o1%' THEN "cachedTokens"::numeric * 0.0000075
+        WHEN model ILIKE '%gemini-2.5-flash%'      THEN "cachedTokens"::numeric * 0.0000000375
+        WHEN model ILIKE '%gemini-2.0-flash%'      THEN "cachedTokens"::numeric * 0.000000025
+        WHEN model ILIKE '%gemini%'                THEN "cachedTokens"::numeric * 0.0000003125
+        ELSE                                            "cachedTokens"::numeric * 0.0000003
       END
     ), 0)::float AS cache_read_cost
     FROM llm_events
@@ -172,10 +182,13 @@ export const pulseRouter = router({
       const ystdCacheEff     = ystdBilling.isAllSubscription ? 0 : ystdCacheRead;
       const ystdInference    = ystdEffective - ystdCacheEff;
       const hourOfDay        = new Date().getHours() + new Date().getMinutes() / 60;
-      // Subscription billing is flat per day — don't extrapolate from current hour
+      // Subscription billing is flat per day — don't extrapolate from current hour.
+      // Before 2 hours of data, today's spend is too volatile; fall back to yesterday's rate.
       const projectedInference = todayBilling.isAllSubscription
         ? todayInference
-        : hourOfDay > 0 ? (todayInference / hourOfDay) * 24 : 0;
+        : hourOfDay >= 2
+          ? (todayInference / hourOfDay) * 24
+          : ystdInference > 0 ? ystdInference : (hourOfDay > 0 ? (todayInference / hourOfDay) * 24 : 0);
       const budget           = Number(process.env.MONTHLY_BUDGET_USD ?? 200);
       return {
         todayCost:           rawTodayCost,
@@ -210,19 +223,21 @@ export const pulseRouter = router({
           _avg: { latencyMs: true, qualityScore: true },
         }),
         ctx.db.llmEvent.count({ where: { ts: { gte: since }, status: 'error', ...pf } }),
-        ctx.db.llmEvent.findMany({ where: { ts: { gte: since }, ...pf }, distinct: ['sessionId'], select: { sessionId: true } }),
+        ctx.db.llmEvent.findMany({ where: { ts: { gte: since }, sessionId: { not: null }, ...pf }, distinct: ['sessionId'], select: { sessionId: true } }),
         ctx.db.llmEvent.aggregate({
           where: { ts: { gte: prevSince, lt: since }, ...pf },
           _count: { id: true },
           _sum: { cachedTokens: true, inputTokens: true },
           _avg: { latencyMs: true },
         }),
-        ctx.db.$queryRaw<Array<{ p50: unknown; p99: unknown; avg_lat: unknown; prev_avg_lat: unknown }>>`
+        ctx.db.$queryRaw<Array<{ p50: unknown; p99: unknown; avg_lat: unknown; prev_avg_lat: unknown; llm_input: unknown; llm_output: unknown }>>`
           SELECT
             PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY "latencyMs") FILTER (WHERE ts >= ${since}) AS p50,
             PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY "latencyMs") FILTER (WHERE ts >= ${since}) AS p99,
             AVG("latencyMs") FILTER (WHERE ts >= ${since}) AS avg_lat,
-            AVG("latencyMs") FILTER (WHERE ts >= ${prevSince} AND ts < ${since}) AS prev_avg_lat
+            AVG("latencyMs") FILTER (WHERE ts >= ${prevSince} AND ts < ${since}) AS prev_avg_lat,
+            COALESCE(SUM("inputTokens") FILTER (WHERE ts >= ${since}), 0)  AS llm_input,
+            COALESCE(SUM("outputTokens") FILTER (WHERE ts >= ${since}), 0) AS llm_output
           FROM llm_events
           WHERE ts >= ${prevSince} AND status = 'ok' ${pfSql}
             AND ("contentType" NOT IN ('tts', 'video', 'image') OR "contentType" IS NULL)
@@ -249,7 +264,7 @@ export const pulseRouter = router({
         avgQuality:       Number(agg._avg.qualityScore ?? 0),
         errorRatePct:     total > 0 ? (errors / total) * 100 : 0,
         activeSessions:   sessions.length,
-        efficiency:       totalInput > 0 ? totalOutput / totalInput : 0,
+        efficiency:       Number(latPct[0]?.llm_input ?? 0) > 0 ? Number(latPct[0]?.llm_output ?? 0) / Number(latPct[0]?.llm_input ?? 1) : 0,
         totalInputTokens: totalInput,
         totalOutputTokens: totalOutput,
         totalCachedTokens: totalCached,

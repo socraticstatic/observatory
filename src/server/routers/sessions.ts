@@ -39,24 +39,24 @@ export const sessionsRouter = router({
         last_input:    bigint | null;
       }>>`
         SELECT
-          COALESCE("sessionId", '(no session)')                           AS session_id,
-          project,
-          surface,
-          MIN(ts)                                                          AS started_at,
-          MAX(ts)                                                          AS ended_at,
-          COUNT(*)                                                         AS call_count,
-          COALESCE(SUM("costUsd"),                         0)::float      AS total_cost,
-          COALESCE(SUM("inputTokens" + "outputTokens"),    0)::float      AS total_tokens,
-          AVG("latencyMs")::float                                          AS avg_lat,
-          COUNT(*) FILTER (WHERE status = 'error')                        AS error_count,
-          array_agg(DISTINCT model)                                        AS models,
-          COALESCE(SUM("cachedTokens"),                    0)::float      AS cached_tokens,
-          COALESCE(SUM("inputTokens"),                     0)::float      AS input_tokens,
-          (ARRAY_AGG("inputTokens" ORDER BY ts ASC))[1]::bigint           AS first_input,
-          (ARRAY_AGG("inputTokens" ORDER BY ts DESC))[1]::bigint          AS last_input
+          COALESCE("sessionId", '(no session)')                                          AS session_id,
+          MODE() WITHIN GROUP (ORDER BY project)                                         AS project,
+          MODE() WITHIN GROUP (ORDER BY surface)                                         AS surface,
+          MIN(ts)                                                                         AS started_at,
+          MAX(ts)                                                                         AS ended_at,
+          COUNT(*)                                                                        AS call_count,
+          COALESCE(SUM("costUsd"),                         0)::float                     AS total_cost,
+          COALESCE(SUM("inputTokens" + "outputTokens"),    0)::float                     AS total_tokens,
+          AVG("latencyMs")::float                                                         AS avg_lat,
+          COUNT(*) FILTER (WHERE status = 'error')                                       AS error_count,
+          array_agg(DISTINCT model)                                                       AS models,
+          COALESCE(SUM("cachedTokens"),                    0)::float                     AS cached_tokens,
+          COALESCE(SUM("inputTokens"),                     0)::float                     AS input_tokens,
+          (ARRAY_AGG("inputTokens" + "cachedTokens" ORDER BY ts ASC))[1]::bigint        AS first_input,
+          (ARRAY_AGG("inputTokens" + "cachedTokens" ORDER BY ts DESC))[1]::bigint       AS last_input
         FROM llm_events
         WHERE ts >= ${since} ${pfSql}
-        GROUP BY COALESCE("sessionId", '(no session)'), project, surface
+        GROUP BY COALESCE("sessionId", '(no session)')
         ORDER BY started_at DESC
         LIMIT 501
       `;
