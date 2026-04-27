@@ -69,6 +69,17 @@ function ExpandedRow({ row, fmt, fmtUsd, fmtMs, fmtUnits }: {
     onSuccess: (_, vars) => utils.annotation.get.invalidate({ traceId: vars.traceId }),
   });
 
+  const { data: datasets } = trpc.datasets.list.useQuery();
+  const addItemMutation = trpc.datasets.addItem.useMutation({
+    onSuccess: () => {
+      setPinPopoverOpen(false);
+      setPinSuccess(true);
+      setTimeout(() => setPinSuccess(false), 2000);
+    },
+  });
+  const [pinPopoverOpen, setPinPopoverOpen] = useState(false);
+  const [pinSuccess, setPinSuccess] = useState(false);
+
   return (
     <div style={{ padding: '12px 16px 16px', borderBottom: '1px solid var(--line)', background: 'rgba(11,16,20,.4)' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px 16px', marginBottom: 12 }}>
@@ -97,6 +108,45 @@ function ExpandedRow({ row, fmt, fmtUsd, fmtMs, fmtUnits }: {
           disabled={rateMutation.isPending}
           onChange={score => rateMutation.mutate({ traceId: row.id, score })}
         />
+      </div>
+
+      {/* Pin to dataset */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--line-2)', position: 'relative', marginBottom: 12 }}>
+        <span className="label" style={{ fontSize: 9 }}>DATASET</span>
+        <button
+          className="btn-secondary"
+          style={{ fontSize: 10, padding: '3px 10px' }}
+          onClick={() => setPinPopoverOpen(o => !o)}
+        >
+          {pinSuccess ? '✓ Pinned' : '↑ Pin to dataset'}
+        </button>
+
+        {pinPopoverOpen && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, zIndex: 100,
+            background: 'var(--bg-2)', border: '1px solid var(--line-2)',
+            borderRadius: 6, padding: 8, minWidth: 200,
+            boxShadow: '0 4px 16px rgba(0,0,0,.4)',
+          }}>
+            <div className="label" style={{ marginBottom: 6, fontSize: 9 }}>SELECT DATASET</div>
+            {(datasets ?? []).map(ds => (
+              <button
+                key={ds.id}
+                className="btn-secondary"
+                style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 4, fontSize: 11 }}
+                onClick={() => addItemMutation.mutate({ datasetId: ds.id, eventId: row.id })}
+              >
+                {ds.name}
+                <span style={{ color: 'var(--steel)', marginLeft: 4 }}>({ds.itemCount})</span>
+              </button>
+            ))}
+            {(datasets ?? []).length === 0 && (
+              <span className="mono" style={{ fontSize: 10, color: 'var(--steel)' }}>
+                No datasets — create one in Datasets view
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="label" style={{ marginBottom: 6 }}>Raw payload</div>
