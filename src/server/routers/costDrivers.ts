@@ -44,7 +44,7 @@ export const costDriversRouter = router({
     .query(async ({ ctx, input }) => {
       const since = new Date(Date.now() - msSince(lookbackToInterval(input.lookback)));
       const pfSql = input.provider ? Prisma.sql`AND provider = ${input.provider}` : Prisma.empty;
-      const [byProvider, byModel, bySurface, byProject, byContentType, byRegion] = await Promise.all([
+      const [byProvider, byModel, bySurface, byProject, byContentType, byRegion, byUser] = await Promise.all([
         ctx.db.$queryRaw<DetailRow[]>`
           SELECT provider AS label, SUM("costUsd")::float AS cost,
             COUNT(*)::bigint AS calls, COUNT(DISTINCT "sessionId")::bigint AS sessions,
@@ -87,6 +87,20 @@ export const costDriversRouter = router({
             PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
           FROM llm_events WHERE ts >= ${since} ${pfSql}
           GROUP BY region ORDER BY cost DESC LIMIT 8`,
+        ctx.db.$queryRaw<DetailRow[]>`
+          SELECT
+            "userId"  AS label,
+            SUM("costUsd")::float  AS cost,
+            COUNT(*)::bigint       AS calls,
+            COUNT(DISTINCT "sessionId")::bigint AS sessions,
+            AVG("latencyMs")::float AS avg_lat_ms,
+            PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY "latencyMs")::float AS p95_lat_ms
+          FROM llm_events
+          WHERE ts >= ${since} AND "userId" IS NOT NULL ${pfSql}
+          GROUP BY "userId"
+          ORDER BY cost DESC
+          LIMIT 8
+        `,
       ]);
       void DIM_SQL; // suppress unused warning
       return {
@@ -96,6 +110,7 @@ export const costDriversRouter = router({
         project:     mapDim(byProject),
         contentType: mapDim(byContentType),
         region:      mapDim(byRegion),
+        user:        mapDim(byUser),
       };
     }),
 

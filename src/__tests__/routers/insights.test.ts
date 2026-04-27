@@ -4,10 +4,13 @@ import { createCallerFactory } from '@/server/trpc';
 import { insightsRouter } from '@/server/routers/insights';
 
 const createCaller = createCallerFactory(insightsRouter);
+const mockAlertRuleFindMany = vi.fn();
 const mockDb = {
   $queryRaw: vi.fn(),
   annotation: { findMany: vi.fn(), create: vi.fn() },
-  llmEvent: { findMany: vi.fn() },
+  llmEvent: { findMany: vi.fn(), aggregate: vi.fn() },
+  budget: { findMany: vi.fn() },
+  alertRule: { findMany: mockAlertRuleFindMany },
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const caller = createCaller({ db: mockDb as any });
@@ -16,6 +19,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockDb.annotation.findMany.mockResolvedValue([]);
   mockDb.llmEvent.findMany.mockResolvedValue([]);
+  mockDb.llmEvent.aggregate.mockResolvedValue({ _sum: { costUsd: null } });
+  mockDb.budget.findMany.mockResolvedValue([]);
+  mockAlertRuleFindMany.mockResolvedValue([]);
 });
 
 // ZOMBIE_ROW produces type='loop' because steps > 12 and last_ts is old enough
@@ -294,5 +300,78 @@ describe('insightsRouter.zombieSessions — provider filter', () => {
   it('accepts optional provider without throwing', async () => {
     mockDb.$queryRaw.mockResolvedValue([]);
     await expect(caller.zombieSessions({ provider: 'anthropic' })).resolves.not.toThrow();
+  });
+});
+
+describe('insights.findings — webhook delivery', () => {
+  // findings calls $queryRaw 10 times in Promise.all; return empty/zero rows for each
+  function mockFindingsQueryRaw() {
+    mockDb.$queryRaw
+      .mockResolvedValueOnce([{ count: 0n, wasted_cost: 0 }])           // opusMismatch
+      .mockResolvedValueOnce([{ p50: 0, p95: 0 }])                       // tailLat
+      .mockResolvedValueOnce([{ count: 0n, total_cost: 0 }])             // reasoning
+      .mockResolvedValueOnce([{ single_count: 0n, total_count: 0n }])    // sprawl
+      .mockResolvedValueOnce([])                                          // whaleRows
+      .mockResolvedValueOnce([{ cache_writes: 0, cache_reads: 0, write_cost: 0 }]) // cacheWR
+      .mockResolvedValueOnce([{ max_error_rate: 0 }])                    // errBurst
+      .mockResolvedValueOnce([{ hit_ratio: 0 }])                         // cache1d
+      .mockResolvedValueOnce([{ hit_ratio: 0 }]);                        // cache7d
+  }
+
+  it('does not throw when alertRule.findMany returns empty', async () => {
+    mockFindingsQueryRaw();
+    mockAlertRuleFindMany.mockResolvedValue([]);
+
+    await expect(caller.findings({ lookback: '24H' })).resolves.toBeDefined();
+  });
+
+  it('calls fetch for each matching finding when a webhook rule is enabled', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+
+    // Make errBurst return a high error rate so the 'error-burst' finding is pushed
+    mockDb.$queryRaw
+      .mockResolvedValueOnce([{ count: 0n, wasted_cost: 0 }])
+      .mockResolvedValueOnce([{ p50: 0, p95: 0 }])
+      .mockResolvedValueOnce([{ count: 0n, total_cost: 0 }])
+      .mockResolvedValueOnce([{ single_count: 0n, total_count: 0n }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ cache_writes: 0, cache_reads: 0, write_cost: 0 }])
+      .mockResolvedValueOnce([{ max_error_rate: 60 }])  // triggers 'error-burst' finding
+      .mockResolvedValueOnce([{ hit_ratio: 0 }])
+      .mockResolvedValueOnce([{ hit_ratio: 0 }]);
+
+    mockAlertRuleFindMany.mockResolvedValue([
+      { id: 'rule-1', name: 'Error burst watcher', metric: 'error-burst', enabled: true, webhookUrl: 'https://example.com/hook' },
+    ]);
+
+    await caller.findings({ lookback: '24H' });
+
+    // fetch should have been called once for the matching finding
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, opts] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://example.com/hook');
+    expect(opts.method).toBe('POST');
+    const body = JSON.parse(opts.body as string);
+    expect(body.id).toBe('error-burst');
+    expect(body.rule).toBe('Error burst watcher');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('does not call fetch when no findings match the rule metric', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+
+    mockFindingsQueryRaw();
+
+    // Rule watching 'opus-mismatch' but no opus mismatch findings will fire (count <= 10)
+    mockAlertRuleFindMany.mockResolvedValue([
+      { id: 'rule-2', name: 'Opus watcher', metric: 'opus-mismatch', enabled: true, webhookUrl: 'https://example.com/hook' },
+    ]);
+
+    await caller.findings({ lookback: '24H' });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    fetchSpy.mockRestore();
   });
 });

@@ -13,6 +13,7 @@ model LlmEvent {
   model                String
   surface              String?
   sessionId            String?
+  userId               String?  @map("user_id") @db.VarChar(255)
   project              String?
   inputTokens          Int
   outputTokens         Int
@@ -32,6 +33,7 @@ model LlmEvent {
   @@index([ts(sort: Desc)])
   @@index([provider, ts(sort: Desc)])
   @@index([sessionId, ts])
+  @@index([userId])
   @@index([project])
   @@map("llm_events")
 }
@@ -96,6 +98,11 @@ model LlmDailyRollup {
   reasoningTokens     BigInt   @default(0) @map("reasoning_tokens")
   errorCount          Int      @default(0) @map("error_count")
   avgLatencyMs        Float?   @map("avg_latency_ms")
+  p50Ms               Float?   @map("p50_ms")
+  p95Ms               Float?   @map("p95_ms")
+  p99Ms               Float?   @map("p99_ms")
+  cacheHits           Int      @default(0) @map("cache_hits")
+  cacheAttempts       Int      @default(0) @map("cache_attempts")
   archivedRawCount    Int      @default(0) @map("archived_raw_count")
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -111,14 +118,15 @@ model SessionLabel {
 }
 
 model AlertRule {
-  id        String   @id
-  name      String
-  metric    String
-  lookback  String
-  operator  String
-  threshold Decimal  @db.Decimal(12, 4)
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id         String   @id
+  name       String
+  metric     String
+  lookback   String
+  operator   String
+  threshold  Decimal  @db.Decimal(12, 4)
+  enabled    Boolean  @default(true)
+  webhookUrl String?  @map("webhook_url")
+  createdAt  DateTime @default(now())
 
   @@map("alert_rules")
 }

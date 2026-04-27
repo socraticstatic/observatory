@@ -57,15 +57,16 @@ interface AlertRule {
 }
 
 interface FormState {
-  name:      string;
-  metric:    Metric;
-  lookback:  Lookback;
-  operator:  Operator;
-  threshold: string;
+  name:       string;
+  metric:     Metric;
+  lookback:   Lookback;
+  operator:   Operator;
+  threshold:  string;
+  webhookUrl: string;
 }
 
 const BLANK_FORM: FormState = {
-  name: '', metric: 'cost', lookback: '24H', operator: 'gt', threshold: '',
+  name: '', metric: 'cost', lookback: '24H', operator: 'gt', threshold: '', webhookUrl: '',
 };
 
 const METRIC_LABELS: Record<Metric, string> = {
@@ -162,12 +163,13 @@ export function RulesView({ provider }: { provider?: string }) {
     const threshold = parseFloat(form.threshold);
     if (!form.name.trim() || isNaN(threshold)) return;
     createRule.mutate({
-      name:      form.name.trim(),
-      metric:    form.metric,
-      lookback:  form.lookback,
-      operator:  form.operator,
+      name:       form.name.trim(),
+      metric:     form.metric,
+      lookback:   form.lookback,
+      operator:   form.operator,
       threshold,
-      enabled:   true,
+      enabled:    true,
+      webhookUrl: form.webhookUrl || null,
     });
   }
 
@@ -289,6 +291,51 @@ export function RulesView({ provider }: { provider?: string }) {
               />
             </div>
 
+          </div>
+
+          {/* Webhook URL row */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginTop: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div className="label" style={{ marginBottom: 5, fontSize: 9 }}>
+                WEBHOOK URL <span style={{ color: 'var(--graphite)', fontSize: 8 }}>(optional)</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  type="url"
+                  placeholder="https://ntfy.sh/my-topic"
+                  value={form.webhookUrl}
+                  onChange={e => setForm(f => ({ ...f, webhookUrl: e.target.value }))}
+                  style={{ ...INPUT_STYLE, flex: 1, fontFamily: "'JetBrains Mono', monospace" }}
+                />
+                {form.webhookUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetch(form.webhookUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          id: 'test', category: 'test', severity: 'info',
+                          title: 'Observatory webhook test',
+                          detail: 'This is a test delivery from Observatory.',
+                          action: 'No action required.',
+                          firedAt: new Date().toISOString(),
+                          rule: form.name || 'unnamed',
+                        }),
+                      }).catch(() => null);
+                    }}
+                    style={{
+                      padding: '6px 10px', fontSize: 10, whiteSpace: 'nowrap',
+                      background: 'var(--ink-2)', border: '1px solid var(--line-2)',
+                      borderRadius: 'var(--r)', color: 'var(--graphite)', cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    TEST
+                  </button>
+                )}
+              </div>
+            </div>
             <button
               className="mbtn primary"
               onClick={saveRule}

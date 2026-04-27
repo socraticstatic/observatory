@@ -36,7 +36,9 @@ export async function runDailyRollup(): Promise<{ rolledUp: number; alreadyDone:
           (id, day, provider, model, project, surface,
            calls, cost_usd, input_tokens, output_tokens,
            cached_tokens, cache_creation_tokens, reasoning_tokens,
-           error_count, avg_latency_ms, archived_raw_count, created_at)
+           error_count, avg_latency_ms,
+           cache_hits, cache_attempts,
+           archived_raw_count, created_at)
         SELECT
           gen_random_uuid(),
           DATE_TRUNC('day', ts)::date,
@@ -53,6 +55,8 @@ export async function runDailyRollup(): Promise<{ rolledUp: number; alreadyDone:
           SUM("reasoningTokens")::bigint,
           COUNT(*) FILTER (WHERE status = 'error')::int,
           AVG("latencyMs"),
+          COUNT(*) FILTER (WHERE "cachedTokens" > 0)::int,
+          COUNT(*) FILTER (WHERE "inputTokens" > 0)::int,
           COUNT(*)::int,
           NOW()
         FROM llm_events
@@ -74,6 +78,8 @@ export async function runDailyRollup(): Promise<{ rolledUp: number; alreadyDone:
           reasoning_tokens     = EXCLUDED.reasoning_tokens,
           error_count          = EXCLUDED.error_count,
           avg_latency_ms       = EXCLUDED.avg_latency_ms,
+          cache_hits           = EXCLUDED.cache_hits,
+          cache_attempts       = EXCLUDED.cache_attempts,
           archived_raw_count   = EXCLUDED.archived_raw_count
         RETURNING 1
       )
