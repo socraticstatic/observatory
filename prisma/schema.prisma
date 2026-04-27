@@ -13,6 +13,7 @@ model LlmEvent {
   model                String
   surface              String?
   sessionId            String?
+  userId               String?  @map("user_id") @db.VarChar(255)
   project              String?
   inputTokens          Int
   outputTokens         Int
@@ -32,6 +33,7 @@ model LlmEvent {
   @@index([ts(sort: Desc)])
   @@index([provider, ts(sort: Desc)])
   @@index([sessionId, ts])
+  @@index([userId])
   @@index([project])
   @@map("llm_events")
 }

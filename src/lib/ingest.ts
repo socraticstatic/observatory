@@ -9,6 +9,7 @@ export interface NormalizedEvent {
   model: string;
   surface?: string;
   sessionId?: string;
+  userId?: string;
   project?: string;
   inputTokens: number;
   outputTokens: number;
@@ -75,6 +76,7 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
   const usage = body.usage ?? body.response?.usage ?? {};
   const latencyMs: number | undefined = body.response_time ? Math.round(body.response_time * 1000) : undefined;
   const sessionId: string | undefined = body.metadata?.session_id ?? body.metadata?.tags?.session_id;
+  const userId: string | undefined = body.user ?? body.metadata?.user_id ?? undefined;
   const project: string | undefined = body.metadata?.project ?? body.metadata?.tags?.project;
   const surface: string | undefined = body.metadata?.surface ?? body.metadata?.tags?.surface;
   const status: string = body.error ? 'error' : (body.response?.choices?.[0]?.finish_reason === 'stop' ? 'ok' : 'ok');
@@ -132,6 +134,7 @@ export function parseIngestPayload(body: any): NormalizedEvent | null {
     model,
     surface,
     sessionId,
+    userId,
     project,
     inputTokens,
     outputTokens,
