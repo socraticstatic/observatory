@@ -21,6 +21,8 @@ export function StarRating({ value, onChange, disabled }: Props) {
             color: (value ?? 0) >= star ? '#C9966B' : 'var(--line-2)',
             transition: 'color 120ms',
           }}
+          aria-label={`Rate ${star} out of 5`}
+          aria-pressed={value === star}
           title={`Rate ${star}`}
         >
           ★
