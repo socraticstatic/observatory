@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
 
 process.env.OBSERVATORY_DB = ":memory:";
 
-import { getDb, insertEvent } from "./db.js";
+import { getDb, insertEvent, _resetDbForTest } from "./db.js";
 import { summarize } from "./summary.js";
 
 function seed() {
@@ -12,6 +12,7 @@ function seed() {
 
 describe("summarize", () => {
   beforeEach(() => { getDb().exec("DELETE FROM events"); });
+  afterAll(() => { _resetDbForTest(); });
 
   it("returns zero totals for empty DB", () => {
     const s = summarize("today");
