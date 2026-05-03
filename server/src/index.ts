@@ -3,8 +3,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { streamSSE } from "hono/streaming";
 import { insertEvent } from "./db.js";
-import { subscribe } from "./sse.js";
-import { broadcast } from "./sse.js";
+import { subscribe, broadcast } from "./sse.js";
 import { summarize } from "./summary.js";
 
 const PORT   = Number(process.env.OBSERVATORY_PORT || 3099);
