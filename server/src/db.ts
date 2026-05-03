@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { join } from "path";
+import { join, dirname } from "path";
 import { homedir } from "os";
 import { mkdirSync } from "fs";
 
@@ -9,7 +9,7 @@ let _db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (_db) return _db;
-  if (DB_PATH !== ":memory:") mkdirSync(join(homedir(), ".observatory"), { recursive: true });
+  if (DB_PATH !== ":memory:") mkdirSync(dirname(DB_PATH), { recursive: true });
   _db = new Database(DB_PATH);
   _db.pragma("journal_mode = WAL");
   _db.exec(`
@@ -69,4 +69,8 @@ export function insertEvent(event: Event): void {
     VALUES
       (@ts, @project, @tool, @provider, @model, @input_tokens, @output_tokens, @cache_read_tokens, @cost_usd, @latency_ms, @status)
   `).run(row);
+}
+
+export function _resetDbForTest(): void {
+  _db = null;
 }
