@@ -1,0 +1,8 @@
+server/node_modules/
+server/dist/
+server/src/public/
+dashboard/node_modules/
+dashboard/dist/
+*.db
+*.db-shm
+*.db-wal
