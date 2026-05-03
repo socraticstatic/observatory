@@ -27,7 +27,7 @@ describe("summarize", () => {
     expect(s.by_model).toHaveLength(2);
     expect(s.by_tool).toHaveLength(2);
     expect(s.by_project).toHaveLength(1);
-    expect(s.by_project[0].project).toBe("vault-daemon");
+    expect((s.by_project[0] as Record<string, unknown>).project).toBe("vault-daemon");
   });
 
   it("top_tools is limited to 5", () => {
